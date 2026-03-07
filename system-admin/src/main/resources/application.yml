@@ -1,0 +1,114 @@
+# -------------------------------------------------------------------
+# 1. 服务端口配置
+# -------------------------------------------------------------------
+server:
+  port: 7799
+
+# -------------------------------------------------------------------
+# 2. Spring 核心配置
+# -------------------------------------------------------------------
+spring:
+  # 包含外部配置文件 (application-datasource.yml)
+  profiles:
+    include: datasource
+
+  # Redis 缓存配置
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 0
+
+  # Servlet 相关的配置
+  servlet:
+    multipart:
+      max-file-size: 100MB # 配置上传文件大小最大值
+      max-request-size: 1000MB # 配置请求体大小最大值 (通常用于下载/上传流)
+
+# -------------------------------------------------------------------
+# 3. 日志配置 (Logging)
+# -------------------------------------------------------------------
+# 全局 debug 模式，mapper 层设置为 debug 模式以便打印 SQL 语句
+logging:
+  level:
+    root: info
+    com.changhui.mapper: debug
+
+# -------------------------------------------------------------------
+# 4. 用户配置
+# -------------------------------------------------------------------
+# 用户配置
+user:
+  password:
+    # 密码最大错误次数
+    maxRetryCount: 5
+    # 密码锁定时间（默认10分钟）
+    lockTime: 10
+
+# -------------------------------------------------------------------
+# 5. 验证码配置
+# -------------------------------------------------------------------
+# 验证码配置
+captcha:
+  enabled: false # 是否启用验证码
+  type: numeric # 验证码类型: numeric(4位数字) 或 arithmetic(算术运算)
+  expire-time: 5 # 验证码过期时间(分钟)
+  width: 120 # 验证码图片宽度
+  height: 40 # 验证码图片高度
+  code-length: 4 # 数字验证码长度
+
+# -------------------------------------------------------------------
+# 6. MyBatis-Plus 配置
+# -------------------------------------------------------------------
+mybatis-plus:
+  configuration:
+    auto-mapping-behavior: full # 数据库字段和实体类自动映射
+    map-underscore-to-camel-case: true # 开启下划线转驼峰命名
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl # 使用 SLF4J 打印日志
+  global-config:
+    db-config:
+      logic-delete-field: isDeleted # 全局逻辑删除字段名
+      logic-delete-value: 1 # 逻辑已删除值 (默认为 1)
+      logic-not-delete-value: 0 # 逻辑未删除值 (默认为 0)
+
+# -------------------------------------------------------------------
+# 7. X File Storage 文件管理配置
+# -------------------------------------------------------------------
+dromara:
+  x-file-storage:
+    # 默认使用的存储平台
+    default-platform: local-plus-1
+    # 缩略图后缀
+    thumbnail-suffix: ".min.jpg"
+    # 本地存储升级版（当前启用）
+    local-plus:
+      - platform: local-plus-1
+        enable-storage: true # 启用存储
+        enable-access: true # 启用访问（生成URL）
+        domain: http://127.0.0.1:${server.port}/file/ # 访问域名
+        base-path: upload/ # 基础路径（URL中的路径）
+        path-patterns: /file/** # Spring MVC映射路径
+        storage-path: D:/file-storage/ # 实际存储路径
+
+
+    # 阿里云OSS配置（已注释，需要时取消注释）
+    # aliyun-oss:
+    #   - platform: aliyun1 # 存储平台标识
+    #     enable-storage: true # 启用存储
+    #     access-key: ${ALICLOUD_ACCESS_KEY_ID}
+    #     secret-key: ${ALICLOUD_ACCESS_KEY_SECRET}
+    #     end-point: oss-cn-beijing.aliyuncs.com
+    #     bucket-name: xxxxxx
+    #     domain: https://xxxx.xxx.xxx/ # 访问域名，必须以“/”结尾
+    #     base-path: house/ # 存储的基础路径
+#
+#    # MinIO配置（已注释，预留）
+#    minio:
+#      - platform: minio-1
+#        enable-storage: true
+#        access-key: minioadmin
+#        secret-key: minioadmin
+#        end-point: http://localhost:9000
+#        bucket-name: files
+#        domain: http://localhost:9000/files/
+#        base-path: upload/

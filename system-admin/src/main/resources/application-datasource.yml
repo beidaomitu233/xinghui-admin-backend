@@ -1,0 +1,96 @@
+spring:
+  datasource:
+    # ===================================================================
+    # Dynamic Datasource 核心配置
+    # ===================================================================
+    dynamic:
+      # 设置默认的数据源关键字
+      primary: master
+      # 严格模式：false (未匹配到数据源时使用默认，而不是报错)
+      strict: false
+      # 使用 P6Spy 输出真实 SQL (可选，不需要可设为 false)
+      p6spy: false
+
+      # -------------------------------------------------------------
+      # 1. 数据源定义列表
+      # -------------------------------------------------------------
+      datasource:
+        # --- 主库 (Master) ---
+        master:
+          driver-class-name: com.mysql.cj.jdbc.Driver
+          url: jdbc:mysql://localhost:3306/xinghui_admin?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&allowMultiQueries=true
+          username: xinghuitec
+          password: xinghuitec233
+
+        # --- 从库 (Slave) ---
+        # 注意：Dynamic-Datasource 不支持 "enabled: false"。
+        # 如果没有配置具体的 url，必须将整个 slave 节点注释掉，否则启动会报 url 为空！
+        # slave:
+        #   driver-class-name: com.mysql.cj.jdbc.Driver
+        #   url: jdbc:mysql://localhost:3306/xinghui_admin_slave...
+        #   username: ...
+        #   password: ...
+
+      # -------------------------------------------------------------
+      # 2. Druid 连接池全局配置 (应用到所有数据源)
+      # -------------------------------------------------------------
+      druid:
+        # 初始化、最小、最大连接数
+        initial-size: 5
+        min-idle: 10
+        max-active: 20
+        # 获取连接等待超时 (毫秒)
+        max-wait: 60000
+        # 连接超时与 Socket 超时
+        connect-timeout: 30000
+        socket-timeout: 60000
+
+        # --- 连接保活与检测 ---
+        # 间隔多久检测一次 (毫秒)
+        time-between-eviction-runs-millis: 60000
+        # 最小生存时间 (毫秒)
+        min-evictable-idle-time-millis: 300000
+        # 最大生存时间 (毫秒)
+        max-evictable-idle-time-millis: 900000
+        
+        # 验证语句
+        validation-query: SELECT 1
+        # 申请连接时不检测 (影响性能)
+        test-on-borrow: false
+        # 归还连接时不检测
+        test-on-return: false
+        # 空闲时检测 (建议开启)
+        test-while-idle: true
+
+        # --- 过滤器配置 (Stat, Wall) ---
+        # 显式指定过滤器别名
+        filters: stat,wall
+        
+        # 具体的 Filter 配置细节
+        filter:
+          stat:
+            enabled: true
+            log-slow-sql: true
+            slow-sql-millis: 1000
+            merge-sql: true
+          wall:
+            config:
+              multi-statement-allow: true
+
+    # ===================================================================
+    # Druid 监控页面配置 (Servlet/Filter)
+    # 注意：这部分通常由 druid-spring-boot-starter 原生支持
+    # 如果 dynamic-datasource 接管了，这部分可能需要单独配置类，或者保留在此处依赖原生 Starter 激活
+    # ===================================================================
+    druid:
+      stat-view-servlet:
+        enabled: true
+        url-pattern: /druid/*
+        allow: # 空着代表允许所有
+        login-username: xinghui_admin
+        login-password: xinghui_admin233
+      
+      web-stat-filter:
+        enabled: true
+        url-pattern: "/*"
+        exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*"
