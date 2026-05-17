@@ -8,7 +8,12 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
       "Bash(Get-ChildItem -Recurse -File -Name)",
-      "Bash(Select-Object -First 100)"
+      "Bash(Select-Object -First 100)",
+      "Bash(cp -r 'D:\\\\changhuiengineer\\\\DevProject\\\\xinghui-admin2\\\\springboot-admin-xinghui\\\\xinghui-admin\\\\common\\\\src\\\\main\\\\java\\\\com\\\\xinghuiTec/annotation' 'D:\\\\changhuiengineer\\\\DevProject\\\\xinghui-admin2\\\\springboot-admin-xinghui\\\\xinghui-admin\\\\common\\\\common-core\\\\src\\\\main\\\\java\\\\com\\\\xinghuiTec/')",
+      "Bash(cp -r 'D:\\\\changhuiengineer\\\\DevProject\\\\xinghui-admin2\\\\springboot-admin-xinghui\\\\xinghui-admin\\\\common\\\\src\\\\main\\\\java\\\\com\\\\xinghuiTec/constants' 'D:\\\\changhuiengineer\\\\DevProject\\\\xinghui-admin2\\\\springboot-admin-xinghui\\\\xinghui-admin\\\\common\\\\common-core\\\\src\\\\main\\\\java\\\\com\\\\xinghuiTec/')",
+      "Bash(cp -r 'D:\\\\changhuiengineer\\\\DevProject\\\\xinghui-admin2\\\\springboot-admin-xinghui\\\\xinghui-admin\\\\common\\\\src\\\\main\\\\java\\\\com\\\\xinghuiTec/emues' 'D:\\\\changhuiengineer\\\\DevProject\\\\xinghui-admin2\\\\springboot-admin-xinghui\\\\xinghui-admin\\\\common\\\\common-core\\\\src\\\\main\\\\java\\\\com\\\\xinghuiTec/')",
+      "Bash(cp -r 'D:\\\\changhuiengineer\\\\DevProject\\\\xinghui-admin2\\\\springboot-admin-xinghui\\\\xinghui-admin\\\\common\\\\src\\\\main\\\\java\\\\com\\\\xinghuiTec/exception' 'D:\\\\changhuiengineer\\\\DevProject\\\\xinghui-admin2\\\\springboot-admin-xinghui\\\\xinghui-admin\\\\common\\\\common-core\\\\src\\\\main\\\\java\\\\com\\\\xinghuiTec/')",
+      "Bash(cp -r 'D:\\\\changhuiengineer\\\\DevProject\\\\xinghui-admin2\\\\springboot-admin-xinghui\\\\xinghui-admin\\\\common\\\\src\\\\main\\\\java\\\\com\\\\xinghuiTec/domain/entity/BaseEntity.java' 'D:\\\\changhuiengineer\\\\DevProject\\\\xinghui-admin2\\\\springboot-admin-xinghui\\\\xinghui-admin\\\\common\\\\common-core\\\\src\\\\main\\\\java\\\\com\\\\xinghuiTec/domain/entity/')"
     ]
   }
 }

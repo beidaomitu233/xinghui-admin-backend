@@ -105,9 +105,8 @@
         </dependency>
         <dependency>
             <groupId>com.xinghuiTec</groupId>
-            <artifactId>common</artifactId>
+            <artifactId>common-tenant</artifactId>
             <version>1.0-SNAPSHOT</version>
-            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
