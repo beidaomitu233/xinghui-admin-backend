@@ -30,7 +30,7 @@ public class SysTenantServiceImpl extends ServiceImpl<SysTenantMapper, SysTenant
     @Override
     public void checkTenant(String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {
-            throw new TenantException("租户ID不能为空");
+            throw new TenantException("tenant.number.not.blank");
         }
         if (TenantConstants.DEFAULT_TENANT_ID.equals(tenantId)) {
             return;
@@ -38,13 +38,13 @@ public class SysTenantServiceImpl extends ServiceImpl<SysTenantMapper, SysTenant
 
         SysTenant tenant = queryByTenantId(tenantId);
         if (ObjectUtil.isNull(tenant)) {
-            throw new TenantException("租户不存在");
+            throw new TenantException("tenant.not.exists");
         }
         if ("1".equals(tenant.getStatus())) {
-            throw new TenantException("租户已被停用");
+            throw new TenantException("tenant.blocked");
         }
         if (tenant.getExpireTime() != null && new Date().after(tenant.getExpireTime())) {
-            throw new TenantException("租户已过期");
+            throw new TenantException("tenant.expired");
         }
     }
 }

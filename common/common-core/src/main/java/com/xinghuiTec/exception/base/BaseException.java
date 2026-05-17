@@ -1,11 +1,25 @@
 package com.xinghuiTec.exception.base;
 
+import com.xinghuiTec.utils.MessageUtils;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import java.io.Serial;
+
 /**
- * 基础异常类
- * 
+ * 基础异常类（支持 i18n 国际化消息）
+ *
  * @author xinghuiTec
  */
+@Data
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+@AllArgsConstructor
 public class BaseException extends RuntimeException {
+
+    @Serial
     private static final long serialVersionUID = 1L;
 
     /**
@@ -14,7 +28,7 @@ public class BaseException extends RuntimeException {
     private String module;
 
     /**
-     * 错误码
+     * 错误码（i18n 消息键）
      */
     private String code;
 
@@ -24,43 +38,36 @@ public class BaseException extends RuntimeException {
     private Object[] args;
 
     /**
-     * 错误消息
+     * 默认错误消息（i18n 查找失败时使用）
      */
     private String defaultMessage;
 
-    public BaseException(String module, String code, Object[] args, String defaultMessage) {
-        this.module = module;
-        this.code = code;
-        this.args = args;
-        this.defaultMessage = defaultMessage;
+    public BaseException(String module, String code, Object[] args) {
+        this(module, code, args, null);
     }
 
     public BaseException(String module, String defaultMessage) {
-        this.module = module;
-        this.defaultMessage = defaultMessage;
+        this(module, null, null, defaultMessage);
+    }
+
+    public BaseException(String code, Object[] args) {
+        this(null, code, args, null);
+    }
+
+    public BaseException(String defaultMessage) {
+        this(null, null, null, defaultMessage);
     }
 
     @Override
     public String getMessage() {
-        if (defaultMessage != null) {
-            return defaultMessage;
+        String message = null;
+        if (code != null && !code.isEmpty()) {
+            message = MessageUtils.message(code, args);
         }
-        return code != null ? code : super.getMessage();
+        if (message == null) {
+            message = defaultMessage;
+        }
+        return message;
     }
 
-    public String getModule() {
-        return module;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public Object[] getArgs() {
-        return args;
-    }
-
-    public String getDefaultMessage() {
-        return defaultMessage;
-    }
 }
