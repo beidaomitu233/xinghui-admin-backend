@@ -17,6 +17,7 @@
         <module>common-redis</module>
         <module>common-security</module>
         <module>common-tenant</module>
+        <module>common-ratelimiter</module>
     </modules>
 
 </project>

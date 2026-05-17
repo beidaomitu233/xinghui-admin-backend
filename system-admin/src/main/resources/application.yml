@@ -19,6 +19,15 @@ spring:
       port: 6379
       database: 0
 
+# Redisson 配置
+redisson:
+  threads: 4
+  nettyThreads: 8
+  singleServerConfig:
+    timeout: 3000
+    connectionPoolSize: 32
+    connectionMinimumIdleSize: 8
+
   # Servlet 相关的配置
   servlet:
     multipart:

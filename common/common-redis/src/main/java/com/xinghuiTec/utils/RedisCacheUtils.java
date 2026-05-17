@@ -293,4 +293,21 @@ public class RedisCacheUtils {
         Long result = redisTemplate.getExpire(key, TimeUnit.SECONDS);
         return result == null ? -2 : result;
     }
+
+    /**
+     * 原子递增计数器（用于限流等场景）
+     *
+     * @param key Redis键
+     * @return 递增后的值
+     */
+    public Long increment(final String key) {
+        return redisTemplate.opsForValue().increment(key);
+    }
+
+    /**
+     * 原子递增计数器并设置步长
+     */
+    public Long increment(final String key, long delta) {
+        return redisTemplate.opsForValue().increment(key, delta);
+    }
 }

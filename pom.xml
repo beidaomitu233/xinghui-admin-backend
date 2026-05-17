@@ -36,6 +36,7 @@
         <aliyun.oss.jaxb-runtime.version>2.3.3</aliyun.oss.jaxb-runtime.version>
         <x-file-storage-spring.version>2.2.1</x-file-storage-spring.version>
         <dynamic-datasource.version>4.3.1</dynamic-datasource.version>
+        <redisson.version>3.40.2</redisson.version>
     </properties>
 
 
@@ -113,6 +114,13 @@
                 <groupId>com.aliyun</groupId>
                 <artifactId>dysmsapi20170525</artifactId>
                 <version>${aliyun.sms.version}</version>
+            </dependency>
+
+            <!-- Redisson 分布式Redis客户端 -->
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson-spring-boot-starter</artifactId>
+                <version>${redisson.version}</version>
             </dependency>
 
 
