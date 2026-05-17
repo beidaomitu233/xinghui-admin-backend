@@ -81,6 +81,12 @@ public class loginFilter extends OncePerRequestFilter {
             if (Objects.isNull(loginUser)) {
                 throw new RuntimeException("登入凭证过期，请重新登入");
             }
+
+            // 从JWT中获取租户ID并设置到loginUser
+            Object tenantIdObj = jwt.getPayload(jwtConstans.PAYLOAD_TENANT_ID);
+            if (tenantIdObj != null) {
+                loginUser.setTenantId(tenantIdObj.toString());
+            }
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

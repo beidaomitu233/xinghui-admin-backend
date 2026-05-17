@@ -68,6 +68,15 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 租户异常
+     */
+    @ExceptionHandler(TenantException.class)
+    public Result<String> handleTenantException(TenantException e) {
+        log.warn("租户异常: {}", e.getMessage());
+        return Result.fail(e.getDefaultMessage() != null ? e.getDefaultMessage() : "租户操作异常");
+    }
+
+    /**
      * 黑名单IP异常
      */
     @ExceptionHandler(BlackListException.class)

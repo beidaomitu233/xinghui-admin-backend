@@ -21,11 +21,11 @@ import com.baomidou.mybatisplus.annotation.TableName;
  */
 @SuppressWarnings("serial")
 @Data
-@EqualsAndHashCode(callSuper = false)
+@EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
 @TableName("sys_user")
-public class SysUser extends BaseEntity {
+public class SysUser extends TenantEntity {
     // 用户ID (UUID)
     @TableId(type = IdType.INPUT)
     private String userId;

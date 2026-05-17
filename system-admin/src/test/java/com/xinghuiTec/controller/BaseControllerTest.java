@@ -51,7 +51,7 @@ public abstract class BaseControllerTest {
     public void loginBeforeAllTests() throws Exception {
         // 创建登录请求体
         loginDTO loginDto = new loginDTO();
-        loginDto.setUsername(TEST_USERNAME);
+        loginDto.setPhone(TEST_USERNAME);
         loginDto.setPassword(TEST_PASSWORD);
 
         // 执行登录请求

@@ -26,6 +26,10 @@ public class loginUser implements UserDetails {
     //获取权限
     @JSONField(serialize = false) //忽略序列化
     private List<SimpleGrantedAuthority> authorities;
+    /**
+     * 租户ID
+     */
+    private String tenantId;
 
     public loginUser(SysUser user, List<String> validPermissions) {
         this.user = user;
@@ -53,9 +57,13 @@ public class loginUser implements UserDetails {
     public String getPassword() {
         return user.getPassword();
     }
+    /**
+     * 返回手机号作为 Spring Security 的 username
+     * 因为系统已切换为手机号登录
+     */
     @Override
     public String getUsername() {
-        return user.getUsername();
+        return user.getMobile();
     }
     @Override
     public boolean isAccountNonExpired() {

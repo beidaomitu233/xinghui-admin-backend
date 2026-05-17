@@ -22,4 +22,9 @@ public class jwtConstans {
      * 用于从 JWT 中提取用户ID
      */
     public static final String PAYLOAD_USER_ID = "userId";
+
+    /**
+     * JWT 载荷字段名 - 租户ID
+     */
+    public static final String PAYLOAD_TENANT_ID = "tenantId";
 }

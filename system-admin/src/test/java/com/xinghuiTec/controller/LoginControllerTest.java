@@ -34,9 +34,9 @@ public class LoginControllerTest {
     private String token; // 存储登录后的token
 
     /**
-     * 测试用户名和密码
+     * 测试手机号和密码
      */
-    private static final String TEST_USERNAME = "testuser2";
+    private static final String TEST_PHONE = "13800138000";
     private static final String TEST_PASSWORD = "123456";
 
     /**
@@ -63,7 +63,7 @@ public class LoginControllerTest {
     @DisplayName("测试用户登录-成功")
     public void testLoginSuccess() throws Exception {
         loginDTO loginDto = new loginDTO();
-        loginDto.setUsername(TEST_USERNAME);
+        loginDto.setPhone(TEST_PHONE);
         loginDto.setPassword(TEST_PASSWORD);
 
         MvcResult result = mockMvc.perform(post("/user/login")
@@ -87,7 +87,7 @@ public class LoginControllerTest {
     @DisplayName("测试用户登录-用户名错误")
     public void testLoginWithWrongUsername() throws Exception {
         loginDTO loginDto = new loginDTO();
-        loginDto.setUsername("wronguser");
+        loginDto.setPhone("wronguser");
         loginDto.setPassword(TEST_PASSWORD);
 
         mockMvc.perform(post("/user/login")
@@ -105,7 +105,7 @@ public class LoginControllerTest {
     @DisplayName("测试用户登录-密码错误")
     public void testLoginWithWrongPassword() throws Exception {
         loginDTO loginDto = new loginDTO();
-        loginDto.setUsername(TEST_USERNAME);
+        loginDto.setPhone(TEST_PHONE);
         loginDto.setPassword("wrongpassword");
 
         mockMvc.perform(post("/user/login")
@@ -210,7 +210,7 @@ public class LoginControllerTest {
      */
     private String loginAndGetToken() throws Exception {
         loginDTO loginDto = new loginDTO();
-        loginDto.setUsername(TEST_USERNAME);
+        loginDto.setPhone(TEST_PHONE);
         loginDto.setPassword(TEST_PASSWORD);
 
         MvcResult result = mockMvc.perform(post("/user/login")

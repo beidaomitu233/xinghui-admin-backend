@@ -36,6 +36,7 @@ import com.xinghuiTec.service.SysRoleService;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.xinghuiTec.constants.jwtConstans.TOKEN_EXPIRATION;
@@ -43,14 +44,6 @@ import static com.xinghuiTec.constants.redisConstants.ADMIN_LOGIN_PREFIX;
 
 @Service
 public class LoginServiceImpl implements LoginService {
-        /*
-         * 基于spring security实现用户登入
-         * 1.通过authenticationManager.authenticate()方法进行用户认证
-         * 2.生成并返回jwt令牌
-         *
-         * authenticate()方法实际上就是会调用我们重写的userDetailManageimpl.loadUserByUsername()方法
-         *
-         */
 
         @Resource
         private AuthenticationManager authenticationManager;
@@ -79,35 +72,33 @@ public class LoginServiceImpl implements LoginService {
         @Autowired
         private SysUserMapper userMapper;
 
+        /** 手机号正则：中国大陆手机号 1xx-xxxx-xxxx */
+        private static final Pattern PHONE_PATTERN = Pattern.compile("^1[3-9]\\d{9}$");
+
         @Override
         public String login(loginDTO user) {
-                // 前置校验(包括验证码验证)
+                // 前置校验（手机号格式 + 验证码）
                 loginPreCheck(user);
 
-                // 1.通过authenticationManager.authenticate()方法进行用户认证
-                // Authentication实现类:UsernamePasswordAuthenticationToken,绑定我们的用户账户和密码
-                UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
-                                user.getUsername(), user.getPassword());
-                // authenticate()从authenticationToken中获取到用户账户和密码,然后传入并调用loadUserByUsername()方法
+                // 1. 认证：将手机号作为用户名传入 Spring Security 认证链
+                // userDetailManageimpl.loadUserByUsername() 会忽略租户按手机号查询
+                UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(user.getPhone(), user.getPassword());
                 Authentication authenticate = authenticationManager.authenticate(authenticationToken);
 
-                // 如果没有匹配到用户,抛出异常
                 if (Objects.isNull(authenticate)) {
-                        throw new RuntimeException("账号或密码错误");
+                        throw new RuntimeException("手机号或密码错误");
                 }
 
-                // 从authenticate中获取用户信息,就是loadUserByUsername()方法的返回值
+                // 2. 从认证结果获取用户信息（tenantId 已在 userDetailManageimpl 中从用户实体设置）
                 loginUser loginUser = (loginUser) authenticate.getPrincipal();
                 String userId = loginUser.getUser().getUserId();
+                String tenantId = loginUser.getTenantId();
 
-                // 2.生成并返回JWT (JWT只包含userId,不包含完整用户信息)
-                String jwt = JwtUtil.createJWT(userId);
+                // 3. 生成 JWT（包含 userId 和 tenantId）
+                String jwt = JwtUtil.createJWT(userId, tenantId);
 
-                // 将毫秒转化为天
+                // 4. 存储 loginUser 到 Redis
                 Integer days = Math.toIntExact(TimeUnit.MILLISECONDS.toDays(TOKEN_EXPIRATION));
-
-                // 3.存储 loginUser 对象到 Redis (而不是存储JWT)
-                // 这样 loginFilter 可以直接从 Redis 获取完整的用户信息,无需查询数据库
                 redisCacheUtils.setCacheObject(ADMIN_LOGIN_PREFIX + userId, loginUser, days, TimeUnit.DAYS);
 
                 return jwt;
@@ -115,10 +106,8 @@ public class LoginServiceImpl implements LoginService {
 
         @Override
         public String logout() {
-                // 从Redis中清除登录信息
-                // 1.从auth中获取当前用户id
                 String userId = SecurityUtils.getUser().getUserId();
-                boolean b = redisCacheUtils.deleteObject(userId);
+                boolean b = redisCacheUtils.deleteObject(ADMIN_LOGIN_PREFIX + userId);
                 if (!b) {
                         throw new RuntimeException("登出失败");
                 }
@@ -127,19 +116,16 @@ public class LoginServiceImpl implements LoginService {
 
         @Override
         public UserInfoVO getUserInfo() {
-                // 1. 获取当前登录用户
                 SysUser user = SecurityUtils.getUser();
                 return getUserInfo(user.getUserId());
         }
 
         @Override
         public UserInfoVO getUserInfo(String userId) {
-                // 如果userId为空，获取当前登录用户信息
                 if (!StringUtils.hasText(userId)) {
                         return getUserInfo();
                 }
 
-                // 2. 尝试从缓存获取用户信息
                 String cacheKey = redisConstants.USER_INFO_PREFIX + userId;
                 UserInfoVO cachedUserInfo = redisCacheUtils.getCacheObject(cacheKey);
 
@@ -147,8 +133,6 @@ public class LoginServiceImpl implements LoginService {
                         return cachedUserInfo;
                 }
 
-                // 3. 缓存未命中，从数据库查询
-                // 获取用户角色列表 (关联表)
                 LambdaQueryWrapper<SysUserRole> wrapper = new LambdaQueryWrapper<>();
                 wrapper.eq(SysUserRole::getUserId, userId);
                 List<SysUserRole> userRoles = userRoleMapper.selectList(wrapper);
@@ -157,12 +141,10 @@ public class LoginServiceImpl implements LoginService {
                 List<String> permissions = new ArrayList<>();
 
                 if (!userRoles.isEmpty()) {
-                        // 获取所有角色ID
                         List<Long> roleIds = userRoles.stream()
                                         .map(SysUserRole::getRoleId)
                                         .collect(Collectors.toList());
 
-                        // 查询角色详细信息并构建 RoleVO 列表
                         if (!roleIds.isEmpty()) {
                                 List<SysRole> sysRoles = roleService.listByIds(roleIds);
                                 for (SysRole role : sysRoles) {
@@ -170,7 +152,6 @@ public class LoginServiceImpl implements LoginService {
                                 }
                         }
 
-                        // 获取权限
                         for (Long roleId : roleIds) {
                                 List<String> perms = menuMapper.selectPermsByUserId(roleId);
                                 if (perms != null) {
@@ -179,13 +160,11 @@ public class LoginServiceImpl implements LoginService {
                         }
                 }
 
-                // 去重权限
                 permissions = permissions.stream()
                                 .filter(p -> p != null && !p.isEmpty())
                                 .distinct()
                                 .collect(Collectors.toList());
 
-                // 查询用户基本信息
                 SysUser user = userMapper.selectById(userId);
                 if (user == null) {
                         throw new RuntimeException("用户不存在");
@@ -193,7 +172,6 @@ public class LoginServiceImpl implements LoginService {
 
                 UserInfoVO userInfoVO = new UserInfoVO(user, roles, permissions);
 
-                // 4. 将结果存入缓存
                 redisCacheUtils.setCacheObject(cacheKey, userInfoVO, redisConstants.USER_INFO_TTL_SEC,
                                 TimeUnit.SECONDS);
 
@@ -202,19 +180,16 @@ public class LoginServiceImpl implements LoginService {
 
         @Override
         public List<SysMenuVO> getUserRouter() {
-                // 1. 获取当前用户
                 SysUser user = SecurityUtils.getUser();
                 return getUserRouter(user.getUserId());
         }
 
         @Override
         public List<SysMenuVO> getUserRouter(String userId) {
-                // 如果userId为空，获取当前登录用户路由
                 if (!StringUtils.hasText(userId)) {
                         return getUserRouter();
                 }
 
-                // 2. 尝试从缓存获取路由信息
                 String routerCacheKey = redisConstants.USER_ROUTER_PREFIX + userId;
                 List<SysMenuVO> cachedRouter = redisCacheUtils.getCacheList(routerCacheKey);
 
@@ -222,27 +197,22 @@ public class LoginServiceImpl implements LoginService {
                         return cachedRouter;
                 }
 
-                // 3. 查询用户角色列表
                 LambdaQueryWrapper<SysUserRole> userRoleWrapper = new LambdaQueryWrapper<>();
                 userRoleWrapper.eq(SysUserRole::getUserId, userId);
                 List<SysUserRole> userRoles = userRoleMapper.selectList(userRoleWrapper);
 
                 if (userRoles.isEmpty()) {
-                        // 如果用户没有角色,返回空菜单列表
                         return Collections.emptyList();
                 }
 
-                // 4. 获取角色ID列表
                 List<Long> roleIds = userRoles.stream()
                                 .map(SysUserRole::getRoleId)
                                 .collect(Collectors.toList());
 
-                // 5. 查询角色菜单关联表,获取菜单ID
                 LambdaQueryWrapper<SysRoleMenu> roleMenuWrapper = new LambdaQueryWrapper<>();
                 roleMenuWrapper.in(SysRoleMenu::getRoleId, roleIds);
                 List<SysRoleMenu> roleMenus = roleMenuMapper.selectList(roleMenuWrapper);
 
-                // 提取并去重菜单ID
                 List<Long> menuIds = roleMenus.stream()
                                 .map(SysRoleMenu::getMenuId)
                                 .distinct()
@@ -252,22 +222,17 @@ public class LoginServiceImpl implements LoginService {
                         return Collections.emptyList();
                 }
 
-                // 6. 查询菜单详情,过滤掉按钮 (menuType != 'F')
                 List<SysMenu> menus = menuMapper.selectByIds(menuIds);
 
-                // 过滤：只保留目录(M)和菜单(C),去除按钮(F)，且状态正常
                 List<SysMenu> filteredMenus = menus.stream()
                                 .filter(menu -> !"F".equals(menu.getMenuType()))
                                 .filter(menu -> "0".equals(menu.getStatus()))
                                 .collect(Collectors.toList());
 
-                // 使用 BeanUtil 批量转换为 VO
                 List<SysMenuVO> menuVOs = cn.hutool.core.bean.BeanUtil.copyToList(filteredMenus, SysMenuVO.class);
 
-                // 7. 构建树形结构并排序
                 List<SysMenuVO> menuTree = buildMenuTree(menuVOs);
 
-                // 8. 存入缓存
                 redisCacheUtils.setCacheList(routerCacheKey, menuTree, redisConstants.USER_ROUTER_TTL_SEC,
                                 TimeUnit.SECONDS);
 
@@ -275,58 +240,43 @@ public class LoginServiceImpl implements LoginService {
         }
 
         /**
-         * 登录前置校验
-         * 
-         * @param loginDTO 登录信息
+         * 登录前置校验（手机号格式 + 验证码）
          */
         public void loginPreCheck(loginDTO loginDTO) {
-                String username = loginDTO.getUsername();
+                String phone = loginDTO.getPhone();
                 String password = loginDTO.getPassword();
                 String code = loginDTO.getCode();
                 String uuid = loginDTO.getUuid();
 
-                // 用户名或密码为空 错误
-                if (!StringUtils.hasText(username) || !StringUtils.hasText(password)) {
+                // 手机号或密码为空
+                if (!StringUtils.hasText(phone) || !StringUtils.hasText(password)) {
                         throw new UserNotExistsException();
                 }
 
-                // 验证码校验(如果启用)
+                // 手机号格式校验
+                if (!PHONE_PATTERN.matcher(phone).matches()) {
+                        throw new RuntimeException("手机号格式不正确，请输入11位中国大陆手机号");
+                }
+
+                // 验证码校验
                 if (captchaProperties.getEnabled()) {
-                        // 检查验证码参数是否为空
                         if (!StringUtils.hasText(code) || !StringUtils.hasText(uuid)) {
                                 throw new CaptchaException();
                         }
-
-                        // 验证验证码
                         boolean isValid = captchaService.validateCaptcha(uuid, code);
                         if (!isValid) {
                                 throw new CaptchaException();
                         }
                 }
-
-                // IP黑名单校验
-                // String blackStr = configService.selectConfigByKey("sys.login.blackIPList");
-                // if (IpUtils.isMatchedIp(blackStr, IpUtils.getIpAddr())) {
-
-                // throw new BlackListException();
-                // }
         }
 
-        /**
-         * 构建树形结构
-         * 使用通用TreeUtils工具类构建菜单树
-         *
-         * @param menus 扁平的菜单列表
-         * @return 树形结构的菜单列表
-         */
         private List<SysMenuVO> buildMenuTree(List<SysMenuVO> menus) {
-                // 使用通用TreeUtils工具类构建树形结构
                 return com.xinghuiTec.utils.TreeUtils.buildTree(
                                 menus,
-                                SysMenuVO::getMenuId, // ID获取器
-                                SysMenuVO::getParentId, // 父ID获取器
-                                SysMenuVO::setChildren, // 子节点设置器
-                                SysMenuVO::getOrderNum // 排序字段获取器
+                                SysMenuVO::getMenuId,
+                                SysMenuVO::getParentId,
+                                SysMenuVO::setChildren,
+                                SysMenuVO::getOrderNum
                 );
         }
 
