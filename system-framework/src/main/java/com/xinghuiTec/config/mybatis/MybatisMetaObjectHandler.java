@@ -1,6 +1,7 @@
 package com.xinghuiTec.config.mybatis;
 
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
+import com.xinghuiTec.utils.TenantHelper;
 import org.apache.ibatis.reflection.MetaObject;
 import org.springframework.stereotype.Component;
 
@@ -14,13 +15,19 @@ import java.util.Date;
 public class MybatisMetaObjectHandler implements MetaObjectHandler {
 
     /**
-     * 在插入数据时自动填充创建时间字段。
+     * 在插入数据时自动填充创建时间字段和租户ID字段。
      *
      * @param metaObject 元对象，包含待插入的数据
      */
     @Override
     public void insertFill(MetaObject metaObject) {
         this.strictInsertFill(metaObject, "createTime", Date.class, new Date());
+
+        // 自动填充租户ID
+        String tenantId = TenantHelper.getTenantId();
+        if (tenantId != null && !tenantId.isEmpty()) {
+            this.strictInsertFill(metaObject, "tenantId", String.class, tenantId);
+        }
     }
 
     /**

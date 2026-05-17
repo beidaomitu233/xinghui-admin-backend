@@ -16,11 +16,11 @@ import com.baomidou.mybatisplus.annotation.TableName;
  */
 @SuppressWarnings("serial")
 @Data
-@EqualsAndHashCode(callSuper = false)
+@EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
 @TableName("sys_role")
-public class SysRole extends BaseEntity {
+public class SysRole extends TenantEntity {
     @TableId
     // 角色ID
     private Long roleId;

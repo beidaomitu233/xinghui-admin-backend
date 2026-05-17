@@ -43,9 +43,9 @@ public class userTest {
         String simpleUUID = IdUtil.simpleUUID();
         SysUser user = new SysUser();
         user.setUserId(simpleUUID);
-        user.setUsername("testuser3");
-        user.setPassword(passwordEncoder.encode("123456")); // 加密密码
-        user.setNickname("测试用户");
+        user.setUsername("user");
+        user.setPassword(passwordEncoder.encode("user1")); // 加密密码
+        user.setNickname("演示账号");
         user.setEmail("testuser@example.com");
         user.setMobile("13800138000");
         user.setAvatar("https://example.com/avatar.jpg");
@@ -61,14 +61,14 @@ public class userTest {
         System.out.println("新增用户ID: " + user.getUserId());
 
         // 关联角色（roleId = 1）
-//        if (user.getUserId() != null) {
-//            SysUserRole userRole = new SysUserRole();
-//            userRole.setUserId(user.getUserId());
-//            userRole.setRoleId(1L); // 角色ID为1
-//            int insertResult = sysUserRoleMapper.insert(userRole);
-//            System.out.println("关联角色结果: " + insertResult);
-//            System.out.println("用户 " + user.getUsername() + " 已关联角色ID: 1");
-//        }
+        if (user.getUserId() != null) {
+            SysUserRole userRole = new SysUserRole();
+            userRole.setUserId(user.getUserId());
+            userRole.setRoleId(2016902236600291329L); // 超级管理员
+            int insertResult = sysUserRoleMapper.insert(userRole);
+            System.out.println("关联角色结果: " + insertResult);
+            System.out.println("用户 " + user.getUsername() + " 已关联角色ID: 1");
+        }
     }
 
     /**

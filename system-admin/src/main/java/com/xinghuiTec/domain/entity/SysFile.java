@@ -16,11 +16,11 @@ import com.baomidou.mybatisplus.annotation.TableName;
  */
 @SuppressWarnings("serial")
 @Data
-@EqualsAndHashCode(callSuper = false)
+@EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
 @TableName("sys_file")
-public class SysFile extends BaseEntity {
+public class SysFile extends TenantEntity {
     @TableId
     // 文件id
     private Long id;

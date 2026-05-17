@@ -16,11 +16,11 @@ import com.baomidou.mybatisplus.annotation.TableName;
  */
 @SuppressWarnings("serial")
 @Data
-@EqualsAndHashCode(callSuper = false)
+@EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
 @TableName("sys_config")
-public class SysConfig extends BaseEntity {
+public class SysConfig extends TenantEntity {
     // 参数主键
     @TableId
     private Integer configId;

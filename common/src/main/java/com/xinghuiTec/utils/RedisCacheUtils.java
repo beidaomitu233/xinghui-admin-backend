@@ -1,5 +1,7 @@
 package com.xinghuiTec.utils;
 
+import com.xinghuiTec.constants.TenantConstants;
+import com.xinghuiTec.helper.TenantHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.BoundSetOperations;
 import org.springframework.data.redis.core.HashOperations;
@@ -13,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Redis 缓存工具类
  * 统一规则: 所有 get 方法在缓存不存在时返回 null
+ * 支持多租户 Key 前缀隔离
  * 
  * @author changhui
  */
@@ -24,13 +27,34 @@ public class RedisCacheUtils {
     private RedisTemplate redisTemplate;
 
     /**
+     * 添加租户前缀到 Redis Key
+     */
+    private String addTenantPrefix(String key) {
+        if (key == null || key.isEmpty()) {
+            return key;
+        }
+        // 全局 Key 不添加租户前缀
+        if (key.startsWith(TenantConstants.GLOBAL_REDIS_KEY)) {
+            return key;
+        }
+        // 检查是否已经有租户前缀
+        String tenantId = TenantHelper.getTenantId();
+        if (tenantId != null && !tenantId.isEmpty()) {
+            if (!key.startsWith(tenantId + ":")) {
+                return tenantId + ":" + key;
+            }
+        }
+        return key;
+    }
+
+    /**
      * 缓存基本的对象，Integer、String、实体类等
      *
      * @param key   缓存的键值
      * @param value 缓存的值
      */
     public <T> void setCacheObject(final String key, final T value) {
-        redisTemplate.opsForValue().set(key, value);
+        redisTemplate.opsForValue().set(addTenantPrefix(key), value);
     }
 
     /**
@@ -42,7 +66,7 @@ public class RedisCacheUtils {
      * @param timeUnit 时间颗粒度
      */
     public <T> void setCacheObject(final String key, final T value, final Integer timeout, final TimeUnit timeUnit) {
-        redisTemplate.opsForValue().set(key, value, timeout, timeUnit);
+        redisTemplate.opsForValue().set(addTenantPrefix(key), value, timeout, timeUnit);
     }
 
     /**
@@ -65,7 +89,7 @@ public class RedisCacheUtils {
      * @return true=设置成功；false=设置失败
      */
     public boolean expire(final String key, final long timeout, final TimeUnit unit) {
-        Boolean result = redisTemplate.expire(key, timeout, unit);
+        Boolean result = redisTemplate.expire(addTenantPrefix(key), timeout, unit);
         return result != null && result;
     }
 
@@ -78,7 +102,7 @@ public class RedisCacheUtils {
      */
     public <T> T getCacheObject(final String key) {
         ValueOperations<String, T> operation = redisTemplate.opsForValue();
-        return operation.get(key);
+        return operation.get(addTenantPrefix(key));
     }
 
     /**
@@ -88,7 +112,7 @@ public class RedisCacheUtils {
      * @return true=删除成功,false=删除失败
      */
     public boolean deleteObject(final String key) {
-        Boolean result = redisTemplate.delete(key);
+        Boolean result = redisTemplate.delete(addTenantPrefix(key));
         return result != null && result;
     }
 
@@ -99,7 +123,11 @@ public class RedisCacheUtils {
      * @return 成功删除的数量
      */
     public long deleteObject(final Collection collection) {
-        Long result = redisTemplate.delete(collection);
+        List<String> prefixedKeys = new ArrayList<>();
+        for (Object obj : collection) {
+            prefixedKeys.add(addTenantPrefix(obj.toString()));
+        }
+        Long result = redisTemplate.delete(prefixedKeys);
         return result == null ? 0 : result;
     }
 
@@ -112,7 +140,7 @@ public class RedisCacheUtils {
      * @return 缓存的元素数量
      */
     public <T> long setCacheList(final String key, final List<T> dataList) {
-        Long count = redisTemplate.opsForList().rightPushAll(key, dataList);
+        Long count = redisTemplate.opsForList().rightPushAll(addTenantPrefix(key), dataList);
         return count == null ? 0 : count;
     }
 
@@ -128,7 +156,8 @@ public class RedisCacheUtils {
      */
     public <T> long setCacheList(final String key, final List<T> dataList, final long timeout,
             final TimeUnit timeUnit) {
-        Long count = redisTemplate.opsForList().rightPushAll(key, dataList);
+        String prefixedKey = addTenantPrefix(key);
+        Long count = redisTemplate.opsForList().rightPushAll(prefixedKey, dataList);
         if (timeout > 0) {
             expire(key, timeout, timeUnit);
         }
@@ -143,13 +172,14 @@ public class RedisCacheUtils {
      * @return 缓存键值对应的数据,不存在返回null
      */
     public <T> List<T> getCacheList(final String key) {
+        String prefixedKey = addTenantPrefix(key);
         // 先检查key是否存在
-        Boolean exists = redisTemplate.hasKey(key);
+        Boolean exists = redisTemplate.hasKey(prefixedKey);
         if (exists == null || !exists) {
             return null; // key不存在,返回null
         }
         // key存在,返回列表数据
-        return (List<T>) redisTemplate.opsForList().range(key, 0, -1);
+        return (List<T>) redisTemplate.opsForList().range(prefixedKey, 0, -1);
     }
 
     /**
@@ -161,7 +191,7 @@ public class RedisCacheUtils {
      * @return 缓存数据的对象
      */
     public <T> BoundSetOperations<String, T> setCacheSet(final String key, final Set<T> dataSet) {
-        BoundSetOperations<String, T> setOperation = redisTemplate.boundSetOps(key);
+        BoundSetOperations<String, T> setOperation = redisTemplate.boundSetOps(addTenantPrefix(key));
         for (T t : dataSet) {
             setOperation.add(t);
         }
@@ -176,12 +206,13 @@ public class RedisCacheUtils {
      * @return 缓存的Set对象,不存在返回null
      */
     public <T> Set<T> getCacheSet(final String key) {
+        String prefixedKey = addTenantPrefix(key);
         // 先检查key是否存在
-        Boolean exists = redisTemplate.hasKey(key);
+        Boolean exists = redisTemplate.hasKey(prefixedKey);
         if (exists == null || !exists) {
             return null; // key不存在,返回null
         }
-        return (Set<T>) redisTemplate.opsForSet().members(key);
+        return (Set<T>) redisTemplate.opsForSet().members(prefixedKey);
     }
 
     /**
@@ -193,7 +224,7 @@ public class RedisCacheUtils {
      */
     public <T> void setCacheMap(final String key, final Map<String, T> dataMap) {
         if (dataMap != null) {
-            redisTemplate.opsForHash().putAll(key, dataMap);
+            redisTemplate.opsForHash().putAll(addTenantPrefix(key), dataMap);
         }
     }
 
@@ -205,12 +236,13 @@ public class RedisCacheUtils {
      * @return 缓存的Map对象,不存在返回null
      */
     public <T> Map<String, T> getCacheMap(final String key) {
+        String prefixedKey = addTenantPrefix(key);
         // 先检查key是否存在
-        Boolean exists = redisTemplate.hasKey(key);
+        Boolean exists = redisTemplate.hasKey(prefixedKey);
         if (exists == null || !exists) {
             return null; // key不存在,返回null
         }
-        return (Map<String, T>) redisTemplate.opsForHash().entries(key);
+        return (Map<String, T>) redisTemplate.opsForHash().entries(prefixedKey);
     }
 
     /**
@@ -222,7 +254,7 @@ public class RedisCacheUtils {
      * @param <T>   值类型
      */
     public <T> void setCacheMapValue(final String key, final String hKey, final T value) {
-        redisTemplate.opsForHash().put(key, hKey, value);
+        redisTemplate.opsForHash().put(addTenantPrefix(key), hKey, value);
     }
 
     /**
@@ -235,7 +267,7 @@ public class RedisCacheUtils {
      */
     public <T> T getCacheMapValue(final String key, final String hKey) {
         HashOperations<String, String, T> opsForHash = redisTemplate.opsForHash();
-        return opsForHash.get(key, hKey);
+        return opsForHash.get(addTenantPrefix(key), hKey);
     }
 
     /**
@@ -246,7 +278,7 @@ public class RedisCacheUtils {
      * @return 删除的数量
      */
     public long delCacheMapValue(final String key, final String hKey) {
-        Long result = redisTemplate.opsForHash().delete(key, hKey);
+        Long result = redisTemplate.opsForHash().delete(addTenantPrefix(key), hKey);
         return result == null ? 0 : result;
     }
 
@@ -259,7 +291,7 @@ public class RedisCacheUtils {
      * @return Hash对象集合
      */
     public <T> List<T> getMultiCacheMapValue(final String key, final Collection<Object> hKeys) {
-        return (List<T>) redisTemplate.opsForHash().multiGet(key, hKeys);
+        return (List<T>) redisTemplate.opsForHash().multiGet(addTenantPrefix(key), hKeys);
     }
 
     /**
@@ -269,7 +301,7 @@ public class RedisCacheUtils {
      * @return 对象列表
      */
     public Collection<String> keys(final String pattern) {
-        return redisTemplate.keys(pattern);
+        return redisTemplate.keys(addTenantPrefix(pattern));
     }
 
     /**
@@ -279,7 +311,7 @@ public class RedisCacheUtils {
      * @return true=存在,false=不存在
      */
     public boolean hasKey(final String key) {
-        Boolean result = redisTemplate.hasKey(key);
+        Boolean result = redisTemplate.hasKey(addTenantPrefix(key));
         return result != null && result;
     }
 
@@ -290,7 +322,7 @@ public class RedisCacheUtils {
      * @return 过期时间(秒),-1表示永久,-2表示key不存在
      */
     public long getExpire(final String key) {
-        Long result = redisTemplate.getExpire(key, TimeUnit.SECONDS);
+        Long result = redisTemplate.getExpire(addTenantPrefix(key), TimeUnit.SECONDS);
         return result == null ? -2 : result;
     }
 }

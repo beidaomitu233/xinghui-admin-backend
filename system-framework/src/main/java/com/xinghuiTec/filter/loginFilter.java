@@ -1,11 +1,11 @@
 package com.xinghuiTec.filter;
 
-import cn.hutool.jwt.Claims;
 import cn.hutool.jwt.JWT;
 import com.xinghuiTec.constants.HttpConstants;
 import com.xinghuiTec.constants.jwtConstans;
 import com.xinghuiTec.constants.redisConstants;
 import com.xinghuiTec.domain.entity.loginUser;
+import com.xinghuiTec.utils.TenantHelper;
 import com.xinghuiTec.utils.JwtUtil;
 import com.xinghuiTec.utils.RedisCacheUtils;
 import jakarta.annotation.Resource;
@@ -69,11 +69,20 @@ public class loginFilter extends OncePerRequestFilter {
 
         // 验证JWT令牌并获取用户信息
         loginUser loginUser;
+        String tenantId = null;
         try {
             // 解析JWT令牌获取载荷信息
             JWT jwt = JwtUtil.parseToken(authorization);
             // 从载荷中获取用户ID
             String userId = jwt.getPayload(jwtConstans.PAYLOAD_USER_ID).toString();
+            // 从载荷中获取租户ID
+            tenantId = JwtUtil.getTenantId(authorization);
+
+            // 设置租户上下文
+            if (tenantId != null && !tenantId.isEmpty()) {
+                TenantHelper.setDynamic(tenantId);
+            }
+
             // 从Redis缓存中获取登录用户信息
             loginUser = redisCacheUtils.getCacheObject(redisConstants.ADMIN_LOGIN_PREFIX + userId);
 
@@ -83,6 +92,12 @@ public class loginFilter extends OncePerRequestFilter {
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
+        } finally {
+            // 清理租户上下文（如果不是忽略租户）
+            if (tenantId != null && !tenantId.isEmpty()) {
+                // 注意：这里不清理，因为后续请求还需要租户上下文
+                // TenantHelper.clearDynamic(); // 如果需要每次请求都重新设置，可以取消注释
+            }
         }
 
         // 将用户信息存入Security上下文，参数为：用户信息、凭证、权限列表

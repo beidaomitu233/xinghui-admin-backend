@@ -16,4 +16,8 @@ public class loginDTO {
      * 唯一标识
      */
     private String uuid;
+    /**
+     * 租户ID
+     */
+    private String tenantId;
 }

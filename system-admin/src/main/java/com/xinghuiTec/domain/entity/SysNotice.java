@@ -19,11 +19,11 @@ import com.baomidou.mybatisplus.annotation.TableName;
  */
 @SuppressWarnings("serial")
 @Data
-@EqualsAndHashCode(callSuper = false)
+@EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
 @TableName("sys_notice")
-public class SysNotice implements Serializable {
+public class SysNotice extends TenantEntity {
     @TableId
     // 公告ID
     private Integer noticeId;

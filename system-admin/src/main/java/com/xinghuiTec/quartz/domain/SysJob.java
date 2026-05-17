@@ -2,7 +2,7 @@ package com.xinghuiTec.quartz.domain;
 
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.xinghuiTec.domain.entity.BaseEntity;
+import com.xinghuiTec.domain.entity.TenantEntity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -16,11 +16,11 @@ import lombok.NoArgsConstructor;
  */
 @SuppressWarnings("serial")
 @Data
-@EqualsAndHashCode(callSuper = false)
+@EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
 @TableName("sys_job")
-public class SysJob extends BaseEntity {
+public class SysJob extends TenantEntity {
     @TableId
     // 任务ID
     private Long jobId;

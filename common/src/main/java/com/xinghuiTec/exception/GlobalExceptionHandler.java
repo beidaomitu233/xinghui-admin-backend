@@ -32,6 +32,15 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 租户异常处理
+     */
+    @ExceptionHandler(TenantException.class)
+    public Result<String> handleTenantException(TenantException e) {
+        log.warn("租户异常: {}", e.getMessage());
+        return Result.fail(e.getMessage());
+    }
+
+    /**
      * 用户不存在异常
      */
     @ExceptionHandler(UserNotExistsException.class)

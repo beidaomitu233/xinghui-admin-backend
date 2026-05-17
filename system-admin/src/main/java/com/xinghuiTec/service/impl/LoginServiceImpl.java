@@ -1,13 +1,18 @@
 package com.xinghuiTec.service.impl;
 
 import com.xinghuiTec.config.CaptchaProperties;
+import com.xinghuiTec.constants.TenantConstants;
 import com.xinghuiTec.constants.redisConstants;
 import com.xinghuiTec.domain.dto.loginDTO;
+import com.xinghuiTec.domain.entity.SysTenant;
 import com.xinghuiTec.domain.entity.SysUser;
 import com.xinghuiTec.domain.entity.loginUser;
 import com.xinghuiTec.domain.vo.SysMenuVO;
+import com.xinghuiTec.exception.TenantException;
 import com.xinghuiTec.exception.user.CaptchaException;
 import com.xinghuiTec.exception.user.UserNotExistsException;
+import com.xinghuiTec.utils.TenantHelper;
+import com.xinghuiTec.mapper.SysTenantMapper;
 import com.xinghuiTec.service.CaptchaService;
 import com.xinghuiTec.service.LoginService;
 import com.xinghuiTec.utils.JwtUtil;
@@ -79,38 +84,84 @@ public class LoginServiceImpl implements LoginService {
         @Autowired
         private SysUserMapper userMapper;
 
+        @Autowired
+        private SysTenantMapper tenantMapper;
+
         @Override
         public String login(loginDTO user) {
                 // 前置校验(包括验证码验证)
                 loginPreCheck(user);
 
-                // 1.通过authenticationManager.authenticate()方法进行用户认证
-                // Authentication实现类:UsernamePasswordAuthenticationToken,绑定我们的用户账户和密码
-                UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
-                                user.getUsername(), user.getPassword());
-                // authenticate()从authenticationToken中获取到用户账户和密码,然后传入并调用loadUserByUsername()方法
-                Authentication authenticate = authenticationManager.authenticate(authenticationToken);
+                // 租户校验
+                checkTenant(user.getTenantId());
 
-                // 如果没有匹配到用户,抛出异常
-                if (Objects.isNull(authenticate)) {
-                        throw new RuntimeException("账号或密码错误");
+                // 在租户上下文中执行用户认证
+                final String[] jwtToken = new String[1];
+                final loginUser[] loginUserRef = new loginUser[1];
+
+                TenantHelper.dynamic(user.getTenantId(), () -> {
+                        // 1.通过authenticationManager.authenticate()方法进行用户认证
+                        // Authentication实现类:UsernamePasswordAuthenticationToken,绑定我们的用户账户和密码
+                        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
+                                        user.getUsername(), user.getPassword());
+                        // authenticate()从authenticationToken中获取到用户和密码,然后传入并调用loadUserByUsername()方法
+                        Authentication authenticate = authenticationManager.authenticate(authenticationToken);
+
+                        // 如果没有匹配到用户,抛出异常
+                        if (Objects.isNull(authenticate)) {
+                                throw new RuntimeException("账号或密码错误");
+                        }
+
+                        // 从authenticate中获取用户信息,就是loadUserByUsername()方法的返回值
+                        loginUser loginUser = (loginUser) authenticate.getPrincipal();
+                        String userId = loginUser.getUser().getUserId();
+
+                        // 2.生成并返回JWT (JWT包含userId和tenantId)
+                        jwtToken[0] = JwtUtil.createJWT(userId, loginUser.getUser().getTenantId());
+
+                        // 将毫秒转化为天
+                        Integer days = Math.toIntExact(TimeUnit.MILLISECONDS.toDays(TOKEN_EXPIRATION));
+
+                        // 3.存储 loginUser 对象到 Redis (而不是存储JWT)
+                        // 这样 loginFilter 可以直接从 Redis 获取完整的用户信息,无需查询数据库
+                        redisCacheUtils.setCacheObject(ADMIN_LOGIN_PREFIX + userId, loginUser, days, TimeUnit.DAYS);
+
+                        loginUserRef[0] = loginUser;
+                });
+
+                return jwtToken[0];
+        }
+
+        /**
+         * 租户校验
+         */
+        private void checkTenant(String tenantId) {
+                if (tenantId == null || tenantId.isEmpty()) {
+                        throw new TenantException("租户ID不能为空");
                 }
 
-                // 从authenticate中获取用户信息,就是loadUserByUsername()方法的返回值
-                loginUser loginUser = (loginUser) authenticate.getPrincipal();
-                String userId = loginUser.getUser().getUserId();
+                // 默认租户直接通过
+                if (TenantConstants.DEFAULT_TENANT_ID.equals(tenantId)) {
+                        return;
+                }
 
-                // 2.生成并返回JWT (JWT只包含userId,不包含完整用户信息)
-                String jwt = JwtUtil.createJWT(userId);
+                // 查询租户是否存在
+                SysTenant tenant = tenantMapper.selectOne(new LambdaQueryWrapper<SysTenant>()
+                        .eq(SysTenant::getTenantId, tenantId));
 
-                // 将毫秒转化为天
-                Integer days = Math.toIntExact(TimeUnit.MILLISECONDS.toDays(TOKEN_EXPIRATION));
+                if (tenant == null) {
+                        throw new TenantException("租户不存在");
+                }
 
-                // 3.存储 loginUser 对象到 Redis (而不是存储JWT)
-                // 这样 loginFilter 可以直接从 Redis 获取完整的用户信息,无需查询数据库
-                redisCacheUtils.setCacheObject(ADMIN_LOGIN_PREFIX + userId, loginUser, days, TimeUnit.DAYS);
+                // 检查租户状态
+                if ("1".equals(tenant.getStatus())) {
+                        throw new TenantException("租户已停用");
+                }
 
-                return jwt;
+                // 检查租户是否过期
+                if (tenant.getExpireTime() != null && new Date().after(tenant.getExpireTime())) {
+                        throw new TenantException("租户已过期");
+                }
         }
 
         @Override

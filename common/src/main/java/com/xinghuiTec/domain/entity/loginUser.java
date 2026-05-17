@@ -32,8 +32,14 @@ public class loginUser implements UserDetails {
         this.permissions = validPermissions;
     }
 
-    public loginUser(SysUser user) {
-        this.user = user;
+    /**
+     * 获取租户ID
+     */
+    public String getTenantId() {
+        if (user != null) {
+            return user.getTenantId();
+        }
+        return null;
     }
 
     @Override
