@@ -1,35 +1,80 @@
 package com.xinghuiTec.config.mybatis;
 
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
+import com.xinghuiTec.domain.entity.BaseEntity;
+import com.xinghuiTec.utils.SecurityUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.reflection.MetaObject;
 import org.springframework.stereotype.Component;
 
 import java.util.Date;
 
 /**
- * MybatisMetaObjectHandler 是一个 MyBatis-Plus 的元对象处理器，
- * 用于在插入和更新数据时自动填充指定的字段。
+ * MyBatis-Plus 元对象自动填充处理器
+ * 自动填充：创建人、更新人、创建时间、更新时间
+ *
+ * @author xinghuiTec
  */
+@Slf4j
 @Component
 public class MybatisMetaObjectHandler implements MetaObjectHandler {
 
-    /**
-     * 在插入数据时自动填充创建时间字段。
-     *
-     * @param metaObject 元对象，包含待插入的数据
-     */
+    /** 未登录时的默认用户ID */
+    private static final String DEFAULT_USER_ID = "-1";
+
     @Override
     public void insertFill(MetaObject metaObject) {
-        this.strictInsertFill(metaObject, "createTime", Date.class, new Date());
+        try {
+            Date now = new Date();
+            if (metaObject.getOriginalObject() instanceof BaseEntity entity) {
+                // 已从 entity 中获取到对象，直接设置
+                if (entity.getCreateTime() == null) {
+                    entity.setCreateTime(now);
+                }
+                if (entity.getUpdateTime() == null) {
+                    entity.setUpdateTime(now);
+                }
+                if (entity.getCreateBy() == null) {
+                    entity.setCreateBy(getLoginUserId());
+                }
+                if (entity.getUpdateBy() == null) {
+                    entity.setUpdateBy(getLoginUserId());
+                }
+            } else {
+                // 非 BaseEntity 子类，使用严格填充
+                this.strictInsertFill(metaObject, "createTime", Date.class, now);
+                this.strictInsertFill(metaObject, "updateTime", Date.class, now);
+            }
+        } catch (Exception e) {
+            log.warn("insertFill 自动填充失败: {}", e.getMessage());
+        }
+    }
+
+    @Override
+    public void updateFill(MetaObject metaObject) {
+        try {
+            Date now = new Date();
+            if (metaObject.getOriginalObject() instanceof BaseEntity entity) {
+                entity.setUpdateTime(now);
+                entity.setUpdateBy(getLoginUserId());
+            } else {
+                this.strictUpdateFill(metaObject, "updateTime", Date.class, now);
+            }
+        } catch (Exception e) {
+            log.warn("updateFill 自动填充失败: {}", e.getMessage());
+        }
     }
 
     /**
-     * 在更新数据时自动填充更新时间字段。
-     *
-     * @param metaObject 元对象，包含待更新的数据
+     * 获取当前登录用户ID，未登录返回默认值
      */
-    @Override
-    public void updateFill(MetaObject metaObject) {
-        this.strictUpdateFill(metaObject, "updateTime", Date.class, new Date());
+    private String getLoginUserId() {
+        try {
+            String userId = SecurityUtils.getUserId();
+            return userId != null ? userId : DEFAULT_USER_ID;
+        } catch (Exception e) {
+            return DEFAULT_USER_ID;
+        }
     }
+
 }
