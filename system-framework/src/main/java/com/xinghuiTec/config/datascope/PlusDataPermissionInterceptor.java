@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.inner.BaseMultiTableInnerInter
 import com.baomidou.mybatisplus.extension.plugins.inner.InnerInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
@@ -94,5 +95,13 @@ public class PlusDataPermissionInterceptor extends BaseMultiTableInnerIntercepto
         if (segment != null) {
             plainSelect.setWhere(segment);
         }
+    }
+
+    /**
+     * 多表数据权限表达式构建（暂不支持多表场景，直接返回原始 WHERE）
+     */
+    @Override
+    public Expression buildTableExpression(Table table, Expression where, String whereSegment) {
+        return handler.getSqlSegment(where, true);
     }
 }
