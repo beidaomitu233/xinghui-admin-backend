@@ -310,4 +310,18 @@ public class RedisCacheUtils {
     public Long increment(final String key, long delta) {
         return redisTemplate.opsForValue().increment(key, delta);
     }
+
+    /**
+     * 仅当 key 不存在时设置值（SETNX），用于防重提交等场景
+     *
+     * @param key     Redis键
+     * @param value   缓存值
+     * @param timeout 过期时间
+     * @param unit    时间单位
+     * @return true=设置成功(key不存在), false=设置失败(key已存在)
+     */
+    public <T> boolean setObjectIfAbsent(final String key, final T value, final long timeout, final TimeUnit unit) {
+        Boolean result = redisTemplate.opsForValue().setIfAbsent(key, value, timeout, unit);
+        return result != null && result;
+    }
 }
