@@ -73,7 +73,7 @@ public class OssService {
     }
 
     private String buildPath() {
-        return "upload/" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd")) + "/";
+        return LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd")) + "/";
     }
 
     private String buildFilename(String originalFilename) {

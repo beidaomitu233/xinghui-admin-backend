@@ -110,6 +110,7 @@ dromara:
         secret-key: admin123
         end-point: http://192.168.2.101:9000
         bucket-name: xinghui-admin
+        base-path: upload/
 
     # ========== 阿里云 OSS（按需启用） ==========
     # aliyun-oss:
