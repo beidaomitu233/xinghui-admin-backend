@@ -36,5 +36,6 @@ CREATE TABLE IF NOT EXISTS `sys_oss` (
     `create_by`       VARCHAR(64)  DEFAULT NULL            COMMENT '创建者',
     `update_by`       VARCHAR(64)  DEFAULT NULL            COMMENT '更新者',
     `tenant_id`       VARCHAR(20)  DEFAULT '000000'        COMMENT '租户编号',
+    `is_deleted`      INT(11)      DEFAULT 0               COMMENT '逻辑删除(0=未删除 1=已删除)',
     PRIMARY KEY (`oss_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='OSS文件记录表';
