@@ -16,4 +16,6 @@ public class SocialLoginConfigProperties {
     private String clientSecret;
     private String redirectUri;
     private List<String> scopes;
+    /** 支付宝公钥（仅支付宝登录使用） */
+    private String alipayPublicKey;
 }
