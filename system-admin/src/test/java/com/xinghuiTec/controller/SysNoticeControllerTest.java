@@ -1,11 +1,12 @@
 package com.xinghuiTec.controller;
 
+import jakarta.annotation.Resource;
 import org.junit.jupiter.api.*;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
-import jakarta.annotation.Resource;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -13,7 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DisplayName("通知公告 Controller 测试")
-public class SysNoticeControllerTest {
+class SysNoticeControllerTest {
 
     @Resource
     private WebApplicationContext context;
@@ -27,6 +28,7 @@ public class SysNoticeControllerTest {
 
     @Test
     @Order(1)
+    @WithMockUser(authorities = "system:notice:list")
     @DisplayName("GET /system/notice/list - 查询通知列表")
     void testListNotices() throws Exception {
         mockMvc.perform(get("/system/notice/list")

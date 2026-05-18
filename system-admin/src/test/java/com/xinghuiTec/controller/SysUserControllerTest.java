@@ -2,13 +2,11 @@ package com.xinghuiTec.controller;
 
 import com.alibaba.fastjson2.JSON;
 import com.xinghuiTec.domain.dto.SysUserAddDTO;
-import com.xinghuiTec.domain.dto.SysUserQueryDTO;
-import com.xinghuiTec.domain.entity.SysUser;
-import com.xinghuiTec.service.SysUserService;
-import com.xinghuiTec.utils.Result;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.*;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -19,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DisplayName("用户管理 Controller 测试")
-public class SysUserControllerTest {
+class SysUserControllerTest {
 
     @Resource
     private WebApplicationContext context;
@@ -33,6 +31,7 @@ public class SysUserControllerTest {
 
     @Test
     @Order(1)
+    @WithMockUser(authorities = "system:user:list")
     @DisplayName("GET /system/user/list - 分页查询用户")
     void testListUsers() throws Exception {
         mockMvc.perform(get("/system/user/list")
@@ -45,6 +44,7 @@ public class SysUserControllerTest {
 
     @Test
     @Order(2)
+    @WithMockUser(authorities = "system:user:add")
     @DisplayName("POST /system/user - 新增用户")
     void testAddUser() throws Exception {
         SysUserAddDTO dto = new SysUserAddDTO();
@@ -56,7 +56,7 @@ public class SysUserControllerTest {
         dto.setStatus(1);
 
         mockMvc.perform(post("/system/user")
-                .contentType("application/json")
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(JSON.toJSONString(dto)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").exists());
