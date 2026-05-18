@@ -107,11 +107,11 @@ dromara:
       - platform: minio-1
         enable-storage: true
         enable-access: true
-        access-key: minioadmin
-        secret-key: minioadmin
-        end-point: http://localhost:9000
-        bucket-name: xinghui
-        domain: http://localhost:9000/xinghui/
+        access-key: admin
+        secret-key: admin123
+        end-point: http://192.168.2.101:9000
+        bucket-name: xinghui-admin
+        domain: http://192.168.2.101:9000/xinghui-admin/
         base-path: upload/
         path-patterns: /oss/**
 
@@ -163,16 +163,16 @@ sms:
     #   template-id: your_template_id
 
 # -------------------------------------------------------------------
-# 10. Mail 邮件配置（QQ邮箱：设置→账户→POP3/SMTP→开启→获取授权码）
+# 10. Mail 邮件配置（163邮箱）
 # -------------------------------------------------------------------
 mail:
-  enabled: false
-  host: smtp.qq.com
+  enabled: true
+  host: smtp.163.com
   port: 465
   auth: true
-  from: your-qq@qq.com
-  user: your-qq@qq.com
-  pass: QQ邮箱授权码（非登录密码，在QQ邮箱设置中生成）
+  from: XingHuiZhiChuang@163.com
+  user: XingHuiZhiChuang@163.com
+  pass: XRtc7rppBU4F5JrQ
   starttlsEnable: true
   sslEnable: true
 
