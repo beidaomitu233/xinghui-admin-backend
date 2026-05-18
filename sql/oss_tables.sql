@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS `sys_oss` (
     `size`            BIGINT(20)   DEFAULT 0               COMMENT '文件大小(字节)',
     `platform`        VARCHAR(50)  DEFAULT 'minio-1'      COMMENT '存储平台',
     `create_time`     DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`     DATETIME     DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     `create_by`       VARCHAR(64)  DEFAULT NULL            COMMENT '创建者',
+    `update_by`       VARCHAR(64)  DEFAULT NULL            COMMENT '更新者',
     `tenant_id`       VARCHAR(20)  DEFAULT '000000'        COMMENT '租户编号',
     PRIMARY KEY (`oss_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='OSS文件记录表';
