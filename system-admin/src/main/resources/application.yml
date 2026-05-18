@@ -106,14 +106,12 @@ dromara:
     minio:
       - platform: minio-1
         enable-storage: true
-        enable-access: true
         access-key: admin
         secret-key: admin123
         end-point: http://192.168.2.101:9000
         bucket-name: xinghui-admin
         domain: http://192.168.2.101:9000/xinghui-admin/
         base-path: upload/
-        path-patterns: /oss/**
 
     # ========== 阿里云 OSS（按需启用） ==========
     # aliyun-oss:
