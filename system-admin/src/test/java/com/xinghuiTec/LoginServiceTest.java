@@ -2,7 +2,7 @@ package com.xinghuiTec;
 
 import cn.hutool.jwt.JWT;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.xinghuiTec.constants.redisConstants;
+import com.xinghuiTec.constants.RedisConstants;
 import com.xinghuiTec.domain.dto.loginDTO;
 import com.xinghuiTec.domain.entity.SysUser;
 import com.xinghuiTec.domain.entity.loginUser;
@@ -198,7 +198,7 @@ public class LoginServiceTest {
         // 4. 验证 Redis 中的登录信息
         String userId = parsed.getPayload("userId").toString();
         loginUser cachedUser = redisCacheUtils.getCacheObject(
-                redisConstants.ADMIN_LOGIN_PREFIX + userId);
+                RedisConstants.ADMIN_LOGIN_PREFIX + userId);
         assertNotNull(cachedUser, "Redis 中应有登录用户信息");
         assertEquals(user.getMobile(), cachedUser.getUser().getMobile(),
                 "Redis 中手机号应匹配");
@@ -316,7 +316,7 @@ public class LoginServiceTest {
 
         // 清理
         String userId = parsed.getPayload("userId").toString();
-        redisCacheUtils.deleteObject(redisConstants.ADMIN_LOGIN_PREFIX + userId);
+        redisCacheUtils.deleteObject(RedisConstants.ADMIN_LOGIN_PREFIX + userId);
         TenantHelper.ignore(() -> sysUserMapper.deleteById(newUser.getUserId()));
         System.out.println("✓ 端到端测试通过，测试数据已清理");
     }

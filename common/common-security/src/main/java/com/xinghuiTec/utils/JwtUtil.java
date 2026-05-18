@@ -7,8 +7,8 @@ import cn.hutool.jwt.JWTUtil;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.xinghuiTec.constants.jwtConstans.TOKEN_EXPIRATION;
-import static com.xinghuiTec.constants.jwtConstans.TOKEN_SIGN_KEY;
+import static com.xinghuiTec.constants.JwtConstants.TOKEN_EXPIRATION;
+import static com.xinghuiTec.constants.JwtConstants.TOKEN_SIGN_KEY;
 
 /**
  * JWT工具类

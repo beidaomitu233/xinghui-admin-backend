@@ -3,8 +3,8 @@ package com.xinghuiTec.filter;
 import cn.hutool.jwt.Claims;
 import cn.hutool.jwt.JWT;
 import com.xinghuiTec.constants.HttpConstants;
-import com.xinghuiTec.constants.jwtConstans;
-import com.xinghuiTec.constants.redisConstants;
+import com.xinghuiTec.constants.JwtConstants;
+import com.xinghuiTec.constants.RedisConstants;
 import com.xinghuiTec.domain.entity.loginUser;
 import com.xinghuiTec.utils.JwtUtil;
 import com.xinghuiTec.utils.RedisCacheUtils;
@@ -73,9 +73,9 @@ public class loginFilter extends OncePerRequestFilter {
             // 解析JWT令牌获取载荷信息
             JWT jwt = JwtUtil.parseToken(authorization);
             // 从载荷中获取用户ID
-            String userId = jwt.getPayload(jwtConstans.PAYLOAD_USER_ID).toString();
+            String userId = jwt.getPayload(JwtConstants.PAYLOAD_USER_ID).toString();
             // 从Redis缓存中获取登录用户信息
-            loginUser = redisCacheUtils.getCacheObject(redisConstants.ADMIN_LOGIN_PREFIX + userId);
+            loginUser = redisCacheUtils.getCacheObject(RedisConstants.ADMIN_LOGIN_PREFIX + userId);
 
             // 验证用户登录凭证是否过期
             if (Objects.isNull(loginUser)) {
@@ -83,7 +83,7 @@ public class loginFilter extends OncePerRequestFilter {
             }
 
             // 从JWT中获取租户ID并设置到loginUser
-            Object tenantIdObj = jwt.getPayload(jwtConstans.PAYLOAD_TENANT_ID);
+            Object tenantIdObj = jwt.getPayload(JwtConstants.PAYLOAD_TENANT_ID);
             if (tenantIdObj != null) {
                 loginUser.setTenantId(tenantIdObj.toString());
             }

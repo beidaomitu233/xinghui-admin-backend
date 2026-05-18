@@ -1,7 +1,7 @@
 package com.xinghuiTec.service.impl;
 
 import com.xinghuiTec.config.CaptchaProperties;
-import com.xinghuiTec.constants.redisConstants;
+import com.xinghuiTec.constants.RedisConstants;
 import com.xinghuiTec.domain.dto.loginDTO;
 import com.xinghuiTec.domain.entity.SysUser;
 import com.xinghuiTec.domain.entity.loginUser;
@@ -39,8 +39,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static com.xinghuiTec.constants.jwtConstans.TOKEN_EXPIRATION;
-import static com.xinghuiTec.constants.redisConstants.ADMIN_LOGIN_PREFIX;
+import static com.xinghuiTec.constants.JwtConstants.TOKEN_EXPIRATION;
+import static com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX;
 
 @Service
 public class LoginServiceImpl implements LoginService {
@@ -126,7 +126,7 @@ public class LoginServiceImpl implements LoginService {
                         return getUserInfo();
                 }
 
-                String cacheKey = redisConstants.USER_INFO_PREFIX + userId;
+                String cacheKey = RedisConstants.USER_INFO_PREFIX + userId;
                 UserInfoVO cachedUserInfo = redisCacheUtils.getCacheObject(cacheKey);
 
                 if (cachedUserInfo != null) {
@@ -172,7 +172,7 @@ public class LoginServiceImpl implements LoginService {
 
                 UserInfoVO userInfoVO = new UserInfoVO(user, roles, permissions);
 
-                redisCacheUtils.setCacheObject(cacheKey, userInfoVO, redisConstants.USER_INFO_TTL_SEC,
+                redisCacheUtils.setCacheObject(cacheKey, userInfoVO, RedisConstants.USER_INFO_TTL_SEC,
                                 TimeUnit.SECONDS);
 
                 return userInfoVO;
@@ -190,7 +190,7 @@ public class LoginServiceImpl implements LoginService {
                         return getUserRouter();
                 }
 
-                String routerCacheKey = redisConstants.USER_ROUTER_PREFIX + userId;
+                String routerCacheKey = RedisConstants.USER_ROUTER_PREFIX + userId;
                 List<SysMenuVO> cachedRouter = redisCacheUtils.getCacheList(routerCacheKey);
 
                 if (cachedRouter != null) {
@@ -233,7 +233,7 @@ public class LoginServiceImpl implements LoginService {
 
                 List<SysMenuVO> menuTree = buildMenuTree(menuVOs);
 
-                redisCacheUtils.setCacheList(routerCacheKey, menuTree, redisConstants.USER_ROUTER_TTL_SEC,
+                redisCacheUtils.setCacheList(routerCacheKey, menuTree, RedisConstants.USER_ROUTER_TTL_SEC,
                                 TimeUnit.SECONDS);
 
                 return menuTree;

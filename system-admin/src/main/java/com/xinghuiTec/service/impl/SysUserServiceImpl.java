@@ -325,9 +325,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         }
 
         // 6. 清除用户缓存，确保下次获取时能拿到最新数据
-        String userInfoCacheKey = com.xinghuiTec.constants.redisConstants.USER_INFO_PREFIX + userId;
+        String userInfoCacheKey = com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId;
         redisCacheUtils.deleteObject(userInfoCacheKey);
-        String routerCacheKey = com.xinghuiTec.constants.redisConstants.USER_ROUTER_PREFIX + userId;
+        String routerCacheKey = com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId;
         redisCacheUtils.deleteObject(routerCacheKey);
     }
 
@@ -366,11 +366,11 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         }
 
         // 5. 清除用户相关缓存
-        String loginCacheKey = com.xinghuiTec.constants.redisConstants.ADMIN_LOGIN_PREFIX + userId;
+        String loginCacheKey = com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX + userId;
         redisCacheUtils.deleteObject(loginCacheKey);
-        String userInfoCacheKey = com.xinghuiTec.constants.redisConstants.USER_INFO_PREFIX + userId;
+        String userInfoCacheKey = com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId;
         redisCacheUtils.deleteObject(userInfoCacheKey);
-        String routerCacheKey = com.xinghuiTec.constants.redisConstants.USER_ROUTER_PREFIX + userId;
+        String routerCacheKey = com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId;
         redisCacheUtils.deleteObject(routerCacheKey);
     }
 
@@ -650,7 +650,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
         // 6. 清除 Redis 缓存
         // 修改个人信息后，需要清除用户信息缓存，下次访问时重新加载
-        String cacheKey = com.xinghuiTec.constants.redisConstants.USER_INFO_PREFIX + userId;
+        String cacheKey = com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId;
         redisCacheUtils.deleteObject(cacheKey);
     }
 
@@ -705,15 +705,15 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         // 8. 清除登录缓存，强制用户重新登录
         // 修改密码是敏感操作，为了安全，清除登录缓存让用户使用新密码重新登录
         // 清除登录信息缓存
-        String loginCacheKey = com.xinghuiTec.constants.redisConstants.ADMIN_LOGIN_PREFIX + userId;
+        String loginCacheKey = com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX + userId;
         redisCacheUtils.deleteObject(loginCacheKey);
 
         // 清除用户信息缓存
-        String userInfoCacheKey = com.xinghuiTec.constants.redisConstants.USER_INFO_PREFIX + userId;
+        String userInfoCacheKey = com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId;
         redisCacheUtils.deleteObject(userInfoCacheKey);
 
         // 清除用户路由缓存
-        String routerCacheKey = com.xinghuiTec.constants.redisConstants.USER_ROUTER_PREFIX + userId;
+        String routerCacheKey = com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId;
         redisCacheUtils.deleteObject(routerCacheKey);
     }
 

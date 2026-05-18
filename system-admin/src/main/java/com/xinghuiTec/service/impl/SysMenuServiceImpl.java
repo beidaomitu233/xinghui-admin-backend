@@ -426,7 +426,7 @@ public class SysMenuServiceImpl extends ServiceImpl<SysMenuMapper, SysMenu> impl
      * 当菜单发生变更时，所有用户的路由缓存都可能受影响
      */
     private void clearAllUserRouterCache() {
-        String pattern = com.xinghuiTec.constants.redisConstants.USER_ROUTER_PREFIX + "*";
+        String pattern = com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + "*";
         java.util.Collection<String> keys = redisCacheUtils.keys(pattern);
         if (keys != null && !keys.isEmpty()) {
             redisCacheUtils.deleteObject(keys);
