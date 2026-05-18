@@ -64,14 +64,14 @@ public class Result<T> {
     }
 
     public static <T> Result<T> fail(String message) {
-        Result<T> result = build(null);
+        Result<T> result = build();
         result.setCode(ResultCodeEnum.FAIL.getCode());
         result.setMessage(message);
         return result;
     }
 
     public static <T> Result<T> fail(Integer code, String message) {
-        Result<T> result = build(null);
+        Result<T> result = build();
         result.setCode(code);
         result.setMessage(message);
         return result;
