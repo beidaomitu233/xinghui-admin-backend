@@ -163,16 +163,16 @@ sms:
     #   template-id: your_template_id
 
 # -------------------------------------------------------------------
-# 10. Mail 邮件配置
+# 10. Mail 邮件配置（QQ邮箱：设置→账户→POP3/SMTP→开启→获取授权码）
 # -------------------------------------------------------------------
 mail:
   enabled: false
-  host: smtp.163.com
+  host: smtp.qq.com
   port: 465
   auth: true
-  from: your-email@163.com
-  user: your-email@163.com
-  pass: your-auth-code
+  from: your-qq@qq.com
+  user: your-qq@qq.com
+  pass: QQ邮箱授权码（非登录密码，在QQ邮箱设置中生成）
   starttlsEnable: true
   sslEnable: true
 

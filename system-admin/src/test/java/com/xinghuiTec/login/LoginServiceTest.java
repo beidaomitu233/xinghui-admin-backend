@@ -41,7 +41,7 @@ public class LoginServiceTest {
     @Resource
     private RedisCacheUtils redisCacheUtils;
 
-    private static final String TEST_PHONE = "13800138000";
+    private static final String TEST_PHONE = "13900000001";
     private static final String TEST_PASSWORD = "123456";
 
     @Test
