@@ -1,18 +1,16 @@
 -- ============================================================
--- OSS 文件管理模块数据库迁移
+-- OSS 文件管理模块数据库迁移（幂等）
 -- ============================================================
 
--- 文件存储配置表
-DROP TABLE IF EXISTS `sys_oss_config`;
-CREATE TABLE `sys_oss_config` (
+CREATE TABLE IF NOT EXISTS `sys_oss_config` (
     `oss_config_id` BIGINT(20)   NOT NULL AUTO_INCREMENT COMMENT '主键',
-    `config_key`    VARCHAR(50)  NOT NULL                COMMENT '配置标识(minio-1/aliyun-oss-1/tencent-cos-1)',
+    `config_key`    VARCHAR(50)  NOT NULL                COMMENT '配置标识',
     `access_key`    VARCHAR(255) DEFAULT ''              COMMENT '访问密钥',
     `secret_key`    VARCHAR(255) DEFAULT ''              COMMENT '密钥',
     `bucket_name`   VARCHAR(255) DEFAULT ''              COMMENT '存储桶名称',
     `endpoint`      VARCHAR(255) DEFAULT ''              COMMENT '访问端点',
     `domain`        VARCHAR(255) DEFAULT ''              COMMENT '自定义域名',
-    `is_https`      CHAR(1)      DEFAULT 'Y'              COMMENT '是否HTTPS(Y/N)',
+    `is_https`      CHAR(1)      DEFAULT 'Y'              COMMENT '是否HTTPS',
     `access_policy` CHAR(1)      DEFAULT '1'              COMMENT '桶权限(0=私有 1=公开)',
     `remark`        VARCHAR(500) DEFAULT ''              COMMENT '备注',
     `status`        CHAR(1)      DEFAULT '0'              COMMENT '状态(0正常 1停用)',
@@ -25,9 +23,7 @@ CREATE TABLE `sys_oss_config` (
     UNIQUE KEY `uk_config_key` (`config_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='OSS配置表';
 
--- 文件记录表
-DROP TABLE IF EXISTS `sys_oss`;
-CREATE TABLE `sys_oss` (
+CREATE TABLE IF NOT EXISTS `sys_oss` (
     `oss_id`          BIGINT(20)   NOT NULL AUTO_INCREMENT COMMENT '主键',
     `original_name`   VARCHAR(255) NOT NULL                COMMENT '原始文件名',
     `file_name`       VARCHAR(255) NOT NULL                COMMENT '存储文件名',

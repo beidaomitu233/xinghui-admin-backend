@@ -4,8 +4,7 @@
 -- ============================================================
 
 -- 1. 创建租户信息表
-DROP TABLE IF EXISTS `sys_tenant`;
-CREATE TABLE `sys_tenant` (
+CREATE TABLE IF NOT EXISTS `sys_tenant` (
     `id`                BIGINT(20)   NOT NULL                   COMMENT '主键ID',
     `tenant_id`         VARCHAR(20)  DEFAULT '000000'           COMMENT '租户编号',
     `contact_user_name` VARCHAR(30)  DEFAULT ''                 COMMENT '联系人',
@@ -27,8 +26,7 @@ CREATE TABLE `sys_tenant` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='租户信息表';
 
 -- 2. 创建租户套餐表
-DROP TABLE IF EXISTS `sys_tenant_package`;
-CREATE TABLE `sys_tenant_package` (
+CREATE TABLE IF NOT EXISTS `sys_tenant_package` (
     `package_id`   BIGINT(20)   NOT NULL                   COMMENT '套餐ID',
     `package_name` VARCHAR(100) DEFAULT ''                 COMMENT '套餐名称',
     `menu_ids`     TEXT         DEFAULT NULL               COMMENT '关联菜单ID列表（逗号分隔）',
@@ -40,21 +38,37 @@ CREATE TABLE `sys_tenant_package` (
     PRIMARY KEY (`package_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='租户套餐表';
 
--- 3. 为各业务表添加 tenant_id 字段
-ALTER TABLE `sys_user`   ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `user_id`;
-ALTER TABLE `sys_role`   ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `role_id`;
-ALTER TABLE `sys_config` ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `config_id`;
-ALTER TABLE `sys_file`   ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `id`;
-ALTER TABLE `sys_notice` ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `notice_id`;
-ALTER TABLE `sys_job`    ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `job_id`;
+-- 3. 为各业务表添加 tenant_id 字段（幂等：检查后添加）
+DELIMITER $$
+DROP PROCEDURE IF EXISTS AddTenantColumns$$
+CREATE PROCEDURE AddTenantColumns()
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_user'   AND COLUMN_NAME='tenant_id') THEN ALTER TABLE `sys_user`   ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `user_id`; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_role'   AND COLUMN_NAME='tenant_id') THEN ALTER TABLE `sys_role`   ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `role_id`; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_config' AND COLUMN_NAME='tenant_id') THEN ALTER TABLE `sys_config` ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `config_id`; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_file'   AND COLUMN_NAME='tenant_id') THEN ALTER TABLE `sys_file`   ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `id`; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_notice' AND COLUMN_NAME='tenant_id') THEN ALTER TABLE `sys_notice` ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `notice_id`; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_job'    AND COLUMN_NAME='tenant_id') THEN ALTER TABLE `sys_job`    ADD COLUMN `tenant_id` VARCHAR(20) DEFAULT '000000' COMMENT '租户编号' AFTER `job_id`; END IF;
+END$$
+DELIMITER ;
+CALL AddTenantColumns();
+DROP PROCEDURE IF EXISTS AddTenantColumns;
 
--- 4. 为 tenant_id 添加索引
-ALTER TABLE `sys_user`   ADD INDEX `idx_tenant_id` (`tenant_id`);
-ALTER TABLE `sys_role`   ADD INDEX `idx_tenant_id` (`tenant_id`);
-ALTER TABLE `sys_config` ADD INDEX `idx_tenant_id` (`tenant_id`);
-ALTER TABLE `sys_file`   ADD INDEX `idx_tenant_id` (`tenant_id`);
-ALTER TABLE `sys_notice` ADD INDEX `idx_tenant_id` (`tenant_id`);
-ALTER TABLE `sys_job`    ADD INDEX `idx_tenant_id` (`tenant_id`);
+-- 4. 为 tenant_id 添加索引（幂等：检查后添加）
+DELIMITER $$
+DROP PROCEDURE IF EXISTS AddTenantIndexes$$
+CREATE PROCEDURE AddTenantIndexes()
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_user'   AND INDEX_NAME='idx_tenant_id') THEN ALTER TABLE `sys_user`   ADD INDEX `idx_tenant_id` (`tenant_id`); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_role'   AND INDEX_NAME='idx_tenant_id') THEN ALTER TABLE `sys_role`   ADD INDEX `idx_tenant_id` (`tenant_id`); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_config' AND INDEX_NAME='idx_tenant_id') THEN ALTER TABLE `sys_config` ADD INDEX `idx_tenant_id` (`tenant_id`); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_file'   AND INDEX_NAME='idx_tenant_id') THEN ALTER TABLE `sys_file`   ADD INDEX `idx_tenant_id` (`tenant_id`); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_notice' AND INDEX_NAME='idx_tenant_id') THEN ALTER TABLE `sys_notice` ADD INDEX `idx_tenant_id` (`tenant_id`); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_job'    AND INDEX_NAME='idx_tenant_id') THEN ALTER TABLE `sys_job`    ADD INDEX `idx_tenant_id` (`tenant_id`); END IF;
+END$$
+DELIMITER ;
+CALL AddTenantIndexes();
+DROP PROCEDURE IF EXISTS AddTenantIndexes;
 
 -- 5. 插入默认租户数据
 INSERT INTO `sys_tenant` (`id`, `tenant_id`, `company_name`, `status`, `account_count`)
