@@ -7,6 +7,7 @@ import org.junit.jupiter.api.*;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -26,7 +27,9 @@ class SysUserControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mockMvc = MockMvcBuilders.webAppContextSetup(context)
+            .apply(SecurityMockMvcConfigurers.springSecurity())
+            .build();
     }
 
     @Test
@@ -45,7 +48,7 @@ class SysUserControllerTest {
     @Test
     @Order(2)
     @WithMockUser(authorities = "system:user:add")
-    @DisplayName("POST /system/user - 新增用户")
+    @DisplayName("POST /system/user/add - 新增用户")
     void testAddUser() throws Exception {
         SysUserAddDTO dto = new SysUserAddDTO();
         dto.setUsername("test_junit_" + System.currentTimeMillis());
@@ -55,7 +58,7 @@ class SysUserControllerTest {
         dto.setMobile("13900000001");
         dto.setStatus(1);
 
-        mockMvc.perform(post("/system/user")
+        mockMvc.perform(post("/system/user/add")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(JSON.toJSONString(dto)))
             .andExpect(status().isOk())
