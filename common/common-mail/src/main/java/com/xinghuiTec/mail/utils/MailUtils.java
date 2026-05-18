@@ -43,7 +43,7 @@ public class MailUtils {
     /** 发送邮件 */
     public static String send(String to, String subject, String content, boolean isHtml, File... files) {
         return JakartaMail.create(ACCOUNT)
-            .addTos(to.split("[,;]"))
+            .setTos(to.split("[,;]"))
             .setTitle(subject)
             .setContent(content)
             .setHtml(isHtml)
@@ -54,7 +54,7 @@ public class MailUtils {
     /** 发送 HTML 邮件（带内嵌图片，cid:xxx 引用） */
     public static String sendHtml(String to, String subject, String content, Map<String, InputStream> imageMap) {
         JakartaMail mail = JakartaMail.create(ACCOUNT)
-            .addTos(to.split("[,;]"))
+            .setTos(to.split("[,;]"))
             .setTitle(subject)
             .setContent(content)
             .setHtml(true);
