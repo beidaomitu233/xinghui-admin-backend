@@ -19,6 +19,7 @@
         <module>common-tenant</module>
         <module>common-ratelimiter</module>
         <module>common-idempotent</module>
+        <module>common-oss</module>
     </modules>
 
 </project>
