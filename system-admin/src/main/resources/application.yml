@@ -161,3 +161,33 @@ sms:
     #   signature: 兴辉科技
     #   sdk-app-id: your_app_id
     #   template-id: your_template_id
+
+# -------------------------------------------------------------------
+# 10. Mail 邮件配置
+# -------------------------------------------------------------------
+mail:
+  enabled: false
+  host: smtp.163.com
+  port: 465
+  auth: true
+  from: your-email@163.com
+  user: your-email@163.com
+  pass: your-auth-code
+  starttlsEnable: true
+  sslEnable: true
+
+# -------------------------------------------------------------------
+# 11. JustAuth 三方登录配置
+# -------------------------------------------------------------------
+justauth:
+  type:
+    # Gitee 登录
+    gitee:
+      client-id: your_client_id
+      client-secret: your_client_secret
+      redirect-uri: http://localhost:7799/auth/social/callback?source=gitee
+    # GitHub 登录
+    # github:
+    #   client-id: your_client_id
+    #   client-secret: your_client_secret
+    #   redirect-uri: http://localhost:7799/auth/social/callback?source=github

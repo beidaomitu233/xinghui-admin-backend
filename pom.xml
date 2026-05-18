@@ -38,6 +38,7 @@
         <dynamic-datasource.version>4.3.1</dynamic-datasource.version>
         <redisson.version>3.40.2</redisson.version>
         <sms4j.version>3.3.5</sms4j.version>
+        <justauth.version>1.16.7</justauth.version>
     </properties>
 
 
@@ -129,6 +130,13 @@
                 <groupId>org.dromara.sms4j</groupId>
                 <artifactId>sms4j-spring-boot-starter</artifactId>
                 <version>${sms4j.version}</version>
+            </dependency>
+
+            <!-- JustAuth 第三方登录 -->
+            <dependency>
+                <groupId>me.zhyd.oauth</groupId>
+                <artifactId>JustAuth</artifactId>
+                <version>${justauth.version}</version>
             </dependency>
 
             <!-- Fastjson2 高性能 JSON 解析库 -->

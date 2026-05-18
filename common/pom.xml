@@ -21,6 +21,8 @@
         <module>common-idempotent</module>
         <module>common-oss</module>
         <module>common-sms</module>
+        <module>common-mail</module>
+        <module>common-social</module>
     </modules>
 
 </project>
