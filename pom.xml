@@ -39,6 +39,7 @@
         <redisson.version>3.40.2</redisson.version>
         <sms4j.version>3.3.5</sms4j.version>
         <justauth.version>1.16.7</justauth.version>
+        <minio.version>8.5.10</minio.version>
     </properties>
 
 
@@ -137,6 +138,13 @@
                 <groupId>me.zhyd.oauth</groupId>
                 <artifactId>JustAuth</artifactId>
                 <version>${justauth.version}</version>
+            </dependency>
+
+            <!-- MinIO 客户端 (x-file-storage 需要) -->
+            <dependency>
+                <groupId>io.minio</groupId>
+                <artifactId>minio</artifactId>
+                <version>${minio.version}</version>
             </dependency>
 
             <!-- Fastjson2 高性能 JSON 解析库 -->

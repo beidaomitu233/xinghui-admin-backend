@@ -21,6 +21,11 @@
             <groupId>org.dromara.x-file-storage</groupId>
             <artifactId>x-file-storage-spring</artifactId>
         </dependency>
+        <!-- MinIO 客户端（x-file-storage 需要此依赖检测并加载 MinIO 存储平台） -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
