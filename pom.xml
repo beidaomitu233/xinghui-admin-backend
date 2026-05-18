@@ -37,6 +37,7 @@
         <x-file-storage-spring.version>2.2.1</x-file-storage-spring.version>
         <dynamic-datasource.version>4.3.1</dynamic-datasource.version>
         <redisson.version>3.40.2</redisson.version>
+        <sms4j.version>3.3.5</sms4j.version>
     </properties>
 
 
@@ -123,6 +124,12 @@
                 <version>${redisson.version}</version>
             </dependency>
 
+            <!-- sms4j 短信聚合框架(阿里云/腾讯云/华为云等) -->
+            <dependency>
+                <groupId>org.dromara.sms4j</groupId>
+                <artifactId>sms4j-spring-boot-starter</artifactId>
+                <version>${sms4j.version}</version>
+            </dependency>
 
             <!-- Fastjson2 高性能 JSON 解析库 -->
             <dependency>

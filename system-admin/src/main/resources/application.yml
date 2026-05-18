@@ -136,3 +136,28 @@ dromara:
     #     bucket-name: xinghui-1234567890
     #     domain: https://xinghui-1234567890.cos.ap-beijing.myqcloud.com/
     #     base-path: upload/
+
+# -------------------------------------------------------------------
+# 9. SMS 短信配置（sms4j 多厂商）
+# -------------------------------------------------------------------
+sms:
+  config-type: yaml          # 配置来源
+  restricted: true           # 开启短信拦截
+  minute-max: 1              # 单手机号每分钟最大发送
+  account-max: 30            # 单手机号每日最大发送
+  blends:
+    # 阿里云短信
+    alibaba:
+      supplier: alibaba
+      access-key-id: ${SMS_ALIBABA_ACCESS_KEY:your_key}
+      access-key-secret: ${SMS_ALIBABA_SECRET_KEY:your_secret}
+      signature: 兴辉科技
+      sdk-app-id: ${SMS_ALIBABA_APP_ID:}
+    # 腾讯云短信
+    # tencent:
+    #   supplier: tencent
+    #   access-key-id: your_secret_id
+    #   access-key-secret: your_secret_key
+    #   signature: 兴辉科技
+    #   sdk-app-id: your_app_id
+    #   template-id: your_template_id
