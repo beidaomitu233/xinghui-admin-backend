@@ -1,9 +1,9 @@
 package com.xinghuiTec.domain.entity;
 
-import java.io.Serializable;
 import java.util.Date;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.xinghuiTec.domain.entity.TenantEntity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -19,11 +19,11 @@ import com.baomidou.mybatisplus.annotation.TableName;
  */
 @SuppressWarnings("serial")
 @Data
-@EqualsAndHashCode(callSuper = false)
+@EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
 @TableName("sys_notice")
-public class SysNotice implements Serializable {
+public class SysNotice extends TenantEntity {
     @TableId
     // 公告ID
     private Integer noticeId;
@@ -38,10 +38,6 @@ public class SysNotice implements Serializable {
     private String status;
     // 创建者
     private String createBy;
-
-    // 创建时间
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
-    private Date createTime;
 
     // 生效开始时间
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")

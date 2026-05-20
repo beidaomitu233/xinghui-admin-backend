@@ -34,4 +34,30 @@
           AND m.status = '0'
     </select>
 
+    <!-- 根据多个角色ID批量查询权限标识 -->
+    <select id="selectPermsByRoleIds" resultType="java.lang.String">
+        SELECT DISTINCT m.perms
+        FROM sys_menu m
+        LEFT JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
+        WHERE rm.role_id IN
+        <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+            #{roleId}
+        </foreach>
+          AND m.perms IS NOT NULL
+          AND m.perms != ''
+          AND m.status = '0'
+    </select>
+
+    <!-- 根据用户ID查询路由菜单 -->
+    <select id="selectMenuByUserId" resultMap="SysMenuMap">
+        SELECT DISTINCT m.*
+        FROM sys_menu m
+        LEFT JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
+        LEFT JOIN sys_user_role ur ON rm.role_id = ur.role_id
+        WHERE ur.user_id = #{userId}
+          AND m.menu_type IN ('M', 'C')
+          AND m.status = '0'
+        ORDER BY m.parent_id, m.order_num
+    </select>
+
 </mapper>

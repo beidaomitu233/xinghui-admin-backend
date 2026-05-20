@@ -105,9 +105,38 @@
         </dependency>
         <dependency>
             <groupId>com.xinghuiTec</groupId>
-            <artifactId>common</artifactId>
+            <artifactId>common-tenant</artifactId>
             <version>1.0-SNAPSHOT</version>
-            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.xinghuiTec</groupId>
+            <artifactId>common-ratelimiter</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.xinghuiTec</groupId>
+            <artifactId>common-idempotent</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.xinghuiTec</groupId>
+            <artifactId>common-oss</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.xinghuiTec</groupId>
+            <artifactId>common-sms</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.xinghuiTec</groupId>
+            <artifactId>common-mail</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.xinghuiTec</groupId>
+            <artifactId>common-social</artifactId>
+            <version>1.0-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

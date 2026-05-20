@@ -35,7 +35,7 @@ public interface LoginService {
      * @param userId 用户ID，如果为空则获取当前登录用户信息
      * @return 用户信息VO
      */
-    UserInfoVO getUserInfo(String userId);
+    UserInfoVO getUserInfo(Long userId);
 
     /**
      * 获取当前登录用户路由菜单
@@ -50,5 +50,5 @@ public interface LoginService {
      * @param userId 用户ID，如果为空则获取当前登录用户路由
      * @return 树形结构的菜单列表
      */
-    List<SysMenuVO> getUserRouter(String userId);
+    List<SysMenuVO> getUserRouter(Long userId);
 }

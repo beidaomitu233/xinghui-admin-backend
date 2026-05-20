@@ -7,6 +7,7 @@ import com.xinghuiTec.domain.entity.loginUser;
 import com.xinghuiTec.mapper.SysMenuMapper;
 import com.xinghuiTec.mapper.SysUserMapper;
 import com.xinghuiTec.service.SysUserRoleService;
+import com.xinghuiTec.utils.TenantHelper;
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,62 +20,59 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
-public class userDetailManageimpl implements UserDetailsService {
+public class UserDetailManageImpl implements UserDetailsService {
+
     @Resource
     private SysUserMapper userMapper;
+
     @Autowired
     private SysMenuMapper menuMapper;
+
     @Resource
     private SysUserRoleService roleService;
 
     /**
-     * 查询用户是否存在并进行授权
-     * 
-     * @param username
-     * @return loginUser(user) 用户信息
-     * @throws UsernameNotFoundException 当用户不存在时抛出异常
+     * 按手机号加载用户（不限租户）
+     * Spring Security 会将 loginDTO.phone 传入此方法的 username 参数
      */
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        // 从数据库中查询用户是否存在
-        SysUser user = userMapper.selectOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username));
+    public UserDetails loadUserByUsername(String phone) throws UsernameNotFoundException {
+        // 不限租户查询：忽略租户隔离，按手机号匹配（取第一条匹配记录）
+        SysUser user = TenantHelper.ignore(() -> {
+            List<SysUser> users = userMapper.selectList(
+                new LambdaQueryWrapper<SysUser>().eq(SysUser::getMobile, phone).last("LIMIT 1")
+            );
+            return users.isEmpty() ? null : users.get(0);
+        });
 
         if (Objects.isNull(user)) {
-            // 用户不存在时，必须抛出 UsernameNotFoundException
-            throw new UsernameNotFoundException("用户不存在");
+            throw new UsernameNotFoundException("手机号未注册");
         }
 
-        // 查询关联角色，以此授权
-        // 优化：支持多角色
+        // 查询关联角色
         LambdaQueryWrapper<SysUserRole> sysUserRoleWrapper = new LambdaQueryWrapper<>();
         sysUserRoleWrapper.eq(SysUserRole::getUserId, user.getUserId());
         List<SysUserRole> userRoles = roleService.list(sysUserRoleWrapper);
 
-/*        if (userRoles == null || userRoles.isEmpty()) {
-            // 这里直接抛出 RuntimeException，Spring Security 会将其包装为
-            // InternalAuthenticationServiceException
-            // 从而保留原始错误信息 "用户未分配角色"，而不会被转换为 BadCredentialsException
-            throw new RuntimeException("用户未分配角色");
-        }*/
-
-        // 查询权限信息封装到LoginUser中
+        // 查询权限信息
         List<String> list = new java.util.ArrayList<>();
-        for (SysUserRole role : userRoles) {
-            List<String> perms = menuMapper.selectPermsByUserId(role.getRoleId());
+        if (!userRoles.isEmpty()) {
+            List<Long> roleIds = userRoles.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
+            List<String> perms = menuMapper.selectPermsByRoleIds(roleIds);
             if (perms != null) {
                 list.addAll(perms);
             }
         }
 
-        // 去重
-        list = list.stream().distinct().collect(Collectors.toList());
-
-        // 过滤掉null和空字符串权限
+        // 去重 + 过滤空值
         List<String> validPermissions = list.stream()
                 .filter(perm -> perm != null && !perm.trim().isEmpty())
+                .distinct()
                 .collect(Collectors.toList());
 
         loginUser loginUser = new loginUser(user, validPermissions);
+        // 从用户实体设置租户ID
+        loginUser.setTenantId(user.getTenantId());
 
         return loginUser;
     }

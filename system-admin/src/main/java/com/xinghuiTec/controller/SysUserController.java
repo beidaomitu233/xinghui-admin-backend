@@ -19,6 +19,9 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import jakarta.annotation.Resource;
 import org.springframework.web.multipart.MultipartFile;
+import com.xinghuiTec.ratelimiter.annotation.RateLimiter;
+import com.xinghuiTec.ratelimiter.enums.LimitType;
+import com.xinghuiTec.idempotent.annotation.RepeatSubmit;
 
 import java.util.List;
 
@@ -67,7 +70,7 @@ public class SysUserController {
     @GetMapping("/info")
     @PreAuthorize("hasAuthority('system:user:query')")
     public Result<UserDetailVO> getUserDetail() {
-        String userId = SecurityUtils.getUser().getUserId();
+        Long userId = SecurityUtils.getUser().getUserId();
         // 1. 获取用户基本信息和权限(包含角色keys、角色names和权限permissions)
         UserInfoVO user = loginService.getUserInfo(userId);
         if (user == null) {
@@ -95,7 +98,7 @@ public class SysUserController {
     @GetMapping("/router")
     @PreAuthorize("hasAuthority('system:user:query')")
     public Result<UserDetailVO> getUserRouter() {
-        String userId = SecurityUtils.getUser().getUserId();
+        Long userId = SecurityUtils.getUser().getUserId();
         // 2. 获取用户路由菜单
         List<SysMenuVO> routers = loginService.getUserRouter(userId);
 
@@ -117,8 +120,8 @@ public class SysUserController {
     @PostMapping("/add")
     @PreAuthorize("hasAuthority('system:user:add')")
     @Log(title = "用户管理", businessType = BusinessType.INSERT)
-    public Result<String> addUser(@Validated @RequestBody SysUserAddDTO sysUserAddDTO) {
-        String userId = sysUserService.addUser(sysUserAddDTO);
+    public Result<Long> addUser(@Validated @RequestBody SysUserAddDTO sysUserAddDTO) {
+        Long userId = sysUserService.addUser(sysUserAddDTO);
         return Result.ok(userId);
     }
 
@@ -149,7 +152,7 @@ public class SysUserController {
     @PostMapping("/remove")
     @PreAuthorize("hasAuthority('system:user:remove')")
     @Log(title = "用户管理", businessType = BusinessType.DELETE)
-    public Result<Void> deleteUser(@RequestParam("userId") String userId) {
+    public Result<Void> deleteUser(@RequestParam("userId") Long userId) {
         sysUserService.deleteUser(userId);
         return Result.ok();
     }
@@ -166,7 +169,7 @@ public class SysUserController {
     @PostMapping("/resetPwd")
     @PreAuthorize("hasAuthority('system:user:edit')")
     @Log(title = "用户管理", businessType = BusinessType.UPDATE)
-    public Result<Void> resetPassword(@RequestParam("userId") String userId) {
+    public Result<Void> resetPassword(@RequestParam("userId") Long userId) {
         sysUserService.resetPassword(userId, "123456");
         return Result.ok();
     }
@@ -195,7 +198,9 @@ public class SysUserController {
     @PostMapping("/import")
     @PreAuthorize("hasAuthority('system:user:add')")
     @Log(title = "用户管理", businessType = BusinessType.IMPORT)
-    public Result<String> importUsers(@RequestBody MultipartFile file) {
+    @RateLimiter(time = 60, count = 3, limitType = LimitType.IP)
+    @RepeatSubmit(interval = 5000)
+    public Result<String> importUsers(@RequestPart("file") MultipartFile file) {
         String result = sysUserService.importUsers(file);
         return Result.ok(result);
     }

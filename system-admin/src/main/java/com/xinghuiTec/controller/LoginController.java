@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import com.xinghuiTec.ratelimiter.annotation.RateLimiter;
 
 import java.util.List;
 
@@ -57,6 +58,7 @@ public class LoginController {
      * @param user 登录信息(包含用户名、密码、验证码和UUID)
      * @return JWT token
      */
+    @RateLimiter(key = "#user.phone", time = 60, count = 5, message = "登录过于频繁，请1分钟后再试")
     @PostMapping("/user/login")
     public Result<String> login(@RequestBody loginDTO user) {
         String token = loginService.login(user);
