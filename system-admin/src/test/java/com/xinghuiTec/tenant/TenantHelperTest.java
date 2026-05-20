@@ -29,6 +29,14 @@ public class TenantHelperTest {
     @Test
     @DisplayName("动态租户 - set/get/clear")
     void testDynamicTenant() {
+        if (!TenantHelper.isEnable()) {
+            // 租户未启用时，setDynamic 不会存值，getDynamic 返回 null
+            TenantHelper.setDynamic("888888");
+            assertNull(TenantHelper.getDynamic(), "租户未启用时 getDynamic 应返回 null");
+            TenantHelper.clearDynamic();
+            System.out.println("✓ 租户未启用，动态租户 set/get 正确跳过");
+            return;
+        }
         TenantHelper.setDynamic("888888");
         assertEquals("888888", TenantHelper.getDynamic());
         TenantHelper.clearDynamic();
@@ -39,6 +47,14 @@ public class TenantHelperTest {
     @Test
     @DisplayName("动态租户 - dynamic() 自动清理")
     void testDynamicAutoCleanup() {
+        if (!TenantHelper.isEnable()) {
+            TenantHelper.dynamic("999999", () -> {
+                assertNull(TenantHelper.getDynamic(), "租户未启用时 getDynamic 应返回 null");
+            });
+            assertNull(TenantHelper.getDynamic());
+            System.out.println("✓ 租户未启用，dynamic() 正确跳过");
+            return;
+        }
         TenantHelper.dynamic("999999", () -> {
             assertEquals("999999", TenantHelper.getDynamic());
         });

@@ -91,11 +91,11 @@ public class LoginServiceImpl implements LoginService {
 
                 // 2. 从认证结果获取用户信息（tenantId 已在 userDetailManageimpl 中从用户实体设置）
                 loginUser loginUser = (loginUser) authenticate.getPrincipal();
-                String userId = loginUser.getUser().getUserId();
+                Long userId = loginUser.getUser().getUserId();
                 String tenantId = loginUser.getTenantId();
 
                 // 3. 生成 JWT（包含 userId 和 tenantId）
-                String jwt = JwtUtil.createJWT(userId, tenantId);
+                String jwt = JwtUtil.createJWT(String.valueOf(userId), tenantId);
 
                 // 4. 存储 loginUser 到 Redis
                 Integer days = Math.toIntExact(TimeUnit.MILLISECONDS.toDays(TOKEN_EXPIRATION));
@@ -106,7 +106,7 @@ public class LoginServiceImpl implements LoginService {
 
         @Override
         public String logout() {
-                String userId = SecurityUtils.getUser().getUserId();
+                Long userId = SecurityUtils.getUser().getUserId();
                 boolean b = redisCacheUtils.deleteObject(ADMIN_LOGIN_PREFIX + userId);
                 if (!b) {
                         throw new RuntimeException("登出失败");
@@ -121,8 +121,8 @@ public class LoginServiceImpl implements LoginService {
         }
 
         @Override
-        public UserInfoVO getUserInfo(String userId) {
-                if (!StringUtils.hasText(userId)) {
+        public UserInfoVO getUserInfo(Long userId) {
+                if (userId == null) {
                         return getUserInfo();
                 }
 
@@ -152,8 +152,8 @@ public class LoginServiceImpl implements LoginService {
                                 }
                         }
 
-                        for (Long roleId : roleIds) {
-                                List<String> perms = menuMapper.selectPermsByUserId(roleId);
+                        if (!roleIds.isEmpty()) {
+                                List<String> perms = menuMapper.selectPermsByRoleIds(roleIds);
                                 if (perms != null) {
                                         permissions.addAll(perms);
                                 }
@@ -185,8 +185,8 @@ public class LoginServiceImpl implements LoginService {
         }
 
         @Override
-        public List<SysMenuVO> getUserRouter(String userId) {
-                if (!StringUtils.hasText(userId)) {
+        public List<SysMenuVO> getUserRouter(Long userId) {
+                if (userId == null) {
                         return getUserRouter();
                 }
 
@@ -209,20 +209,10 @@ public class LoginServiceImpl implements LoginService {
                                 .map(SysUserRole::getRoleId)
                                 .collect(Collectors.toList());
 
-                LambdaQueryWrapper<SysRoleMenu> roleMenuWrapper = new LambdaQueryWrapper<>();
-                roleMenuWrapper.in(SysRoleMenu::getRoleId, roleIds);
-                List<SysRoleMenu> roleMenus = roleMenuMapper.selectList(roleMenuWrapper);
-
-                List<Long> menuIds = roleMenus.stream()
-                                .map(SysRoleMenu::getMenuId)
-                                .distinct()
-                                .collect(Collectors.toList());
-
-                if (menuIds.isEmpty()) {
+                List<SysMenu> menus = menuMapper.selectMenuByUserId(userId);
+                if (menus == null || menus.isEmpty()) {
                         return Collections.emptyList();
                 }
-
-                List<SysMenu> menus = menuMapper.selectByIds(menuIds);
 
                 List<SysMenu> filteredMenus = menus.stream()
                                 .filter(menu -> !"F".equals(menu.getMenuType()))
@@ -242,7 +232,7 @@ public class LoginServiceImpl implements LoginService {
         /**
          * 登录前置校验（手机号格式 + 验证码）
          */
-        public void loginPreCheck(loginDTO loginDTO) {
+        private void loginPreCheck(loginDTO loginDTO) {
                 String phone = loginDTO.getPhone();
                 String password = loginDTO.getPassword();
                 String code = loginDTO.getCode();

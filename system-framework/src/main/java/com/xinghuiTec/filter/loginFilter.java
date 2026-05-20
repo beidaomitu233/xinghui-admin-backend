@@ -32,7 +32,7 @@ import java.util.Objects;
  */
 @Component
 // OncePerRequestFilter 每次HTTP请求只会被调用一次
-public class loginFilter extends OncePerRequestFilter {
+public class LoginFilter extends OncePerRequestFilter {
 
     /**
      * 自定义Redis缓存工具类，用于从Redis中获取缓存对象
@@ -70,6 +70,11 @@ public class loginFilter extends OncePerRequestFilter {
         // 验证JWT令牌并获取用户信息
         loginUser loginUser;
         try {
+            // 先验证JWT签名和过期时间，防止伪造Token
+            if (!JwtUtil.verify(authorization)) {
+                throw new RuntimeException("Token无效或已过期，请重新登录");
+            }
+
             // 解析JWT令牌获取载荷信息
             JWT jwt = JwtUtil.parseToken(authorization);
             // 从载荷中获取用户ID
@@ -94,7 +99,6 @@ public class loginFilter extends OncePerRequestFilter {
         // 将用户信息存入Security上下文，参数为：用户信息、凭证、权限列表
         UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginUser,
                 null, loginUser.getAuthorities());
-        System.out.println("登录用户信息：" + loginUser);
         SecurityContextHolder.getContext().setAuthentication(authenticationToken);
 
         // 验证完成，继续执行过滤器链

@@ -49,6 +49,21 @@ public class JwtUtil {
     }
 
     public static boolean verify(String token) {
-        return JWTUtil.verify(token, TOKEN_SIGN_KEY);
+        try {
+            if (!JWTUtil.verify(token, TOKEN_SIGN_KEY)) {
+                return false;
+            }
+            // 校验过期时间
+            JWT jwt = JWTUtil.parseToken(token);
+            Object expireObj = jwt.getPayload("expire_time");
+            if (expireObj instanceof Number) {
+                long expireTime = ((Number) expireObj).longValue();
+                return expireTime > System.currentTimeMillis();
+            }
+            // 没有过期时间字段视为无效
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

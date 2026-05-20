@@ -236,7 +236,7 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
 
         // 清除每个用户的路由缓存和用户信息缓存
         for (SysUserRole userRole : userRoles) {
-            String userId = userRole.getUserId();
+            Long userId = userRole.getUserId();
             String routerCacheKey = com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId;
             redisCacheUtils.deleteObject(routerCacheKey);
             String userInfoCacheKey = com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId;

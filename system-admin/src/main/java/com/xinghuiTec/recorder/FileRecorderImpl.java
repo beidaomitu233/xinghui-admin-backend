@@ -1,10 +1,10 @@
 package com.xinghuiTec.recorder;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.xinghuiTec.domain.entity.SysFile;
 import com.xinghuiTec.domain.entity.SysFilePart;
-import com.xinghuiTec.mapper.SysFileMapper;
 import com.xinghuiTec.mapper.SysFilePartMapper;
+import com.xinghuiTec.oss.entity.SysOss;
+import com.xinghuiTec.oss.service.ISysOssService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.x.file.storage.core.FileInfo;
@@ -16,7 +16,7 @@ import java.util.Date;
 
 /**
  * X File Storage 文件记录器实现
- * 用于保存文件上传记录到数据库
+ * 用于保存文件上传记录到 OSS 数据库表
  * 
  * @author beidoa23
  * @since 2026-01-24
@@ -26,44 +26,48 @@ import java.util.Date;
 public class FileRecorderImpl implements FileRecorder {
 
     @Resource
-    private SysFileMapper sysFileMapper;
+    private ISysOssService sysOssService;
 
     @Resource
     private SysFilePartMapper sysFilePartMapper;
 
     @Override
     public boolean save(FileInfo fileInfo) {
-        SysFile sysFile = toEntity(fileInfo);
-        int result = sysFileMapper.insert(sysFile);
+        SysOss sysOss = toEntity(fileInfo);
+        boolean result = sysOssService.save(sysOss);
+        if (result && sysOss.getOssId() != null) {
+            // 将生成的自增主键反写回 FileInfo，解决 Issue #2
+            fileInfo.setId(String.valueOf(sysOss.getOssId()));
+        }
         log.info("保存文件记录: {}", fileInfo.getOriginalFilename());
-        return result > 0;
+        return result;
     }
 
     @Override
     public void update(FileInfo fileInfo) {
-        SysFile sysFile = toEntity(fileInfo);
+        SysOss sysOss = toEntity(fileInfo);
         // 更新文件记录，匹配URL
-        LambdaQueryWrapper<SysFile> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SysFile::getUrl, fileInfo.getUrl());
-        sysFileMapper.update(sysFile, wrapper);
+        LambdaQueryWrapper<SysOss> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SysOss::getUrl, fileInfo.getUrl());
+        sysOssService.update(sysOss, wrapper);
         log.info("更新文件记录: {}", fileInfo.getOriginalFilename());
     }
 
     @Override
     public FileInfo getByUrl(String url) {
-        SysFile sysFile = sysFileMapper.selectOne(
-                new LambdaQueryWrapper<SysFile>()
-                        .eq(SysFile::getUrl, url));
-        return sysFile == null ? null : toFileInfo(sysFile);
+        SysOss sysOss = sysOssService.getOne(
+                new LambdaQueryWrapper<SysOss>()
+                        .eq(SysOss::getUrl, url), false);
+        return sysOss == null ? null : toFileInfo(sysOss);
     }
 
     @Override
     public boolean delete(String url) {
-        int result = sysFileMapper.delete(
-                new LambdaQueryWrapper<SysFile>()
-                        .eq(SysFile::getUrl, url));
+        boolean result = sysOssService.remove(
+                new LambdaQueryWrapper<SysOss>()
+                        .eq(SysOss::getUrl, url));
         log.info("删除文件记录: {}", url);
-        return result > 0;
+        return result;
     }
 
     @Override
@@ -75,7 +79,6 @@ public class FileRecorderImpl implements FileRecorder {
         filePart.setETag(filePartInfo.getETag());
         filePart.setPartNumber(filePartInfo.getPartNumber());
         filePart.setPartSize(filePartInfo.getPartSize());
-        // filePart.setHash(filePartInfo.getHash()); // FilePartInfo可能没有getHash方法
         filePart.setCreateTime(new Date());
         sysFilePartMapper.insert(filePart);
         log.info("保存分片记录: PartNumber={}, UploadId={}", filePartInfo.getPartNumber(), filePartInfo.getUploadId());
@@ -89,58 +92,45 @@ public class FileRecorderImpl implements FileRecorder {
     }
 
     /**
-     * FileInfo 转 SysFile实体
+     * FileInfo 转 SysOss实体
      */
-    private SysFile toEntity(FileInfo fileInfo) {
-        SysFile sysFile = new SysFile();
-        // ID通常由数据库生成或此处生成，如果是更新操作需注意
-        // 此处简单以时间戳生成ID，实际生产建议使用雪花算法
-        if (fileInfo.getId() == null) {
-            sysFile.setId(System.currentTimeMillis());
-        } else {
-            // 尝试转换String ID, 如果是更新，FileInfo可能带着ID
+    private SysOss toEntity(FileInfo fileInfo) {
+        SysOss sysOss = new SysOss();
+        if (fileInfo.getId() != null) {
             try {
-                sysFile.setId(Long.parseLong(fileInfo.getId()));
+                sysOss.setOssId(Long.parseLong(fileInfo.getId()));
             } catch (Exception e) {
-                // 忽略异常
+                // ignore
             }
         }
-        sysFile.setUrl(fileInfo.getUrl());
-        sysFile.setSize(fileInfo.getSize());
-        sysFile.setFilename(fileInfo.getFilename());
-        sysFile.setOriginalName(fileInfo.getOriginalFilename());
-        sysFile.setBasePath(fileInfo.getBasePath());
-        sysFile.setPath(fileInfo.getPath());
-        sysFile.setExt(fileInfo.getExt());
-        sysFile.setPlatform(fileInfo.getPlatform());
-        sysFile.setThUrl(fileInfo.getThUrl());
-        sysFile.setThFilename(fileInfo.getThFilename());
-        sysFile.setThSize(fileInfo.getThSize());
-        sysFile.setObjectId(fileInfo.getObjectId());
-        sysFile.setCreateTime(fileInfo.getCreateTime());
-        return sysFile;
+        sysOss.setUrl(fileInfo.getUrl());
+        sysOss.setSize(fileInfo.getSize());
+        sysOss.setFileName(fileInfo.getFilename());
+        sysOss.setOriginalName(fileInfo.getOriginalFilename());
+        sysOss.setFileSuffix(fileInfo.getExt());
+        sysOss.setPlatform(fileInfo.getPlatform());
+        if (fileInfo.getCreateTime() != null) {
+            sysOss.setCreateTime(fileInfo.getCreateTime());
+        }
+        return sysOss;
     }
 
     /**
-     * SysFile实体 转 FileInfo
+     * SysOss实体 转 FileInfo
      */
-    private FileInfo toFileInfo(SysFile sysFile) {
+    private FileInfo toFileInfo(SysOss sysOss) {
         FileInfo fileInfo = new FileInfo();
-        fileInfo.setUrl(sysFile.getUrl());
-        fileInfo.setSize(sysFile.getSize());
-        fileInfo.setFilename(sysFile.getFilename());
-        fileInfo.setOriginalFilename(sysFile.getOriginalName());
-        fileInfo.setBasePath(sysFile.getBasePath());
-        fileInfo.setPath(sysFile.getPath());
-        fileInfo.setExt(sysFile.getExt());
-        fileInfo.setPlatform(sysFile.getPlatform());
-        fileInfo.setThUrl(sysFile.getThUrl());
-        fileInfo.setThFilename(sysFile.getThFilename());
-        fileInfo.setThSize(sysFile.getThSize());
-        fileInfo.setObjectId(sysFile.getObjectId());
-        fileInfo.setCreateTime(sysFile.getCreateTime());
+        fileInfo.setUrl(sysOss.getUrl());
+        fileInfo.setSize(sysOss.getSize());
+        fileInfo.setFilename(sysOss.getFileName());
+        fileInfo.setOriginalFilename(sysOss.getOriginalName());
+        fileInfo.setExt(sysOss.getFileSuffix());
+        fileInfo.setPlatform(sysOss.getPlatform());
+        fileInfo.setCreateTime(sysOss.getCreateTime());
         // ID需要设置
-        fileInfo.setId(String.valueOf(sysFile.getId()));
+        if (sysOss.getOssId() != null) {
+            fileInfo.setId(String.valueOf(sysOss.getOssId()));
+        }
         return fileInfo;
     }
 }

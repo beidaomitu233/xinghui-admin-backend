@@ -17,7 +17,7 @@ public class ResultTest {
     void testOk() {
         Result<Void> result = Result.ok();
         assertEquals(200, result.getCode());
-        assertEquals("操作成功", result.getMessage());
+        assertEquals("成功", result.getMessage());
         assertNull(result.getData());
         System.out.println("✓ ok() code=" + result.getCode());
     }
@@ -27,7 +27,7 @@ public class ResultTest {
     void testOkWithData() {
         Result<String> result = Result.ok("hello");
         assertEquals(200, result.getCode());
-        assertEquals("操作成功", result.getMessage());
+        assertEquals("成功", result.getMessage());
         assertEquals("hello", result.getData());
         System.out.println("✓ ok(data) data=" + result.getData());
     }

@@ -20,7 +20,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
-public class userDetailManageimpl implements UserDetailsService {
+public class UserDetailManageImpl implements UserDetailsService {
 
     @Resource
     private SysUserMapper userMapper;
@@ -37,10 +37,13 @@ public class userDetailManageimpl implements UserDetailsService {
      */
     @Override
     public UserDetails loadUserByUsername(String phone) throws UsernameNotFoundException {
-        // 不限租户查询：忽略租户隔离，按手机号匹配
-        SysUser user = TenantHelper.ignore(() ->
-            userMapper.selectOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getMobile, phone))
-        );
+        // 不限租户查询：忽略租户隔离，按手机号匹配（取第一条匹配记录）
+        SysUser user = TenantHelper.ignore(() -> {
+            List<SysUser> users = userMapper.selectList(
+                new LambdaQueryWrapper<SysUser>().eq(SysUser::getMobile, phone).last("LIMIT 1")
+            );
+            return users.isEmpty() ? null : users.get(0);
+        });
 
         if (Objects.isNull(user)) {
             throw new UsernameNotFoundException("手机号未注册");
@@ -53,8 +56,9 @@ public class userDetailManageimpl implements UserDetailsService {
 
         // 查询权限信息
         List<String> list = new java.util.ArrayList<>();
-        for (SysUserRole role : userRoles) {
-            List<String> perms = menuMapper.selectPermsByUserId(role.getRoleId());
+        if (!userRoles.isEmpty()) {
+            List<Long> roleIds = userRoles.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
+            List<String> perms = menuMapper.selectPermsByRoleIds(roleIds);
             if (perms != null) {
                 list.addAll(perms);
             }

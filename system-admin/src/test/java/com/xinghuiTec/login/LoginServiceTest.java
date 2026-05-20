@@ -19,6 +19,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -43,6 +45,18 @@ public class LoginServiceTest {
 
     private static final String TEST_PHONE = "13900000001";
     private static final String TEST_PASSWORD = "123456";
+
+    /**
+     * 跨租户按手机号查找用户（可能多个租户有相同手机号，取第一条）
+     */
+    private SysUser findUserByPhone(String phone) {
+        return TenantHelper.ignore(() -> {
+            List<SysUser> users = sysUserMapper.selectList(
+                new LambdaQueryWrapper<SysUser>().eq(SysUser::getMobile, phone).last("LIMIT 1")
+            );
+            return users.isEmpty() ? null : users.get(0);
+        });
+    }
 
     @Test
     @Order(1)
@@ -86,9 +100,7 @@ public class LoginServiceTest {
     @Order(4)
     @DisplayName("跨租户查询 - 按手机号查找用户")
     void testQueryUserAcrossTenants() {
-        SysUser user = TenantHelper.ignore(() ->
-            sysUserMapper.selectOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getMobile, TEST_PHONE))
-        );
+        SysUser user = findUserByPhone(TEST_PHONE);
         if (user != null) {
             assertEquals(TEST_PHONE, user.getMobile());
             assertNotNull(user.getTenantId());
@@ -102,9 +114,7 @@ public class LoginServiceTest {
     @Order(5)
     @DisplayName("Spring Security 认证 - 手机号+密码")
     void testAuthenticateByPhone() {
-        SysUser user = TenantHelper.ignore(() ->
-            sysUserMapper.selectOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getMobile, TEST_PHONE))
-        );
+        SysUser user = findUserByPhone(TEST_PHONE);
         if (user == null) { System.out.println("跳过: 无测试用户"); return; }
 
         UsernamePasswordAuthenticationToken token =
@@ -123,9 +133,7 @@ public class LoginServiceTest {
     @Order(6)
     @DisplayName("完整登录流程 - JWT + Redis")
     void testFullLoginFlow() {
-        SysUser user = TenantHelper.ignore(() ->
-            sysUserMapper.selectOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getMobile, TEST_PHONE))
-        );
+        SysUser user = findUserByPhone(TEST_PHONE);
         if (user == null) { System.out.println("跳过: 无测试用户"); return; }
 
         loginDTO dto = new loginDTO();

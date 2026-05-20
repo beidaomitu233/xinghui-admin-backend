@@ -27,7 +27,7 @@ public class ExceptionTest {
     void testBaseExceptionModule() {
         BaseException ex = new BaseException("test", "模块测试错误");
         assertEquals("test", ex.getModule());
-        assertEquals("测试错误", ex.getMessage()); // 实际取 defaultMessage，不是 code
+        assertEquals("模块测试错误", ex.getMessage()); // 实际取 defaultMessage
         System.out.println("✓ BaseException 模块: " + ex.getModule());
     }
 

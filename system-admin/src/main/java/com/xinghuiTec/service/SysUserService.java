@@ -30,7 +30,7 @@ public interface SysUserService extends IService<SysUser> {
      * @param userId 用户ID
      * @return 用户详细信息，如果不存在返回 null
      */
-    SysUser getUserInfo(String userId);
+    SysUser getUserInfo(Long userId);
 
     /**
      * 新增用户（包含角色分配）
@@ -41,7 +41,7 @@ public interface SysUserService extends IService<SysUser> {
      * @param sysUserAddDTO 新增用户请求DTO
      * @return 新增成功的用户ID（UUID格式）
      */
-    String addUser(SysUserAddDTO sysUserAddDTO);
+    Long addUser(SysUserAddDTO sysUserAddDTO);
 
     /**
      * 批量新增用户
@@ -69,7 +69,7 @@ public interface SysUserService extends IService<SysUser> {
      * 
      * @param userId 用户ID
      */
-    void deleteUser(String userId);
+    void deleteUser(Long userId);
 
     /**
      * 重置用户密码
@@ -77,7 +77,7 @@ public interface SysUserService extends IService<SysUser> {
      * @param userId      用户ID
      * @param newPassword 新密码
      */
-    void resetPassword(String userId, String newPassword);
+    void resetPassword(Long userId, String newPassword);
 
     /**
      * 下载用户导入模板

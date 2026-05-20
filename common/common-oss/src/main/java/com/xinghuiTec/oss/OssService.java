@@ -48,7 +48,30 @@ public class OssService {
 
     /** 上传输入流 */
     public FileInfo upload(InputStream inputStream, String filename, String contentType, String platform) {
-        return upload(IoUtil.readBytes(inputStream), filename, contentType, platform);
+        return buildUpload(fileStorageService.of(inputStream), platform)
+                .setSaveFilename(buildFilename(filename))
+                .setContentType(contentType)
+                .upload();
+    }
+
+    /** 流式下载文件到 HttpServletResponse */
+    public void download(String url, jakarta.servlet.http.HttpServletResponse response) {
+        try {
+            org.dromara.x.file.storage.core.FileInfo fileInfo = getFileInfo(url);
+            if (fileInfo == null) {
+                throw new RuntimeException("文件不存在");
+            }
+            response.setContentType("application/octet-stream");
+            response.setHeader("Content-Disposition",
+                    "attachment; filename=" + java.net.URLEncoder.encode(fileInfo.getOriginalFilename(), java.nio.charset.StandardCharsets.UTF_8));
+            fileStorageService.download(url).inputStream(in -> {
+                IoUtil.copy(in, response.getOutputStream());
+                response.getOutputStream().flush();
+            });
+        } catch (Exception e) {
+            log.error("文件下载失败", e);
+            throw new RuntimeException("文件下载失败: " + e.getMessage());
+        }
     }
 
     public boolean delete(String url) {

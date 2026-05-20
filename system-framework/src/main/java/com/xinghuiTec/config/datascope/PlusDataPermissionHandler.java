@@ -90,8 +90,8 @@ public class PlusDataPermissionHandler {
         for (DataColumn col : dataPermission.value()) {
             // SELF 模式：create_by = 当前用户ID
             String columnName = col.value();
-            String userId = loginUser.getUser().getUserId();
-            return new EqualsTo(new Column(columnName), new StringValue(userId));
+            Long userId = loginUser.getUser().getUserId();
+            return new EqualsTo(new Column(columnName), new StringValue(String.valueOf(userId)));
         }
         return null;
     }

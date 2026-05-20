@@ -21,9 +21,9 @@ import com.baomidou.mybatisplus.annotation.TableName;
 @NoArgsConstructor
 @TableName("sys_user_role")
 public class SysUserRole {
-    // 用户ID (UUID)
+    // 用户ID
     @TableField
-    private String userId;
+    private Long userId;
     // 角色ID
     @TableId
     private Long roleId;

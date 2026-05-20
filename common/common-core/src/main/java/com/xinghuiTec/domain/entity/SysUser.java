@@ -26,9 +26,9 @@ import com.baomidou.mybatisplus.annotation.TableName;
 @NoArgsConstructor
 @TableName("sys_user")
 public class SysUser extends TenantEntity {
-    // 用户ID (UUID)
-    @TableId(type = IdType.INPUT)
-    private String userId;
+    // 用户ID
+    @TableId(type = IdType.ASSIGN_ID)
+    private Long userId;
     // 用户账号
     private String username;
     // 密码(BCrypt加密) - 不返回给前端

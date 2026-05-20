@@ -41,7 +41,7 @@ redisson:
 logging:
   level:
     root: info
-    com.changhui.mapper: debug
+    com.xinghuiTec.mapper: debug
 
 # -------------------------------------------------------------------
 # 4. 用户配置
@@ -106,9 +106,9 @@ dromara:
     minio:
       - platform: minio-1
         enable-storage: true
-        access-key: admin
-        secret-key: admin123
-        end-point: http://192.168.2.101:9000
+        access-key: ${MINIO_ACCESS_KEY:}
+        secret-key: ${MINIO_SECRET_KEY:}
+        end-point: ${MINIO_ENDPOINT:http://192.168.2.101:9000}
         bucket-name: xinghui-admin
         base-path: upload/
 
@@ -164,12 +164,12 @@ sms:
 # -------------------------------------------------------------------
 mail:
   enabled: true
-  host: smtp.163.com
-  port: 465
+  host: ${MAIL_HOST:smtp.163.com}
+  port: ${MAIL_PORT:465}
   auth: true
-  from: XingHuiZhiChuang@163.com
-  user: XingHuiZhiChuang@163.com
-  pass: XRtc7rppBU4F5JrQ
+  from: ${MAIL_FROM:XingHuiZhiChuang@163.com}
+  user: ${MAIL_USER:XingHuiZhiChuang@163.com}
+  pass: ${MAIL_PASS:}
   starttlsEnable: true
   sslEnable: true
 
