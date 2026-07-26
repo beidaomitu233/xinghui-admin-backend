@@ -32,12 +32,23 @@ public class SysOssController {
     @Resource
     private ISysOssService sysOssService;
 
+    /**
+     * 上传文件
+     *
+     * @param file     上传文件
+     * @param platform 目标存储平台（可选，如 minio-1 / aliyun-oss-1，空则使用默认平台）
+     */
     @PostMapping("/upload")
     @PreAuthorize("hasAuthority('system:oss:upload')")
     @Log(title = "文件上传", businessType = BusinessType.INSERT)
-    public Result<SysOss> upload(@RequestParam("file") MultipartFile file) {
-        FileInfo fileInfo = ossService.upload(file);
-        // 通过 fileInfo.getId() 拿回 FileRecorderImpl 中反写的 ID
+    public Result<SysOss> upload(@RequestParam("file") MultipartFile file,
+                                 @RequestParam(required = false) String platform) {
+        FileInfo fileInfo = ossService.upload(file, platform);
+        // FileRecorderImpl 落库成功后会把生成的主键反写进 fileInfo.id；
+        // 反写缺失说明记录未落库（插入失败/记录器未生效），对象已在存储端，须明确报错而非 NPE
+        if (fileInfo.getId() == null || fileInfo.getId().isBlank()) {
+            throw new RuntimeException("文件已上传但记录保存失败，请联系管理员");
+        }
         SysOss sysOss = sysOssService.getById(Long.parseLong(fileInfo.getId()));
         return Result.ok(sysOss);
     }
@@ -47,9 +58,11 @@ public class SysOssController {
     @Log(title = "文件下载", businessType = BusinessType.OTHER)
     public void download(@PathVariable("ossId") Long ossId, HttpServletResponse response) {
         SysOss sysOss = sysOssService.getById(ossId);
-        if (sysOss != null) {
-            ossService.download(sysOss.getUrl(), response);
+        if (sysOss == null) {
+            throw new RuntimeException("文件不存在或已删除");
         }
+        // 传入已加载记录的原始文件名，避免存储层再按 url 回查一次
+        ossService.download(sysOss.getUrl(), sysOss.getOriginalName(), response);
     }
 
     @GetMapping("/list")
@@ -73,19 +86,25 @@ public class SysOssController {
     @GetMapping("/info/{ossId}")
     @PreAuthorize("hasAuthority('system:oss:query')")
     public Result<SysOss> getInfo(@PathVariable("ossId") Long ossId) {
-        return Result.ok(sysOssService.getById(ossId));
+        SysOss sysOss = sysOssService.getById(ossId);
+        if (sysOss == null) {
+            throw new RuntimeException("文件不存在或已删除");
+        }
+        return Result.ok(sysOss);
     }
 
     @PostMapping("/remove")
     @PreAuthorize("hasAuthority('system:oss:remove')")
     @Log(title = "文件删除", businessType = BusinessType.DELETE)
     public Result<Void> remove(@RequestBody List<Long> ossIds) {
-        for (Long id : ossIds) {
-            SysOss sysOss = sysOssService.getById(id);
-            if (sysOss != null) {
-                ossService.delete(sysOss.getUrl());
-                sysOssService.removeById(id);
-            }
+        if (ossIds == null || ossIds.isEmpty()) {
+            return Result.ok();
+        }
+        // 一次批量加载替代逐个 getById；存储删除时 FileRecorderImpl 会按 url 同步
+        // 逻辑删除记录，无需再 removeById（原实现的第二次删除恒匹配 0 行）
+        List<SysOss> records = sysOssService.listByIds(ossIds);
+        for (SysOss sysOss : records) {
+            ossService.delete(sysOss.getUrl());
         }
         return Result.ok();
     }
