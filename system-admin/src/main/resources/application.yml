@@ -19,9 +19,9 @@ spring:
   # 全新空库则完整执行 V1(表结构) + V2(种子数据)。
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:xinghui_admin}?useUnicode=true&characterEncoding=utf8&useSSL=true&serverTimezone=GMT%2B8
-    user: ${DB_USERNAME:xinghuitec}
-    password: ${DB_PASSWORD:xinghuitec233}
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:xinghuiadmin}?useUnicode=true&characterEncoding=utf8&useSSL=true&serverTimezone=GMT%2B8
+    user: ${DB_USERNAME:xinghuiadmin}
+    password: ${DB_PASSWORD:xinghuiadmin23}
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 2
