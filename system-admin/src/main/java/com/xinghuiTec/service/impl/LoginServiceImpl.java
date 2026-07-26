@@ -2,9 +2,9 @@ package com.xinghuiTec.service.impl;
 
 import com.xinghuiTec.config.CaptchaProperties;
 import com.xinghuiTec.constants.RedisConstants;
-import com.xinghuiTec.domain.dto.loginDTO;
+import com.xinghuiTec.domain.dto.LoginDTO;
 import com.xinghuiTec.domain.entity.SysUser;
-import com.xinghuiTec.domain.entity.loginUser;
+import com.xinghuiTec.domain.entity.LoginUser;
 import com.xinghuiTec.domain.vo.SysMenuVO;
 import com.xinghuiTec.exception.user.CaptchaException;
 import com.xinghuiTec.exception.user.UserNotExistsException;
@@ -76,7 +76,7 @@ public class LoginServiceImpl implements LoginService {
         private static final Pattern PHONE_PATTERN = Pattern.compile("^1[3-9]\\d{9}$");
 
         @Override
-        public String login(loginDTO user) {
+        public String login(LoginDTO user) {
                 // 前置校验（手机号格式 + 验证码）
                 loginPreCheck(user);
 
@@ -90,7 +90,7 @@ public class LoginServiceImpl implements LoginService {
                 }
 
                 // 2. 从认证结果获取用户信息（tenantId 已在 userDetailManageimpl 中从用户实体设置）
-                loginUser loginUser = (loginUser) authenticate.getPrincipal();
+                LoginUser loginUser = (LoginUser) authenticate.getPrincipal();
                 Long userId = loginUser.getUser().getUserId();
                 String tenantId = loginUser.getTenantId();
 
@@ -232,7 +232,7 @@ public class LoginServiceImpl implements LoginService {
         /**
          * 登录前置校验（手机号格式 + 验证码）
          */
-        private void loginPreCheck(loginDTO loginDTO) {
+        private void loginPreCheck(LoginDTO loginDTO) {
                 String phone = loginDTO.getPhone();
                 String password = loginDTO.getPassword();
                 String code = loginDTO.getCode();

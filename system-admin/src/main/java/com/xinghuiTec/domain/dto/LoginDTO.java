@@ -7,7 +7,7 @@ import lombok.Data;
  * 使用手机号 + 密码登录，不限制租户
  */
 @Data
-public class loginDTO {
+public class LoginDTO {
     /**
      * 手机号（登录账号）
      */

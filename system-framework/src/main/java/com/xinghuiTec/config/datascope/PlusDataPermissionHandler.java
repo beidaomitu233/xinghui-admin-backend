@@ -5,7 +5,7 @@ import cn.hutool.core.util.ObjectUtil;
 import com.xinghuiTec.annotation.datascope.DataColumn;
 import com.xinghuiTec.annotation.datascope.DataPermission;
 import com.xinghuiTec.constants.TenantConstants;
-import com.xinghuiTec.domain.entity.loginUser;
+import com.xinghuiTec.domain.entity.LoginUser;
 import com.xinghuiTec.enums.DataScopeType;
 import com.xinghuiTec.utils.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +41,7 @@ public class PlusDataPermissionHandler {
                 return where;
             }
 
-            loginUser loginUser = SecurityUtils.getLoginUser();
+            LoginUser loginUser = SecurityUtils.getLoginUser();
             if (loginUser == null) {
                 return where;
             }
@@ -81,7 +81,7 @@ public class PlusDataPermissionHandler {
     /**
      * 构建过滤表达式：create_by = 'userId'
      */
-    private Expression buildFilterExpression(DataPermission dataPermission, loginUser loginUser,
+    private Expression buildFilterExpression(DataPermission dataPermission, LoginUser loginUser,
                                               DataScopeType scopeType) throws JSQLParserException {
         if (scopeType != DataScopeType.SELF) {
             return null;
@@ -97,7 +97,7 @@ public class PlusDataPermissionHandler {
     }
 
     /** 检查是否为超级管理员 */
-    private boolean isSuperAdmin(loginUser loginUser) {
+    private boolean isSuperAdmin(LoginUser loginUser) {
         // 检查角色中是否有 superadmin roleKey
         if (CollUtil.isNotEmpty(loginUser.getPermissions())) {
             return loginUser.getPermissions().contains(TenantConstants.SUPER_ADMIN_ROLE_KEY);
@@ -106,7 +106,7 @@ public class PlusDataPermissionHandler {
     }
 
     /** 检查是否为租户管理员 */
-    private boolean isTenantAdmin(loginUser loginUser) {
+    private boolean isTenantAdmin(LoginUser loginUser) {
         if (CollUtil.isNotEmpty(loginUser.getPermissions())) {
             return loginUser.getPermissions().contains(TenantConstants.TENANT_ADMIN_ROLE_KEY);
         }
@@ -114,7 +114,7 @@ public class PlusDataPermissionHandler {
     }
 
     /** 获取用户第一个角色的数据范围 */
-    private DataScopeType getDataScopeType(loginUser loginUser) {
+    private DataScopeType getDataScopeType(LoginUser loginUser) {
         // 从 SecurityUtils 获取用户角色信息
         // 由于 loginUser 没有直接存 dataScope，我们需要从 roles 列表获取
         // 暂时通过 permissions 判断，后续可优化

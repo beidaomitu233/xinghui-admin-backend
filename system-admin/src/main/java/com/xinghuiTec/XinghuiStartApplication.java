@@ -8,8 +8,8 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableFileStorage
 @SpringBootApplication
 @EnableAsync
-public class xinghuiStartApplication {
+public class XinghuiStartApplication {
     public static void main(String[] args) {
-        SpringApplication.run(xinghuiStartApplication.class, args);
+        SpringApplication.run(XinghuiStartApplication.class, args);
     }
 }

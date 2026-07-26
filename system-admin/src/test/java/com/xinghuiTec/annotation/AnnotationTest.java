@@ -1,7 +1,7 @@
 package com.xinghuiTec.annotation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.xinghuiTec.domain.dto.loginDTO;
+import com.xinghuiTec.domain.dto.LoginDTO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,7 +36,7 @@ public class AnnotationTest {
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger blockedCount = new AtomicInteger(0);
         
-        loginDTO dto = new loginDTO();
+        LoginDTO dto = new LoginDTO();
         dto.setPhone("13900000001");
         dto.setPassword("123456");
         String content = objectMapper.writeValueAsString(dto);

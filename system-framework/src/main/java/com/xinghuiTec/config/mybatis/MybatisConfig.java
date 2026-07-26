@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Role;
 
 @Configuration
-public class mybatisConfig {
+public class MybatisConfig {
 
     /**
      * MyBatis-Plus 拦截器链

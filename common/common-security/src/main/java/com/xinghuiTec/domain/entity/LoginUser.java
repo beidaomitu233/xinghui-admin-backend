@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class loginUser implements UserDetails {
+public class LoginUser implements UserDetails {
     private SysUser user;
     //存储权限信息临时集合
     private List<String> permissions;
@@ -31,12 +31,12 @@ public class loginUser implements UserDetails {
      */
     private String tenantId;
 
-    public loginUser(SysUser user, List<String> validPermissions) {
+    public LoginUser(SysUser user, List<String> validPermissions) {
         this.user = user;
         this.permissions = validPermissions;
     }
 
-    public loginUser(SysUser user) {
+    public LoginUser(SysUser user) {
         this.user = user;
     }
 

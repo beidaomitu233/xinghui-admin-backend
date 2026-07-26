@@ -1,6 +1,6 @@
 package com.xinghuiTec.controller;
 
-import com.xinghuiTec.domain.dto.loginDTO;
+import com.xinghuiTec.domain.dto.LoginDTO;
 import com.xinghuiTec.domain.vo.CaptchaVO;
 import com.xinghuiTec.domain.vo.SysMenuVO;
 import com.xinghuiTec.service.CaptchaService;
@@ -60,7 +60,7 @@ public class LoginController {
      */
     @RateLimiter(key = "#user.phone", time = 60, count = 5, message = "登录过于频繁，请1分钟后再试")
     @PostMapping("/user/login")
-    public Result<String> login(@RequestBody loginDTO user) {
+    public Result<String> login(@RequestBody LoginDTO user) {
         String token = loginService.login(user);
         return Result.ok(token);
     }
