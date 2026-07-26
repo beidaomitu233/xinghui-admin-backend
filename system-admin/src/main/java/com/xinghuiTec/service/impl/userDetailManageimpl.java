@@ -3,7 +3,7 @@ package com.xinghuiTec.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xinghuiTec.domain.entity.SysUser;
 import com.xinghuiTec.domain.entity.SysUserRole;
-import com.xinghuiTec.domain.entity.loginUser;
+import com.xinghuiTec.domain.entity.LoginUser;
 import com.xinghuiTec.mapper.SysMenuMapper;
 import com.xinghuiTec.mapper.SysUserMapper;
 import com.xinghuiTec.service.SysUserRoleService;
@@ -33,7 +33,7 @@ public class UserDetailManageImpl implements UserDetailsService {
 
     /**
      * 按手机号加载用户（不限租户）
-     * Spring Security 会将 loginDTO.phone 传入此方法的 username 参数
+     * Spring Security 会将 LoginDTO.phone 传入此方法的 username 参数
      */
     @Override
     public UserDetails loadUserByUsername(String phone) throws UsernameNotFoundException {
@@ -70,7 +70,7 @@ public class UserDetailManageImpl implements UserDetailsService {
                 .distinct()
                 .collect(Collectors.toList());
 
-        loginUser loginUser = new loginUser(user, validPermissions);
+        LoginUser loginUser = new LoginUser(user, validPermissions);
         // 从用户实体设置租户ID
         loginUser.setTenantId(user.getTenantId());
 

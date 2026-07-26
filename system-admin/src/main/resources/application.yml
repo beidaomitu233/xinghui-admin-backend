@@ -37,6 +37,12 @@ spring:
       port: 6379
       database: 0
 
+  # Servlet 文件上传配置（必须位于 spring: 节点下才生效）
+  servlet:
+    multipart:
+      max-file-size: 100MB # 配置上传文件大小最大值
+      max-request-size: 1000MB # 配置请求体大小最大值 (通常用于下载/上传流)
+
 # Redisson 配置
 redisson:
   threads: 4
@@ -45,12 +51,6 @@ redisson:
     timeout: 3000
     connectionPoolSize: 32
     connectionMinimumIdleSize: 8
-
-  # Servlet 相关的配置
-  servlet:
-    multipart:
-      max-file-size: 100MB # 配置上传文件大小最大值
-      max-request-size: 1000MB # 配置请求体大小最大值 (通常用于下载/上传流)
 
 # -------------------------------------------------------------------
 # 3. 日志配置 (Logging)

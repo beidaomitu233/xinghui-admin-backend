@@ -2,9 +2,9 @@ package com.xinghuiTec.login;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xinghuiTec.constants.RedisConstants;
-import com.xinghuiTec.domain.dto.loginDTO;
+import com.xinghuiTec.domain.dto.LoginDTO;
 import com.xinghuiTec.domain.entity.SysUser;
-import com.xinghuiTec.domain.entity.loginUser;
+import com.xinghuiTec.domain.entity.LoginUser;
 import com.xinghuiTec.mapper.SysUserMapper;
 import com.xinghuiTec.service.LoginService;
 import com.xinghuiTec.utils.JwtUtil;
@@ -62,7 +62,7 @@ public class LoginServiceTest {
     @Order(1)
     @DisplayName("手机号格式校验 - 正确格式通过")
     void testPhoneFormatValid() {
-        loginDTO dto = new loginDTO();
+        LoginDTO dto = new LoginDTO();
         dto.setPhone("13912345678");
         dto.setPassword("123456");
         try {
@@ -77,7 +77,7 @@ public class LoginServiceTest {
     @Order(2)
     @DisplayName("手机号格式校验 - 错误格式拦截")
     void testPhoneFormatInvalid() {
-        loginDTO dto = new loginDTO();
+        LoginDTO dto = new LoginDTO();
         dto.setPhone("12345");
         dto.setPassword("123456");
         RuntimeException ex = assertThrows(RuntimeException.class, () -> loginService.login(dto));
@@ -89,7 +89,7 @@ public class LoginServiceTest {
     @Order(3)
     @DisplayName("手机号格式校验 - 空手机号拦截")
     void testPhoneEmpty() {
-        loginDTO dto = new loginDTO();
+        LoginDTO dto = new LoginDTO();
         dto.setPhone("");
         dto.setPassword("123456");
         assertThrows(Exception.class, () -> loginService.login(dto));
@@ -122,8 +122,8 @@ public class LoginServiceTest {
         Authentication auth = authenticationManager.authenticate(token);
 
         assertNotNull(auth);
-        assertTrue(auth.getPrincipal() instanceof loginUser);
-        loginUser lu = (loginUser) auth.getPrincipal();
+        assertTrue(auth.getPrincipal() instanceof LoginUser);
+        LoginUser lu = (LoginUser) auth.getPrincipal();
         assertEquals(TEST_PHONE, lu.getUser().getMobile());
         assertNotNull(lu.getTenantId());
         System.out.println("✓ 认证通过, 用户: " + lu.getUser().getUserId() + ", 租户: " + lu.getTenantId());
@@ -136,7 +136,7 @@ public class LoginServiceTest {
         SysUser user = findUserByPhone(TEST_PHONE);
         if (user == null) { System.out.println("跳过: 无测试用户"); return; }
 
-        loginDTO dto = new loginDTO();
+        LoginDTO dto = new LoginDTO();
         dto.setPhone(TEST_PHONE);
         dto.setPassword(TEST_PASSWORD);
 
@@ -149,7 +149,7 @@ public class LoginServiceTest {
         Object tenantId = parsed.getPayload("tenantId");
 
         // 验证 Redis 中有登录信息
-        loginUser cached = redisCacheUtils.getCacheObject(RedisConstants.ADMIN_LOGIN_PREFIX + userId);
+        LoginUser cached = redisCacheUtils.getCacheObject(RedisConstants.ADMIN_LOGIN_PREFIX + userId);
         assertNotNull(cached);
         assertEquals(TEST_PHONE, cached.getUser().getMobile());
 
@@ -160,7 +160,7 @@ public class LoginServiceTest {
     @Order(7)
     @DisplayName("登录失败 - 未注册手机号")
     void testLoginFailUnregistered() {
-        loginDTO dto = new loginDTO();
+        LoginDTO dto = new LoginDTO();
         dto.setPhone("19900000001");
         dto.setPassword("anypassword");
         assertThrows(Exception.class, () -> loginService.login(dto));
@@ -171,7 +171,7 @@ public class LoginServiceTest {
     @Order(8)
     @DisplayName("登录失败 - 密码错误")
     void testLoginFailWrongPassword() {
-        loginDTO dto = new loginDTO();
+        LoginDTO dto = new LoginDTO();
         dto.setPhone(TEST_PHONE);
         dto.setPassword("wrong_password_xxx");
         assertThrows(Exception.class, () -> loginService.login(dto));

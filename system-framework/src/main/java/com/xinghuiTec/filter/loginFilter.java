@@ -5,7 +5,7 @@ import cn.hutool.jwt.JWT;
 import com.xinghuiTec.constants.HttpConstants;
 import com.xinghuiTec.constants.JwtConstants;
 import com.xinghuiTec.constants.RedisConstants;
-import com.xinghuiTec.domain.entity.loginUser;
+import com.xinghuiTec.domain.entity.LoginUser;
 import com.xinghuiTec.utils.JwtUtil;
 import com.xinghuiTec.utils.RedisCacheUtils;
 import jakarta.annotation.Resource;
@@ -56,7 +56,7 @@ public class LoginFilter extends OncePerRequestFilter {
      */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException, IOException {
+            throws ServletException, IOException {
         // 从请求头中获取Authorization字段
         String authorization = request.getHeader(HttpConstants.HEADER_AUTHORIZATION);
 
@@ -68,32 +68,36 @@ public class LoginFilter extends OncePerRequestFilter {
         }
 
         // 验证JWT令牌并获取用户信息
-        loginUser loginUser;
+        // 校验失败一律按"未认证"处理：清空上下文后放行，由 AuthenticationEntryPoint 统一返回 401，
+        // 而不是抛出 RuntimeException 导致 HTTP 500（过滤器异常不经过 @RestControllerAdvice）
+        LoginUser loginUser = null;
         try {
             // 先验证JWT签名和过期时间，防止伪造Token
-            if (!JwtUtil.verify(authorization)) {
-                throw new RuntimeException("Token无效或已过期，请重新登录");
-            }
-
-            // 解析JWT令牌获取载荷信息
-            JWT jwt = JwtUtil.parseToken(authorization);
-            // 从载荷中获取用户ID
-            String userId = jwt.getPayload(JwtConstants.PAYLOAD_USER_ID).toString();
-            // 从Redis缓存中获取登录用户信息
-            loginUser = redisCacheUtils.getCacheObject(RedisConstants.ADMIN_LOGIN_PREFIX + userId);
-
-            // 验证用户登录凭证是否过期
-            if (Objects.isNull(loginUser)) {
-                throw new RuntimeException("登入凭证过期，请重新登入");
-            }
-
-            // 从JWT中获取租户ID并设置到loginUser
-            Object tenantIdObj = jwt.getPayload(JwtConstants.PAYLOAD_TENANT_ID);
-            if (tenantIdObj != null) {
-                loginUser.setTenantId(tenantIdObj.toString());
+            if (JwtUtil.verify(authorization)) {
+                // 解析JWT令牌获取载荷信息
+                JWT jwt = JwtUtil.parseToken(authorization);
+                Object userIdObj = jwt.getPayload(JwtConstants.PAYLOAD_USER_ID);
+                if (userIdObj != null) {
+                    // 从Redis缓存中获取登录用户信息（缓存不存在视为登录凭证已过期）
+                    loginUser = redisCacheUtils.getCacheObject(RedisConstants.ADMIN_LOGIN_PREFIX + userIdObj);
+                }
+                if (loginUser != null) {
+                    // 从JWT中获取租户ID并设置到loginUser
+                    Object tenantIdObj = jwt.getPayload(JwtConstants.PAYLOAD_TENANT_ID);
+                    if (tenantIdObj != null) {
+                        loginUser.setTenantId(tenantIdObj.toString());
+                    }
+                }
             }
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            logger.warn("Token 解析失败，按未认证处理: " + e.getMessage());
+            loginUser = null;
+        }
+
+        if (Objects.isNull(loginUser)) {
+            SecurityContextHolder.clearContext();
+            filterChain.doFilter(request, response);
+            return;
         }
 
         // 将用户信息存入Security上下文，参数为：用户信息、凭证、权限列表

@@ -1,6 +1,6 @@
 package com.xinghuiTec.service;
 
-import com.xinghuiTec.domain.dto.loginDTO;
+import com.xinghuiTec.domain.dto.LoginDTO;
 import com.xinghuiTec.domain.vo.SysMenuVO;
 import com.xinghuiTec.domain.vo.UserInfoVO;
 
@@ -13,7 +13,7 @@ public interface LoginService {
      * @param user 登录信息
      * @return JWT token
      */
-    String login(loginDTO user);
+    String login(LoginDTO user);
 
     /**
      * 用户登出
