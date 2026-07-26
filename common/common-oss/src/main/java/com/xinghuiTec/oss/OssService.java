@@ -54,16 +54,21 @@ public class OssService {
                 .upload();
     }
 
-    /** 流式下载文件到 HttpServletResponse */
+    /** 流式下载文件到 HttpServletResponse（按 url 回查记录获取原始文件名） */
     public void download(String url, jakarta.servlet.http.HttpServletResponse response) {
+        org.dromara.x.file.storage.core.FileInfo fileInfo = getFileInfo(url);
+        if (fileInfo == null) {
+            throw new RuntimeException("文件不存在");
+        }
+        download(url, fileInfo.getOriginalFilename(), response);
+    }
+
+    /** 流式下载，文件名由调用方提供（调用方已持有记录时避免再按 url 回查一次） */
+    public void download(String url, String originalFilename, jakarta.servlet.http.HttpServletResponse response) {
         try {
-            org.dromara.x.file.storage.core.FileInfo fileInfo = getFileInfo(url);
-            if (fileInfo == null) {
-                throw new RuntimeException("文件不存在");
-            }
             response.setContentType("application/octet-stream");
             response.setHeader("Content-Disposition",
-                    "attachment; filename=" + java.net.URLEncoder.encode(fileInfo.getOriginalFilename(), java.nio.charset.StandardCharsets.UTF_8));
+                    "attachment; filename=" + java.net.URLEncoder.encode(originalFilename, java.nio.charset.StandardCharsets.UTF_8));
             fileStorageService.download(url).inputStream(in -> {
                 try {
                     java.io.OutputStream out = response.getOutputStream();

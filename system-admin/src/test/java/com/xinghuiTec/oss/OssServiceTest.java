@@ -39,19 +39,12 @@ class OssServiceTest {
         assertNotNull(info);
         assertNotNull(info.getUrl());
         assertTrue(info.getSize() > 0);
+        // FileRecorderImpl 已自动落库并把主键反写进 FileInfo.id，
+        // 直接复用该记录（手工再 save 会产生第二行孤儿数据）
+        assertNotNull(info.getId(), "FileRecorder 应已落库并反写主键");
 
         testUrl = info.getUrl();
-
-        // 保存记录到数据库
-        SysOss record = new SysOss();
-        record.setOriginalName("test-oss.txt");
-        record.setFileName(info.getFilename());
-        record.setFileSuffix("txt");
-        record.setUrl(info.getUrl());
-        record.setSize(info.getSize());
-        record.setPlatform(info.getPlatform());
-        ossRecordService.save(record);
-        testOssId = record.getOssId();
+        testOssId = Long.parseLong(info.getId());
 
         System.out.println("✓ 上传成功");
         System.out.println("  ossId: " + testOssId);
@@ -112,24 +105,16 @@ class OssServiceTest {
         FileInfo info = ossService.upload(inputStream, "test-stream.txt", "text/plain", null);
         assertNotNull(info);
         assertNotNull(info.getUrl());
+        assertNotNull(info.getId(), "FileRecorder 应已落库并反写主键");
 
-        // 记录并立即清理
-        SysOss record = new SysOss();
-        record.setOriginalName("test-stream.txt");
-        record.setFileName(info.getFilename());
-        record.setFileSuffix("txt");
-        record.setUrl(info.getUrl());
-        record.setSize(info.getSize());
-        record.setPlatform(info.getPlatform());
-        ossRecordService.save(record);
-
-        // 清理（OSS 删除可能因连接问题失败，不影响上传测试结果）
+        // 清理：存储删除会经 FileRecorderImpl 同步逻辑删除记录；
+        // 删除失败时兜底手动移除，避免留下孤儿记录
         try {
             ossService.delete(info.getUrl());
         } catch (Exception e) {
             System.out.println("⚠ OSS 文件删除失败（不影响上传测试）: " + e.getMessage());
+            ossRecordService.removeById(Long.parseLong(info.getId()));
         }
-        ossRecordService.removeById(record.getOssId());
 
         System.out.println("✓ 输入流上传成功并已清理");
     }
@@ -144,16 +129,15 @@ class OssServiceTest {
         SysOss record = ossRecordService.getById(testOssId);
         assertNotNull(record);
 
-        // 删除云存储文件（可能因连接问题失败）
+        // 删除云存储文件（FileRecorderImpl 会按 url 同步逻辑删除数据库记录）；
+        // 存储删除失败时兜底手动移除记录
         try {
             ossService.delete(record.getUrl());
-            System.out.println("  云存储文件已删除");
+            System.out.println("  云存储文件已删除（记录随 FileRecorder 同步删除）");
         } catch (Exception e) {
             System.out.println("⚠ 云存储文件删除失败: " + e.getMessage());
+            ossRecordService.removeById(testOssId);
         }
-
-        // 删除数据库记录
-        ossRecordService.removeById(testOssId);
 
         // 验证数据库记录已删除
         assertNull(ossRecordService.getById(testOssId));

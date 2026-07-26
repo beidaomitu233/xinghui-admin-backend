@@ -5,7 +5,16 @@ server:
   port: 7799
 
 # -------------------------------------------------------------------
-# 2. Spring 核心配置
+# 2. 数据库连接（单一来源）
+# Flyway 与 dynamic-datasource 主库共同引用 ${db.*}，避免两处双写产生参数漂移
+# -------------------------------------------------------------------
+db:
+  url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:xinghuiadmin}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&allowMultiQueries=true
+  username: ${DB_USERNAME:xinghuiadmin}
+  password: ${DB_PASSWORD:xinghuiadmin23}
+
+# -------------------------------------------------------------------
+# 3. Spring 核心配置
 # -------------------------------------------------------------------
 spring:
   # 包含外部配置文件 (application-datasource.yml)
@@ -14,14 +23,14 @@ spring:
 
   # Flyway 数据库版本化迁移
   # 注意: 项目使用 dynamic-datasource，Flyway 无法从 spring.datasource 自动推导连接，
-  # 必须显式指定 url/user/password（与主库 master 保持一致的环境变量）。
+  # 必须显式指定连接信息（引用上方 db.* 单一来源）。
   # baseline-version=2: 存量库（已有表结构+种子数据）首次接入时自动打基线跳过 V1/V2；
-  # 全新空库则完整执行 V1(表结构) + V2(种子数据)。
+  # 全新空库则完整执行 V1(表结构) + V2(种子数据)；之后的增量脚本对两者都会执行。
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:xinghuiadmin}?useUnicode=true&characterEncoding=utf8&useSSL=true&serverTimezone=GMT%2B8
-    user: ${DB_USERNAME:xinghuiadmin}
-    password: ${DB_PASSWORD:xinghuiadmin23}
+    url: ${db.url}
+    user: ${db.username}
+    password: ${db.password}
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 2

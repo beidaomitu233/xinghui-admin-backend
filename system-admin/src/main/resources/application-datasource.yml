@@ -16,11 +16,12 @@ spring:
       # -------------------------------------------------------------
       datasource:
         # --- 主库 (Master) ---
+        # 连接信息引用 application.yml 顶部的 db.* 单一来源（与 Flyway 保持一致）
         master:
           driver-class-name: com.mysql.cj.jdbc.Driver
-          url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:xinghuiadmin}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&allowMultiQueries=true
-          username: ${DB_USERNAME:xinghuiadmin}
-          password: ${DB_PASSWORD:xinghuiadmin23}
+          url: ${db.url}
+          username: ${db.username}
+          password: ${db.password}
 
         # --- 从库 (Slave) ---
         # 注意：Dynamic-Datasource 不支持 "enabled: false"。
@@ -86,9 +87,11 @@ spring:
       stat-view-servlet:
         enabled: true
         url-pattern: /druid/*
-        allow: # 空着代表允许所有
-        login-username: ${DRUID_USERNAME:xinghui_admin}
-        login-password: ${DRUID_PASSWORD:xinghui_admin233}
+        # 默认仅本机可访问（原为空=全网段开放，配合仓库公开的默认口令构成暴露面）；
+        # 需要远程访问时通过 DRUID_ALLOW 显式放开
+        allow: ${DRUID_ALLOW:127.0.0.1}
+        login-username: ${DRUID_USERNAME:xinghuiadmin}
+        login-password: ${DRUID_PASSWORD:xinghuiadmin23}
       
       web-stat-filter:
         enabled: true
