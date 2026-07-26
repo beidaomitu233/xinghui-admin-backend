@@ -2,7 +2,7 @@ package com.xinghuiTec.config;
 
 import com.xinghuiTec.constants.HttpConstants;
 import com.xinghuiTec.filter.AuthenticationEntryPointImpl;
-import com.xinghuiTec.filter.loginFilter;
+import com.xinghuiTec.filter.LoginFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,7 +26,7 @@ public class SecurityConfig {
     private AuthenticationConfiguration authenticationConfiguration;
 
     @Autowired
-    private loginFilter jwtAuthenticationFilter;
+    private LoginFilter jwtAuthenticationFilter;
 
     @Autowired
     private AuthenticationEntryPointImpl authenticationEntryPoint;

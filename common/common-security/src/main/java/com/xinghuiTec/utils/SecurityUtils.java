@@ -37,7 +37,7 @@ public class SecurityUtils {
     /**
      * 获取当前登录用户的ID
      */
-    public static String getUserId() {
+    public static Long getUserId() {
         SysUser user = getUser();
         return user != null ? user.getUserId() : null;
     }
