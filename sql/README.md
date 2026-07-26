@@ -22,7 +22,7 @@ sql/
 只需创建空数据库，应用启动时 Flyway 自动建表并写入种子数据：
 
 ```sql
-CREATE DATABASE xinghui_admin DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE xinghuiadmin DEFAULT CHARACTER SET utf8mb4;
 ```
 
 默认账号（登录使用**手机号+密码**，**生产环境务必立即修改**）：
@@ -48,7 +48,7 @@ CREATE DATABASE xinghui_admin DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900
    `V20260726_01__add_login_log_table.sql`；
 3. **已合并进 dev 的脚本一律不可修改**（Flyway 校验 checksum，改动会导致启动失败），
    写错了就再加一个新脚本修正；
-4. 脚本须兼容 MySQL 8.0，避免依赖特定库名；
+4. 脚本须兼容 MySQL 5.7+ 与 8.0（勿使用 utf8mb4_0900_ai_ci 等 8.0 专属特性），避免依赖特定库名；
 5. DDL 与 DML 尽量分开为两个脚本，便于回溯。
 
 ## 相关配置

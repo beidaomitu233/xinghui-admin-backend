@@ -83,7 +83,7 @@ xinghui-admin
 ### 1. 环境依赖
 *   **Java 17** 及以上编译运行环境
 *   **Maven 3.8+** 项目构建工具
-*   **MySQL 8.0** 关系型数据库
+*   **MySQL 5.7+ / 8.0** 关系型数据库（基线脚本兼容两个版本）
 *   **Redis 6.x+** 高性能缓存服务
 *   **MinIO**（可选，用于本地云存储调试）
 
@@ -91,7 +91,7 @@ xinghui-admin
 只需在 MySQL 中创建空数据库，表结构与种子数据由 **Flyway** 在应用首次启动时自动初始化：
 
 ```sql
-CREATE DATABASE xinghui_admin DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE xinghuiadmin DEFAULT CHARACTER SET utf8mb4;
 ```
 
 初始化完成后的默认账号（登录使用**手机号+密码**，**生产环境务必立即修改**）：
@@ -116,7 +116,7 @@ CREATE DATABASE xinghui_admin DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900
 mvn clean package -DskipTests
 
 # 启动业务主程序
-java -jar system-admin/target/system-admin-1.0-SNAPSHOT.jar
+java -jar system-admin/target/system-admin-1.1.0-SNAPSHOT.jar
 ```
 启动成功后，即可通过默认配置的端口（如 `7799` 或 `8030`）访问后台 RESTful API 接口。
 
