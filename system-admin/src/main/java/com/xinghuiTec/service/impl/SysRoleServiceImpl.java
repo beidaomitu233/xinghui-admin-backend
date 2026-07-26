@@ -151,9 +151,11 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
         // 如果提供了菜单ID列表，更新角色菜单关联
         if (addDTO.getMenuIds() != null) {
             sysRoleMenuService.assignMenusToRole(addDTO.getRoleId(), addDTO.getMenuIds());
-            // 清除所有拥有该角色的用户的路由缓存
-            clearUserRouterCacheByRoleId(addDTO.getRoleId());
         }
+
+        // 任何角色变更（名称/状态/数据权限/菜单）都要清除拥有该角色用户的路由缓存，
+        // 否则仅改状态/名称时旧缓存在 TTL 内继续生效
+        clearUserRouterCacheByRoleId(addDTO.getRoleId());
 
         log.info("修改角色成功: {}", existRole.getRoleName());
     }

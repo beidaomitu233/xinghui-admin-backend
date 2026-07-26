@@ -81,7 +81,7 @@ public class LoginServiceImpl implements LoginService {
                 loginPreCheck(user);
 
                 // 1. 认证：将手机号作为用户名传入 Spring Security 认证链
-                // userDetailManageimpl.loadUserByUsername() 会忽略租户按手机号查询
+                // UserDetailManageImpl.loadUserByUsername() 会忽略租户按手机号查询
                 UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(user.getPhone(), user.getPassword());
                 Authentication authenticate = authenticationManager.authenticate(authenticationToken);
 
@@ -89,7 +89,7 @@ public class LoginServiceImpl implements LoginService {
                         throw new RuntimeException("手机号或密码错误");
                 }
 
-                // 2. 从认证结果获取用户信息（tenantId 已在 userDetailManageimpl 中从用户实体设置）
+                // 2. 从认证结果获取用户信息（tenantId 已在 UserDetailManageImpl 中从用户实体设置）
                 LoginUser loginUser = (LoginUser) authenticate.getPrincipal();
                 Long userId = loginUser.getUser().getUserId();
                 String tenantId = loginUser.getTenantId();

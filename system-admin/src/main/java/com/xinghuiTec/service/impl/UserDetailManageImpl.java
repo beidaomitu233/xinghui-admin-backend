@@ -10,13 +10,13 @@ import com.xinghuiTec.service.SysUserRoleService;
 import com.xinghuiTec.utils.TenantHelper;
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,17 +37,20 @@ public class UserDetailManageImpl implements UserDetailsService {
      */
     @Override
     public UserDetails loadUserByUsername(String phone) throws UsernameNotFoundException {
-        // 不限租户查询：忽略租户隔离，按手机号匹配（取第一条匹配记录）
-        SysUser user = TenantHelper.ignore(() -> {
-            List<SysUser> users = userMapper.selectList(
-                new LambdaQueryWrapper<SysUser>().eq(SysUser::getMobile, phone).last("LIMIT 1")
-            );
-            return users.isEmpty() ? null : users.get(0);
-        });
+        // 不限租户查询：忽略租户隔离，按手机号匹配
+        List<SysUser> users = TenantHelper.ignore(() -> userMapper.selectList(
+                new LambdaQueryWrapper<SysUser>().eq(SysUser::getMobile, phone)
+        ));
 
-        if (Objects.isNull(user)) {
+        if (users == null || users.isEmpty()) {
             throw new UsernameNotFoundException("手机号未注册");
         }
+        // 同一手机号匹配到多个账号属于数据异常：拒绝登录并告警，
+        // 避免无 ORDER BY 的 LIMIT 1 随机命中他人/他租户账号
+        if (users.size() > 1) {
+            throw new InternalAuthenticationServiceException("手机号关联多个账号，数据异常，请联系管理员");
+        }
+        SysUser user = users.get(0);
 
         // 查询关联角色
         LambdaQueryWrapper<SysUserRole> sysUserRoleWrapper = new LambdaQueryWrapper<>();

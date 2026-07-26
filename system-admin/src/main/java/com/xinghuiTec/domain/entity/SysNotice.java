@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
@@ -24,8 +25,9 @@ import com.baomidou.mybatisplus.annotation.TableName;
 @NoArgsConstructor
 @TableName("sys_notice")
 public class SysNotice extends TenantEntity {
-    @TableId
-    // 公告ID
+    // 公告ID（表主键为 int AUTO_INCREMENT，必须显式指定 AUTO，
+    // 否则命中全局 ASSIGN_ID 雪花策略，64 位 ID 截断为 int 产生负数/碰撞主键）
+    @TableId(type = IdType.AUTO)
     private Integer noticeId;
 
     // 公告标题

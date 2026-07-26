@@ -9,7 +9,10 @@ import com.xinghuiTec.exception.base.BaseException;
 import com.xinghuiTec.exception.user.*;
 import com.xinghuiTec.utils.Result;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.BindException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -218,6 +221,37 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public Result<Void> handleAccessDeniedException(AccessDeniedException e) {
         return Result.fail(ADMIN_ACCESS_FORBIDDEN);
+    }
+
+    /**
+     * 账号已停用（Spring Security 认证前置检查抛出）
+     */
+    @ExceptionHandler(DisabledException.class)
+    public Result<Void> handleDisabledException(DisabledException e) {
+        log.warn("停用账号尝试登录: {}", e.getMessage());
+        return Result.fail("账号已被停用，请联系管理员");
+    }
+
+    // ==================== 数据库异常 ====================
+    // 必须在 RuntimeException 兜底之前单独处理：数据库异常信息含 SQL/表结构细节，
+    // 原样返回给客户端会泄漏内部实现
+
+    /**
+     * 唯一索引冲突（并发 check-then-insert 场景由数据库唯一索引兜底）
+     */
+    @ExceptionHandler(DuplicateKeyException.class)
+    public Result<Void> handleDuplicateKeyException(DuplicateKeyException e) {
+        log.warn("唯一约束冲突: {}", e.getMessage());
+        return Result.fail("数据已存在，请勿重复提交");
+    }
+
+    /**
+     * 其他数据库访问异常
+     */
+    @ExceptionHandler(DataAccessException.class)
+    public Result<Void> handleDataAccessException(DataAccessException e) {
+        log.error("数据库访问异常", e);
+        return Result.fail("数据库操作异常，请联系管理员");
     }
 
     // ==================== 兜底异常 ====================

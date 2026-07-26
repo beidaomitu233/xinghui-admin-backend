@@ -49,6 +49,14 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     private com.xinghuiTec.utils.RedisCacheUtils redisCacheUtils;
 
     /**
+     * 自身代理引用：Excel 导入监听器回调 batchAddUser 时必须经过代理，
+     * 直接传 this（目标对象）会绕过 AOP 使 @Transactional 失效
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private SysUserService selfProxy;
+
+    /**
      * 获取用户列表
      *
      * @param sysUserQueryDTO 用户查询条件DTO对象，包含分页参数和查询条件
@@ -136,6 +144,15 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         Long count = this.count(queryWrapper);
         if (count > 0) {
             throw new RuntimeException("用户名已存在");
+        }
+
+        // 1.1 校验手机号唯一性（登录凭证按手机号匹配，重复手机号会导致登录命中错误账号）
+        if (StringUtils.hasText(sysUserAddDTO.getMobile())) {
+            LambdaQueryWrapper<SysUser> mobileWrapper = new LambdaQueryWrapper<>();
+            mobileWrapper.eq(SysUser::getMobile, sysUserAddDTO.getMobile());
+            if (this.count(mobileWrapper) > 0) {
+                throw new RuntimeException("手机号已被其他用户使用");
+            }
         }
 
         // 2. 创建用户实体并设置基本信息
@@ -301,6 +318,17 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             }
         }
 
+        // 2.1 如果修改了手机号，校验新手机号是否已被其他用户使用（手机号是登录凭证）
+        if (StringUtils.hasText(sysUserAddDTO.getMobile())
+                && !sysUserAddDTO.getMobile().equals(existUser.getMobile())) {
+            LambdaQueryWrapper<SysUser> mobileWrapper = new LambdaQueryWrapper<>();
+            mobileWrapper.eq(SysUser::getMobile, sysUserAddDTO.getMobile())
+                    .ne(SysUser::getUserId, userId);
+            if (this.count(mobileWrapper) > 0) {
+                throw new RuntimeException("手机号已被其他用户使用");
+            }
+        }
+
         // 3. 更新用户基本信息
         SysUser updateUser = new SysUser();
         updateUser.setUserId(userId);
@@ -352,6 +380,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         redisCacheUtils.deleteObject(userInfoCacheKey);
         String routerCacheKey = com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId;
         redisCacheUtils.deleteObject(routerCacheKey);
+        // 同时清除登录态缓存：LoginFilter 按此缓存放行请求，
+        // 不清除的话被停用/降权的用户旧 token 在 TTL 内仍按旧权限生效
+        String loginCacheKey = com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX + userId;
+        redisCacheUtils.deleteObject(loginCacheKey);
     }
 
     /**
@@ -432,6 +464,12 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (!updateSuccess) {
             throw new RuntimeException("密码重置失败");
         }
+
+        // 5. 清除该用户全部登录相关缓存：重置密码属安全敏感操作，
+        // 必须让旧 token 立即失效（否则持旧凭证的会话——可能正是泄露源——继续有效）
+        redisCacheUtils.deleteObject(com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX + userId);
+        redisCacheUtils.deleteObject(com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId);
+        redisCacheUtils.deleteObject(com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId);
     }
 
     /**
@@ -480,8 +518,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
         try {
             // 创建监听器（需要角色服务来根据roleKey查询roleId）
+            // 传入自身代理而非 this，保证监听器回调 batchAddUser 时 @Transactional 生效
             SysUserImportListener listener = new SysUserImportListener(
-                    this, sysRoleService);
+                    selfProxy, sysRoleService);
 
             // 读取Excel文件
             FastExcel.read(file.getInputStream(), SysUserExcel.class, listener)

@@ -67,37 +67,51 @@ public class LoginFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 验证JWT令牌并获取用户信息
-        // 校验失败一律按"未认证"处理：清空上下文后放行，由 AuthenticationEntryPoint 统一返回 401，
-        // 而不是抛出 RuntimeException 导致 HTTP 500（过滤器异常不经过 @RestControllerAdvice）
-        LoginUser loginUser = null;
+        // 1) JWT 签名/过期校验与解析：失败一律按"未认证"处理——清空上下文后放行，
+        // 由 AuthenticationEntryPoint 统一返回 401，而不是抛出 RuntimeException
+        // 导致 HTTP 500（过滤器异常不经过 @RestControllerAdvice）
+        Object userIdObj = null;
+        Object tenantIdObj = null;
         try {
-            // 先验证JWT签名和过期时间，防止伪造Token
             if (JwtUtil.verify(authorization)) {
-                // 解析JWT令牌获取载荷信息
                 JWT jwt = JwtUtil.parseToken(authorization);
-                Object userIdObj = jwt.getPayload(JwtConstants.PAYLOAD_USER_ID);
-                if (userIdObj != null) {
-                    // 从Redis缓存中获取登录用户信息（缓存不存在视为登录凭证已过期）
-                    loginUser = redisCacheUtils.getCacheObject(RedisConstants.ADMIN_LOGIN_PREFIX + userIdObj);
-                }
-                if (loginUser != null) {
-                    // 从JWT中获取租户ID并设置到loginUser
-                    Object tenantIdObj = jwt.getPayload(JwtConstants.PAYLOAD_TENANT_ID);
-                    if (tenantIdObj != null) {
-                        loginUser.setTenantId(tenantIdObj.toString());
-                    }
-                }
+                userIdObj = jwt.getPayload(JwtConstants.PAYLOAD_USER_ID);
+                tenantIdObj = jwt.getPayload(JwtConstants.PAYLOAD_TENANT_ID);
             }
         } catch (Exception e) {
             logger.warn("Token 解析失败，按未认证处理: " + e.getMessage());
-            loginUser = null;
+            userIdObj = null;
         }
 
+        if (Objects.isNull(userIdObj)) {
+            SecurityContextHolder.clearContext();
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // 2) 读取 Redis 登录态：基础设施故障必须与"凭证过期"区分开，
+        // 返回 503 并记录完整堆栈，避免 Redis 抖动时在线用户被集体"踢下线"
+        LoginUser loginUser;
+        try {
+            loginUser = redisCacheUtils.getCacheObject(RedisConstants.ADMIN_LOGIN_PREFIX + userIdObj);
+        } catch (Exception e) {
+            logger.error("读取登录态缓存失败（Redis 异常）", e);
+            response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"code\":503,\"message\":\"服务暂时不可用，请稍后重试\",\"data\":null}");
+            return;
+        }
+
+        // 缓存不存在视为登录凭证已过期，按未认证处理
         if (Objects.isNull(loginUser)) {
             SecurityContextHolder.clearContext();
             filterChain.doFilter(request, response);
             return;
+        }
+
+        // 从JWT中获取租户ID并设置到loginUser
+        if (tenantIdObj != null) {
+            loginUser.setTenantId(tenantIdObj.toString());
         }
 
         // 将用户信息存入Security上下文，参数为：用户信息、凭证、权限列表

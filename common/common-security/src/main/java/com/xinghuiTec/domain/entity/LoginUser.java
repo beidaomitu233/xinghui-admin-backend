@@ -77,8 +77,12 @@ public class LoginUser implements UserDetails {
     public boolean isCredentialsNonExpired() {
         return true;
     }
+    /**
+     * 账号是否启用（status: 1正常 0停用）
+     * 停用账号在认证阶段由 Spring Security 抛出 DisabledException 拒绝登录
+     */
     @Override
     public boolean isEnabled() {
-        return true;
+        return user != null && (user.getStatus() == null || user.getStatus() == 1);
     }
 }
