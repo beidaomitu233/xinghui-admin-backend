@@ -47,9 +47,26 @@ CREATE DATABASE xinghuiadmin DEFAULT CHARACTER SET utf8mb4;
 2. 命名：`V<yyyyMMdd>_<序号>__<英文小写下划线描述>.sql`，例如
    `V20260726_01__add_login_log_table.sql`；
 3. **已合并进 dev 的脚本一律不可修改**（Flyway 校验 checksum，改动会导致启动失败），
-   写错了就再加一个新脚本修正；
-4. 脚本须兼容 MySQL 5.7+ 与 8.0（勿使用 utf8mb4_0900_ai_ci 等 8.0 专属特性），避免依赖特定库名；
-5. DDL 与 DML 尽量分开为两个脚本，便于回溯。
+   写错了就再加一个新脚本修正。
+   **唯一例外**：某脚本从未在任何环境成功执行过（如基线脚本存在执行必失败的缺陷，
+   任何库都不可能持有其成功记录），允许原地重修，但必须随修复版发布说明明确公告；
+4. 脚本须兼容 MySQL 5.7+ 与 8.0（勿使用 utf8mb4_0900_ai_ci 等 8.0 专属特性），
+   排序规则统一显式使用 `utf8mb4_general_ci`，避免依赖特定库名；
+5. DDL 与 DML 尽量分开为两个脚本，便于回溯；种子/数据脚本一律使用**具名列** INSERT
+   （`INSERT INTO t (col1, col2, ...) VALUES ...`），杜绝按位置写值随列演进而断裂；
+6. 需要在存量库与全新库上都安全执行的结构变更，用 information_schema 检测 +
+   `PREPARE`/`EXECUTE` 动态执行实现幂等（参考 `V20260726_02__legacy_schema_alignment.sql`）。
+
+## 迁移失败/校验不一致的修复
+
+- **启动报 `Migration checksum mismatch`**：本地脚本与库中记录不一致。确认代码为最新后，
+  若确认库中记录属于旧有缺陷版本，执行
+  `DELETE FROM flyway_schema_history WHERE version = '<版本>' AND success = 1;`
+  后重启由 Flyway 重放（或使用 flyway repair）。生产环境操作前必须备份。
+- **启动报 `Detected failed migration`**：上次迁移中途失败留下 success=0 记录。
+  人工确认/回滚该脚本的部分效果后，执行
+  `DELETE FROM flyway_schema_history WHERE success = 0;` 并重启。
+- 开发库不确定状态时最快路径：删库重建，交由 Flyway 全新初始化。
 
 ## 相关配置
 
