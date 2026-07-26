@@ -37,9 +37,9 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_DATABASE: xinghui_admin
-          MYSQL_USER: xinghuitec
-          MYSQL_PASSWORD: xinghuitec233
+          MYSQL_DATABASE: xinghuiadmin
+          MYSQL_USER: xinghuiadmin
+          MYSQL_PASSWORD: xinghuiadmin23
           MYSQL_ROOT_PASSWORD: root
         ports:
           - 3306:3306
@@ -86,9 +86,9 @@ jobs:
         env:
           DB_HOST: 127.0.0.1
           DB_PORT: "3306"
-          DB_NAME: xinghui_admin
-          DB_USERNAME: xinghuitec
-          DB_PASSWORD: xinghuitec233
+          DB_NAME: xinghuiadmin
+          DB_USERNAME: xinghuiadmin
+          DB_PASSWORD: xinghuiadmin23
           MINIO_ENDPOINT: http://127.0.0.1:9000
           MINIO_ACCESS_KEY: minioadmin
           MINIO_SECRET_KEY: minioadmin

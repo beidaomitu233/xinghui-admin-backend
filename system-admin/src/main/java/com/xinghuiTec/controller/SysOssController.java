@@ -69,6 +69,13 @@ public class SysOssController {
         return Result.ok(sysOssService.page(page, wrapper));
     }
 
+    /** 获取单个文件记录详情 */
+    @GetMapping("/info/{ossId}")
+    @PreAuthorize("hasAuthority('system:oss:query')")
+    public Result<SysOss> getInfo(@PathVariable("ossId") Long ossId) {
+        return Result.ok(sysOssService.getById(ossId));
+    }
+
     @PostMapping("/remove")
     @PreAuthorize("hasAuthority('system:oss:remove')")
     @Log(title = "文件删除", businessType = BusinessType.DELETE)
