@@ -57,14 +57,20 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      # bitnami/minio 版本化 tag 已随 Bitnami 目录迁移至 bitnamilegacy（只读镜像仓库）
       minio:
-        image: bitnami/minio:2024
+        image: bitnamilegacy/minio:2024
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin
           MINIO_DEFAULT_BUCKETS: xinghui-admin
         ports:
           - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 

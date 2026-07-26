@@ -94,12 +94,12 @@ xinghui-admin
 CREATE DATABASE xinghui_admin DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 ```
 
-初始化完成后的默认账号（**生产环境务必立即修改密码**）：
+初始化完成后的默认账号（登录使用**手机号+密码**，**生产环境务必立即修改**）：
 
-| 账号 | 密码 | 角色 |
-| :--- | :--- | :--- |
-| admin | admin123 | 超级管理员、管理员 |
-| user | admin123 | 用户（演示） |
+| 账号 | 登录手机号 | 密码 | 角色 |
+| :--- | :--- | :--- | :--- |
+| admin | 13800000000 | admin123 | 超级管理员、管理员 |
+| user | 13800000001 | admin123 | 用户（演示） |
 
 > 存量数据库首次接入会自动打基线（跳过基线脚本），详细说明与迁移脚本编写规范见 [sql/README.md](sql/README.md)。
 

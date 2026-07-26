@@ -112,6 +112,10 @@ public class RedisCacheUtils {
      * @return 缓存的元素数量
      */
     public <T> long setCacheList(final String key, final List<T> dataList) {
+        // rightPushAll 对空集合会抛 IllegalArgumentException，空列表直接跳过缓存
+        if (dataList == null || dataList.isEmpty()) {
+            return 0;
+        }
         Long count = redisTemplate.opsForList().rightPushAll(key, dataList);
         return count == null ? 0 : count;
     }
@@ -128,6 +132,10 @@ public class RedisCacheUtils {
      */
     public <T> long setCacheList(final String key, final List<T> dataList, final long timeout,
             final TimeUnit timeUnit) {
+        // rightPushAll 对空集合会抛 IllegalArgumentException，空列表直接跳过缓存
+        if (dataList == null || dataList.isEmpty()) {
+            return 0;
+        }
         Long count = redisTemplate.opsForList().rightPushAll(key, dataList);
         if (timeout > 0) {
             expire(key, timeout, timeUnit);

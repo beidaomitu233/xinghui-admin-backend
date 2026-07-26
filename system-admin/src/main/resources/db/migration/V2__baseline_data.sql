@@ -1,6 +1,6 @@
 -- =====================================================================
 -- XingHui Admin - Flyway V2 基线种子数据
--- 菜单/角色/租户/参数/演示数据；默认账号 admin/admin123, user/admin123（生产环境务必修改）
+-- 菜单/角色/租户/参数/演示数据；默认账号（登录使用手机号）: admin=13800000000/admin123, user=13800000001/admin123（生产环境务必修改）
 -- 由 sql/xinghui_admin.sql 历史全量脚本整理生成；此后所有变更须通过
 -- 新增 V<yyyyMMdd>_<nn>__<描述>.sql 迁移脚本演进，禁止直接修改本文件。
 -- =====================================================================
@@ -36,6 +36,7 @@ INSERT INTO `sys_menu` VALUES (1, '系统管理', 0, 1, 'system', NULL, 1, 'M', 
 INSERT INTO `sys_menu` VALUES (2, '系统监控', 0, 2, 'monitor', NULL, 1, 'M', '0', '0', '', 'carbon:activity', '2025-12-25 22:36:47', '2026-01-31 02:56:07', 0);
 INSERT INTO `sys_menu` VALUES (3, '基础设施', 0, 3, 'infra', NULL, 1, 'M', '0', '0', '', 'carbon:cube', '2025-12-25 22:36:47', '2026-01-31 03:16:33', 0);
 INSERT INTO `sys_menu` VALUES (4, 'AI助手', 0, 4, 'ai', NULL, 1, 'M', '1', '1', '', 'carbon:bot', '2025-12-25 22:36:47', '2026-01-31 03:35:15', 0);
+INSERT INTO `sys_menu` VALUES (100, '用户管理', 1, 1, 'user', 'system/user/index', 1, 'C', '0', '0', 'system:user:list', 'carbon:user', '2025-12-25 22:36:47', '2025-12-25 22:36:47', 0);
 INSERT INTO `sys_menu` VALUES (101, '角色管理', 1, 2, 'role', 'system/role/index', 1, 'C', '0', '0', 'system:role:list', 'carbon:user-role', '2025-12-25 22:36:47', '2026-01-31 02:56:07', 0);
 INSERT INTO `sys_menu` VALUES (102, '菜单管理', 1, 3, 'menu', 'system/menu/index', 1, 'C', '0', '0', 'system:menu:list', 'carbon:menu', '2025-12-25 22:36:47', '2026-01-31 02:56:07', 0);
 INSERT INTO `sys_menu` VALUES (103, '参数设置', 1, 4, 'config', 'system/config/index', 1, 'C', '0', '0', 'system:config:list', 'carbon:document-configuration', '2025-12-25 22:36:47', '2026-01-31 02:56:07', 0);
@@ -46,6 +47,7 @@ INSERT INTO `sys_menu` VALUES (300, '文件管理', 3, 1, 'file', 'system/file/i
 INSERT INTO `sys_menu` VALUES (301, '通知公告', 3, 2, 'notice', 'system/notice/index', 1, 'C', '0', '0', 'system:notice:list', 'carbon:notification', '2025-12-25 22:36:47', '2026-01-31 02:56:07', 0);
 INSERT INTO `sys_menu` VALUES (1000, '用户查询', 100, 1, '', '', 1, 'F', '0', '0', 'system:user:query', '#', '2025-12-25 22:36:47', '2025-12-25 22:36:47', 0);
 INSERT INTO `sys_menu` VALUES (1001, '用户新增', 100, 2, '', '', 1, 'F', '0', '0', 'system:user:add', '#', '2025-12-25 22:36:47', '2025-12-25 22:36:47', 0);
+INSERT INTO `sys_menu` VALUES (1002, '用户修改', 100, 3, '', '', 1, 'F', '0', '0', 'system:user:edit', '#', '2025-12-25 22:36:47', '2025-12-25 22:36:47', 0);
 INSERT INTO `sys_menu` VALUES (1003, '用户删除', 100, 4, '', '', 1, 'F', '0', '0', 'system:user:remove', '#', '2025-12-25 22:36:47', '2025-12-25 22:36:47', 0);
 INSERT INTO `sys_menu` VALUES (1004, '用户导出', 100, 5, '', '', 1, 'F', '0', '0', 'system:user:export', '#', '2025-12-25 22:36:47', '2025-12-25 22:36:47', 0);
 INSERT INTO `sys_menu` VALUES (1005, '用户导入', 100, 6, '', '', 1, 'F', '0', '0', 'system:user:import', '#', '2025-12-25 22:36:47', '2025-12-25 22:36:47', 0);
@@ -91,21 +93,16 @@ INSERT INTO `sys_menu` VALUES (3007, '文件列表', 300, 4, '', '', 1, 'F', '0'
 INSERT INTO `sys_menu` VALUES (3008, '文件下载', 300, 4, '', '', 1, 'F', '0', '0', 'system:file:download', '#', '2025-12-25 22:36:47', '2026-01-30 04:15:24', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539780, '工作台', 0, 0, 'workspace', 'dashboard/workspace/index', 1, 'C', '0', '0', NULL, 'carbon:home', '2026-01-30 04:08:42', '2026-01-31 02:56:07', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539781, '看板', 0, 0, 'analytics', 'dashboard/analytics/index', 0, 'C', '0', '0', '', 'carbon:dashboard', '2026-01-30 17:55:35', '2026-01-31 02:56:43', 0);
-INSERT INTO `sys_menu` VALUES (2015147980830539782, '????', 0, 5, 'system/news', 'system/news/index', 1, 'C', '0', '0', 'system:news:list', 'documentation', '2026-05-08 19:28:45', '2026-05-08 21:10:45', 0);
-INSERT INTO `sys_menu` VALUES (2015147980830539783, '资讯查询', 2015147980830539782, 1, '', '', 1, 'F', '0', '0', 'system:news:query', '#', '2026-05-08 20:24:10', '2026-05-08 20:24:10', 0);
-INSERT INTO `sys_menu` VALUES (2015147980830539784, '资讯新增', 2015147980830539782, 2, '', '', 1, 'F', '0', '0', 'system:news:add', '#', '2026-05-08 20:24:10', '2026-05-08 20:24:10', 0);
-INSERT INTO `sys_menu` VALUES (2015147980830539785, '资讯修改', 2015147980830539782, 3, '', '', 1, 'F', '0', '0', 'system:news:edit', '#', '2026-05-08 20:24:10', '2026-05-08 20:24:10', 0);
-INSERT INTO `sys_menu` VALUES (2015147980830539786, '资讯删除', 2015147980830539782, 4, '', '', 1, 'F', '0', '0', 'system:news:remove', '#', '2026-05-08 20:24:10', '2026-05-08 20:24:10', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539787, '下载管理', 0, 6, 'system/download', 'system/download/index', 1, 'C', '0', '0', 'system:download:list', 'carbon:download', '2026-05-08 20:24:10', '2026-05-08 21:58:03', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539788, '下载查询', 2015147980830539787, 1, '', '', 1, 'F', '0', '0', 'system:download:query', '#', '2026-05-08 20:24:10', '2026-05-08 20:24:10', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539789, '下载新增', 2015147980830539787, 2, '', '', 1, 'F', '0', '0', 'system:download:add', '#', '2026-05-08 20:24:10', '2026-05-08 20:24:10', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539790, '下载修改', 2015147980830539787, 3, '', '', 1, 'F', '0', '0', 'system:download:edit', '#', '2026-05-08 20:24:10', '2026-05-08 20:24:10', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539791, '下载删除', 2015147980830539787, 4, '', '', 1, 'F', '0', '0', 'system:download:remove', '#', '2026-05-08 20:24:10', '2026-05-08 20:24:10', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539792, '资讯管理', 0, 5, 'system/news', 'system/news/index', 1, 'C', '0', '0', 'system:news:list', 'documentation', '2026-05-08 21:39:43', '2026-05-08 21:39:43', 0);
-INSERT INTO `sys_menu` VALUES (2015147980830539793, '资讯查询', 2015147980830539782, 1, '', '', 1, 'F', '0', '0', 'system:news:query', '#', '2026-05-08 21:39:53', '2026-05-08 21:39:53', 0);
-INSERT INTO `sys_menu` VALUES (2015147980830539794, '资讯新增', 2015147980830539782, 2, '', '', 1, 'F', '0', '0', 'system:news:add', '#', '2026-05-08 21:39:53', '2026-05-08 21:39:53', 0);
-INSERT INTO `sys_menu` VALUES (2015147980830539795, '资讯修改', 2015147980830539782, 3, '', '', 1, 'F', '0', '0', 'system:news:edit', '#', '2026-05-08 21:39:53', '2026-05-08 21:39:53', 0);
-INSERT INTO `sys_menu` VALUES (2015147980830539796, '资讯删除', 2015147980830539782, 4, '', '', 1, 'F', '0', '0', 'system:news:remove', '#', '2026-05-08 21:39:53', '2026-05-08 21:39:53', 0);
+INSERT INTO `sys_menu` VALUES (2015147980830539793, '资讯查询', 2015147980830539792, 1, '', '', 1, 'F', '0', '0', 'system:news:query', '#', '2026-05-08 21:39:53', '2026-05-08 21:39:53', 0);
+INSERT INTO `sys_menu` VALUES (2015147980830539794, '资讯新增', 2015147980830539792, 2, '', '', 1, 'F', '0', '0', 'system:news:add', '#', '2026-05-08 21:39:53', '2026-05-08 21:39:53', 0);
+INSERT INTO `sys_menu` VALUES (2015147980830539795, '资讯修改', 2015147980830539792, 3, '', '', 1, 'F', '0', '0', 'system:news:edit', '#', '2026-05-08 21:39:53', '2026-05-08 21:39:53', 0);
+INSERT INTO `sys_menu` VALUES (2015147980830539796, '资讯删除', 2015147980830539792, 4, '', '', 1, 'F', '0', '0', 'system:news:remove', '#', '2026-05-08 21:39:53', '2026-05-08 21:39:53', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539801, '页面管理', 0, 7, 'system/page', 'system/page/index', 1, 'C', '0', '0', 'system:page:list', 'carbon:data-viewer', '2026-05-08 21:58:03', '2026-05-08 21:58:03', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539802, '页面查询', 2015147980830539801, 1, '', '', 1, 'F', '0', '0', 'system:page:query', '#', '2026-05-08 21:58:03', '2026-05-08 21:58:03', 0);
 INSERT INTO `sys_menu` VALUES (2015147980830539803, '页面编辑', 2015147980830539801, 2, '', '', 1, 'F', '0', '0', 'system:page:edit', '#', '2026-05-08 21:58:03', '2026-05-08 21:58:03', 0);
@@ -144,7 +141,6 @@ INSERT INTO `sys_news` VALUES (5, 'MinerU 在学术论文解析中的应用实�
 -- ----------------------------
 -- Records of sys_notice
 -- ----------------------------
-INSERT INTO `sys_notice` VALUES (-960479230, '000000', '测试通知', '2', 0xE890A8E8BEBE, '0', '2026-01-31 00:00:00', '2026-01-31 00:00:00', 'beidaomitu', '2026-01-31 02:43:46', '2026-01-31 03:40:01', NULL, 0);
 
 -- ----------------------------
 -- Records of sys_page
@@ -180,11 +176,18 @@ INSERT INTO `sys_page` VALUES (25, 'ecosystem', 'intro', 'description', 'text', 
 -- ----------------------------
 INSERT INTO `sys_role` VALUES (2016901862971731969, '000000', '管理员', 'admin', '1', 1, '2026-01-29 23:50:51', NULL, '2026-01-29 23:52:30', NULL, 0);
 INSERT INTO `sys_role` VALUES (2016902236600291329, '000000', '超级管理员', 'super_admin', '1', 1, '2026-01-29 23:52:20', NULL, '2026-01-29 23:52:20', NULL, 0);
-INSERT INTO `sys_role` VALUES (2016956169284788226, '000000', '用户', 'user', '1', 0, '2026-01-30 03:26:39', NULL, '2026-01-30 03:26:38', NULL, 0);
+INSERT INTO `sys_role` VALUES (2016956169284788226, '000000', '用户', 'user', '1', 1, '2026-01-30 03:26:39', NULL, '2026-01-30 03:26:38', NULL, 0);
 
 -- ----------------------------
 -- Records of sys_role_menu
 -- ----------------------------
+INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 100);
+INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 100);
+INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 2015147980830539804);
+INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539804);
+INSERT INTO `sys_role_menu` VALUES (2016956169284788226, 1);
+INSERT INTO `sys_role_menu` VALUES (2016956169284788226, 100);
+INSERT INTO `sys_role_menu` VALUES (2016956169284788226, 1000);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 1);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 2);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 3);
@@ -197,8 +200,6 @@ INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 201);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 202);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 300);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 301);
-INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 400);
-INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 401);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 1000);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 1001);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 1002);
@@ -243,14 +244,6 @@ INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 3003);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 3004);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 3005);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 3006);
-INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 4000);
-INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 4001);
-INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 4002);
-INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 2015147980830539782);
-INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 2015147980830539783);
-INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 2015147980830539784);
-INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 2015147980830539785);
-INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 2015147980830539786);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 2015147980830539787);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 2015147980830539788);
 INSERT INTO `sys_role_menu` VALUES (2016901862971731969, 2015147980830539789);
@@ -297,8 +290,6 @@ INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 201);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 202);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 300);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 301);
-INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 400);
-INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 401);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 1000);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 1001);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 1002);
@@ -345,16 +336,8 @@ INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 3005);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 3006);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 3007);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 3008);
-INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 4000);
-INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 4001);
-INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 4002);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539780);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539781);
-INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539782);
-INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539783);
-INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539784);
-INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539785);
-INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539786);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539787);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539788);
 INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539789);
@@ -394,20 +377,17 @@ INSERT INTO `sys_role_menu` VALUES (2016902236600291329, 2015147980830539825);
 -- Records of sys_tenant
 -- ----------------------------
 INSERT INTO `sys_tenant` VALUES (1, '000000', '', '', '默认租户', '', '', '', '', NULL, NULL, -1, '0', '2026-05-17 22:39:42', NULL, NULL, NULL, 0);
-INSERT INTO `sys_tenant` VALUES (2056028986928656385, 'TEST01', '张三', '13800001111', '已更新的测试企业', '北京市朝阳区', '91110000MA12345678', '', '测试用租户', 2056028985271906306, NULL, 100, '0', '2026-05-17 23:08:04', NULL, '2026-05-17 23:08:04', NULL, 1);
 
 -- ----------------------------
 -- Records of sys_tenant_package
 -- ----------------------------
 INSERT INTO `sys_tenant_package` VALUES (1, '默认套餐', NULL, '', '0', '2026-05-17 22:39:42', NULL, NULL, NULL, 0);
-INSERT INTO `sys_tenant_package` VALUES (2056028932280975362, '测试套餐_1779030471258', '1,2,3,4,5', '测试用套餐', '0', '2026-05-17 23:07:51', NULL, NULL, NULL, 0);
-INSERT INTO `sys_tenant_package` VALUES (2056028985271906306, '测试套餐_1779030483881', '1,2,3,4,5', '已更新的测试套餐', '0', '2026-05-17 23:08:04', NULL, '2026-05-17 23:08:04', NULL, 1);
 
 -- ----------------------------
 -- Records of sys_user
 -- ----------------------------
-INSERT INTO `sys_user` VALUES (1, '000000', 'admin', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '超级管理员', 'admin@xinghui.local', '', '', 1, '', NULL, '2026-01-01 00:00:00', '-1', '2026-01-01 00:00:00', '-1', 0);
-INSERT INTO `sys_user` VALUES (2, '000000', 'user', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '演示账号', 'user@xinghui.local', '', '', 1, '', NULL, '2026-01-01 00:00:00', '-1', '2026-01-01 00:00:00', '-1', 0);
+INSERT INTO `sys_user` VALUES (1, '000000', 'admin', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '超级管理员', 'admin@xinghui.local', '13800000000', '', 1, '', NULL, '2026-01-01 00:00:00', '-1', '2026-01-01 00:00:00', '-1', 0);
+INSERT INTO `sys_user` VALUES (2, '000000', 'user', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '演示账号', 'user@xinghui.local', '13800000001', '', 1, '', NULL, '2026-01-01 00:00:00', '-1', '2026-01-01 00:00:00', '-1', 0);
 
 -- ----------------------------
 -- Records of sys_user_role
