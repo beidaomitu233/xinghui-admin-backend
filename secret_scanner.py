@@ -39,7 +39,7 @@ SAFE_WORDS = {
     'true', 'false', 'null', 'none', 'yes', 'no', 'default', 'required', 'optional', 'empty', '""', "''",
     'debug', 'info', 'warn', 'error', 'all', 'any', 'system', 'root', 'admin', 'username', 'user', 'db',
     'mysql', 'localhost', '127.0.0.1', 'jdbc', 'utf-8', 'utf8', 'utf8mb4',
-    'xinghuitec233', 'xinghui_admin233', 'your_secret', 'your_client_secret', 'your_secret_key'
+    'xinghuiadmin23', 'your_secret', 'your_client_secret', 'your_secret_key'
 }
 
 def is_placeholder(value):

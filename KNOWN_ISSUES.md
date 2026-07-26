@@ -1,7 +1,26 @@
 # 已知问题清单（Known Issues）
 
-深度代码审查（2026-07-26）确认但本轮未修复的问题，按优先级排列。
+深度代码审查（2026-07-26，两轮）确认但暂未修复的问题，按优先级排列。
 修复时请从 dev 拉 feature/fix 分支，完成后勾选并注明提交。
+
+## 第二轮审查（/code-review）暂缓项
+
+- [ ] **sys_oss_config 配置不生效**：`/system/oss/config` 的 CRUD 只写表，
+  x-file-storage 平台仅从 application.yml 装配，持久化配置无任何消费方。
+  需实现启动/变更时动态注册平台（FileStorageService 支持运行时增删），或下线该管理接口。
+- [ ] **common-* AutoConfig 双重注册**：9 个自动配置类位于组件扫描基包内，
+  被 auto-config 与 @Configuration 扫描同时注册，exclude/条件/顺序语义失效。
+  OssAutoConfig 已加 @ConditionalOnMissingBean 兜底，其余 8 个待补；
+  长期应将 AutoConfig 移出 com.xinghuiTec 扫描范围，并用 ArchUnit 规则禁止
+  common-* 模块输出 @RestController（本轮的重复 controller 冲突即此模式产物）。
+- [ ] **CI integration-test 移除 continue-on-error**：当前失败不阻断合并。
+  待 5.7/8.0 矩阵连续一周全绿后移除，使迁移兼容性成为硬门禁。
+- [ ] **OssService 删除链路深度优化**：fileStorageService.delete(url) 内部仍按 url
+  先查记录再删（每文件 2 次 DB 操作）；可增加 delete(FileInfo) 通路避免回查。
+- [ ] **前端文件管理页对接**（仓库外）：UI/apps/web-ele 仍调用早已删除的 `/file/**` 旧接口，
+  需重写 API 客户端对接 `/system/oss/**`（list/upload/remove/download/info）并适配新响应结构。
+- [ ] **归档脚本仅限 MySQL 8.0**：sql/xinghui_admin.sql 保留 utf8mb4_0900_ai_ci（历史原貌），
+  5.7 环境勿导入，统一走 Flyway 空库初始化。
 
 ## P1 功能缺陷
 

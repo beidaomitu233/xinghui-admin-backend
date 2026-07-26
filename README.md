@@ -105,7 +105,7 @@ CREATE DATABASE xinghuiadmin DEFAULT CHARACTER SET utf8mb4;
 
 ### 3. 系统配置
 修改 `system-admin/src/main/resources/application.yml` 与 `application-datasource.yml` 文件：
-1.  **数据库连接**：修改 `spring.datasource.dynamic.datasource.master` 的 `url`、`username` 及 `password`。
+1.  **数据库连接**：修改 `application.yml` 顶部的 `db.url / db.username / db.password`（Flyway 与主数据源共同引用的单一来源），或注入环境变量 `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USERNAME` / `DB_PASSWORD`。
 2.  **Redis 连接**：修改 `spring.data.redis` 的主机地址、端口及密码。
 3.  **云存储客户端**（MinIO / 阿里云等）：配置 `dromara.x-file-storage` 各平台的秘钥及 Bucket 桶名，或在系统环境变量中注入 `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` 等参数。
 
@@ -116,7 +116,7 @@ CREATE DATABASE xinghuiadmin DEFAULT CHARACTER SET utf8mb4;
 mvn clean package -DskipTests
 
 # 启动业务主程序
-java -jar system-admin/target/system-admin-1.1.0-SNAPSHOT.jar
+java -jar system-admin/target/system-admin.jar
 ```
 启动成功后，即可通过默认配置的端口（如 `7799` 或 `8030`）访问后台 RESTful API 接口。
 
