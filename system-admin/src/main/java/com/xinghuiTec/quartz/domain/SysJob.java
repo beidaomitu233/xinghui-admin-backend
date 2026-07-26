@@ -2,6 +2,7 @@ package com.xinghuiTec.quartz.domain;
 
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.xinghuiTec.domain.entity.BaseEntity;
 import com.xinghuiTec.domain.entity.TenantEntity;
 import lombok.AllArgsConstructor;
 import lombok.Data;

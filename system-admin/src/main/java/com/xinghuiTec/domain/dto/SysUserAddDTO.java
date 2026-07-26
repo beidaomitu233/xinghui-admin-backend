@@ -16,7 +16,7 @@ import java.util.List;
 public class SysUserAddDTO {
 
     /** 用户ID（修改用户时必填，新增用户时不需要） */
-    private String userId;
+    private Long userId;
 
     /** 用户账号（必填） */
     @NotBlank(message = "用户账号不能为空")

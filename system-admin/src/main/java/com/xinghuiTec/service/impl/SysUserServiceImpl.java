@@ -49,6 +49,14 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     private com.xinghuiTec.utils.RedisCacheUtils redisCacheUtils;
 
     /**
+     * 自身代理引用：Excel 导入监听器回调 batchAddUser 时必须经过代理，
+     * 直接传 this（目标对象）会绕过 AOP 使 @Transactional 失效
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private SysUserService selfProxy;
+
+    /**
      * 获取用户列表
      *
      * @param sysUserQueryDTO 用户查询条件DTO对象，包含分页参数和查询条件
@@ -111,7 +119,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
      * @return 用户详细信息，如果不存在返回 null
      */
     @Override
-    public SysUser getUserInfo(String userId) {
+    public SysUser getUserInfo(Long userId) {
         // 直接使用 MyBatis-Plus 的 getById 方法根据主键查询
         // 密码字段已通过 @JsonIgnore 注解自动过滤，不会返回给前端
         return this.getById(userId);
@@ -129,7 +137,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public String addUser(SysUserAddDTO sysUserAddDTO) {
+    public Long addUser(SysUserAddDTO sysUserAddDTO) {
         // 1. 校验用户名是否已存在
         LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(SysUser::getUsername, sysUserAddDTO.getUsername());
@@ -138,11 +146,18 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             throw new RuntimeException("用户名已存在");
         }
 
+        // 1.1 校验手机号唯一性（登录凭证按手机号匹配，重复手机号会导致登录命中错误账号）
+        if (StringUtils.hasText(sysUserAddDTO.getMobile())) {
+            LambdaQueryWrapper<SysUser> mobileWrapper = new LambdaQueryWrapper<>();
+            mobileWrapper.eq(SysUser::getMobile, sysUserAddDTO.getMobile());
+            if (this.count(mobileWrapper) > 0) {
+                throw new RuntimeException("手机号已被其他用户使用");
+            }
+        }
+
         // 2. 创建用户实体并设置基本信息
         SysUser user = new SysUser();
-        // 生成UUID作为用户ID
-        String userId = UUID.randomUUID().toString().replace("-", "");
-        user.setUserId(userId);
+        // ID 由 MyBatis-Plus ASSIGN_ID 自动生成
         user.setUsername(sysUserAddDTO.getUsername());
 
         // 使用BCrypt加密密码
@@ -160,6 +175,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (!saveSuccess) {
             throw new RuntimeException("用户信息保存失败");
         }
+        
+        Long userId = user.getUserId();
 
         // 4. 分配角色 - 批量插入用户角色关联
         List<Long> roleIds = sysUserAddDTO.getRoleIds();
@@ -199,11 +216,30 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         List<SysUserRole> sysUserRoles = new ArrayList<>();
 
         // 1. 预处理数据
+        List<String> importUsernames = sysUserAddDTOList.stream()
+                .map(SysUserAddDTO::getUsername)
+                .filter(StringUtils::hasText)
+                .collect(java.util.stream.Collectors.toList());
+
+        java.util.Set<String> existingUsernames = new java.util.HashSet<>();
+        if (!importUsernames.isEmpty()) {
+            List<SysUser> existingUsers = this.list(new LambdaQueryWrapper<SysUser>().in(SysUser::getUsername, importUsernames));
+            existingUsernames = existingUsers.stream().map(SysUser::getUsername).collect(java.util.stream.Collectors.toSet());
+        }
+
+        java.util.Set<String> currentBatchUsernames = new java.util.HashSet<>();
+
         for (SysUserAddDTO dto : sysUserAddDTOList) {
+            String username = dto.getUsername();
+            if (!StringUtils.hasText(username) || existingUsernames.contains(username) || currentBatchUsernames.contains(username)) {
+                continue; // 跳过已存在或当前批次重复的用户，防范 DuplicateKeyException (Issue #14)
+            }
+            currentBatchUsernames.add(username);
+
             SysUser user = new SysUser();
-            String userId = UUID.randomUUID().toString().replace("-", "");
+            Long userId = com.baomidou.mybatisplus.core.toolkit.IdWorker.getId();
             user.setUserId(userId);
-            user.setUsername(dto.getUsername());
+            user.setUsername(username);
             user.setNickname(dto.getNickname());
             user.setEmail(dto.getEmail());
             user.setMobile(dto.getMobile());
@@ -222,6 +258,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
                     sysUserRoles.add(userRole);
                 }
             }
+        }
+
+        if (sysUsers.isEmpty()) {
+            return 0;
         }
 
         // 2. 批量保存用户
@@ -256,8 +296,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     @Transactional(rollbackFor = Exception.class)
     public void updateUser(SysUserAddDTO sysUserAddDTO) {
         // 1. 校验用户是否存在
-        String userId = sysUserAddDTO.getUserId();
-        if (!StringUtils.hasText(userId)) {
+        Long userId = sysUserAddDTO.getUserId();
+        if (userId == null) {
             throw new RuntimeException("用户ID不能为空");
         }
 
@@ -275,6 +315,17 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             Long count = this.count(queryWrapper);
             if (count > 0) {
                 throw new RuntimeException("用户名已存在");
+            }
+        }
+
+        // 2.1 如果修改了手机号，校验新手机号是否已被其他用户使用（手机号是登录凭证）
+        if (StringUtils.hasText(sysUserAddDTO.getMobile())
+                && !sysUserAddDTO.getMobile().equals(existUser.getMobile())) {
+            LambdaQueryWrapper<SysUser> mobileWrapper = new LambdaQueryWrapper<>();
+            mobileWrapper.eq(SysUser::getMobile, sysUserAddDTO.getMobile())
+                    .ne(SysUser::getUserId, userId);
+            if (this.count(mobileWrapper) > 0) {
+                throw new RuntimeException("手机号已被其他用户使用");
             }
         }
 
@@ -325,10 +376,14 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         }
 
         // 6. 清除用户缓存，确保下次获取时能拿到最新数据
-        String userInfoCacheKey = com.xinghuiTec.constants.redisConstants.USER_INFO_PREFIX + userId;
+        String userInfoCacheKey = com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId;
         redisCacheUtils.deleteObject(userInfoCacheKey);
-        String routerCacheKey = com.xinghuiTec.constants.redisConstants.USER_ROUTER_PREFIX + userId;
+        String routerCacheKey = com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId;
         redisCacheUtils.deleteObject(routerCacheKey);
+        // 同时清除登录态缓存：LoginFilter 按此缓存放行请求，
+        // 不清除的话被停用/降权的用户旧 token 在 TTL 内仍按旧权限生效
+        String loginCacheKey = com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX + userId;
+        redisCacheUtils.deleteObject(loginCacheKey);
     }
 
     /**
@@ -342,9 +397,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void deleteUser(String userId) {
+    public void deleteUser(Long userId) {
         // 1. 校验用户ID是否为空
-        if (!StringUtils.hasText(userId)) {
+        if (userId == null) {
             throw new RuntimeException("用户ID不能为空");
         }
 
@@ -366,11 +421,11 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         }
 
         // 5. 清除用户相关缓存
-        String loginCacheKey = com.xinghuiTec.constants.redisConstants.ADMIN_LOGIN_PREFIX + userId;
+        String loginCacheKey = com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX + userId;
         redisCacheUtils.deleteObject(loginCacheKey);
-        String userInfoCacheKey = com.xinghuiTec.constants.redisConstants.USER_INFO_PREFIX + userId;
+        String userInfoCacheKey = com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId;
         redisCacheUtils.deleteObject(userInfoCacheKey);
-        String routerCacheKey = com.xinghuiTec.constants.redisConstants.USER_ROUTER_PREFIX + userId;
+        String routerCacheKey = com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId;
         redisCacheUtils.deleteObject(routerCacheKey);
     }
 
@@ -382,9 +437,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
      * @param newPassword 新密码
      */
     @Override
-    public void resetPassword(String userId, String newPassword) {
+    public void resetPassword(Long userId, String newPassword) {
         // 1. 校验参数
-        if (!StringUtils.hasText(userId)) {
+        if (userId == null) {
             throw new RuntimeException("用户ID不能为空");
         }
         if (!StringUtils.hasText(newPassword)) {
@@ -409,6 +464,12 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (!updateSuccess) {
             throw new RuntimeException("密码重置失败");
         }
+
+        // 5. 清除该用户全部登录相关缓存：重置密码属安全敏感操作，
+        // 必须让旧 token 立即失效（否则持旧凭证的会话——可能正是泄露源——继续有效）
+        redisCacheUtils.deleteObject(com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX + userId);
+        redisCacheUtils.deleteObject(com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId);
+        redisCacheUtils.deleteObject(com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId);
     }
 
     /**
@@ -457,8 +518,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
         try {
             // 创建监听器（需要角色服务来根据roleKey查询roleId）
+            // 传入自身代理而非 this，保证监听器回调 batchAddUser 时 @Transactional 生效
             SysUserImportListener listener = new SysUserImportListener(
-                    this, sysRoleService);
+                    selfProxy, sysRoleService);
 
             // 读取Excel文件
             FastExcel.read(file.getInputStream(), SysUserExcel.class, listener)
@@ -577,7 +639,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         // 1. 从 SecurityContext 获取当前登录用户的 userId
         // SecurityUtils.getUser() 返回的是当前登录用户的 SysUser 对象
         com.xinghuiTec.domain.entity.SysUser currentUser = com.xinghuiTec.utils.SecurityUtils.getUser();
-        String userId = currentUser.getUserId();
+        Long userId = currentUser.getUserId();
 
         // 2. 调用 LoginService 获取用户详细信息（包含角色列表）
         // LoginService 已经实现了缓存机制，优先从 Redis 获取，缓存未命中才查询数据库
@@ -595,7 +657,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         // 1. 获取当前登录用户的 userId
         // 注意：不能从参数中获取 userId，必须从 SecurityContext 获取，防止用户篡改他人信息
         com.xinghuiTec.domain.entity.SysUser currentUser = com.xinghuiTec.utils.SecurityUtils.getUser();
-        String userId = currentUser.getUserId();
+        Long userId = currentUser.getUserId();
 
         // 2. 查询用户当前信息
         SysUser user = this.getById(userId);
@@ -650,7 +712,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
         // 6. 清除 Redis 缓存
         // 修改个人信息后，需要清除用户信息缓存，下次访问时重新加载
-        String cacheKey = com.xinghuiTec.constants.redisConstants.USER_INFO_PREFIX + userId;
+        String cacheKey = com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId;
         redisCacheUtils.deleteObject(cacheKey);
     }
 
@@ -664,7 +726,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public void updatePassword(com.xinghuiTec.domain.dto.SysPasswordUpdateDTO updateDTO) {
         // 1. 获取当前登录用户的 userId
         com.xinghuiTec.domain.entity.SysUser currentUser = com.xinghuiTec.utils.SecurityUtils.getUser();
-        String userId = currentUser.getUserId();
+        Long userId = currentUser.getUserId();
 
         // 2. 校验新密码和确认密码是否一致
         if (!updateDTO.getNewPassword().equals(updateDTO.getConfirmPassword())) {
@@ -705,15 +767,15 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         // 8. 清除登录缓存，强制用户重新登录
         // 修改密码是敏感操作，为了安全，清除登录缓存让用户使用新密码重新登录
         // 清除登录信息缓存
-        String loginCacheKey = com.xinghuiTec.constants.redisConstants.ADMIN_LOGIN_PREFIX + userId;
+        String loginCacheKey = com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX + userId;
         redisCacheUtils.deleteObject(loginCacheKey);
 
         // 清除用户信息缓存
-        String userInfoCacheKey = com.xinghuiTec.constants.redisConstants.USER_INFO_PREFIX + userId;
+        String userInfoCacheKey = com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId;
         redisCacheUtils.deleteObject(userInfoCacheKey);
 
         // 清除用户路由缓存
-        String routerCacheKey = com.xinghuiTec.constants.redisConstants.USER_ROUTER_PREFIX + userId;
+        String routerCacheKey = com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId;
         redisCacheUtils.deleteObject(routerCacheKey);
     }
 

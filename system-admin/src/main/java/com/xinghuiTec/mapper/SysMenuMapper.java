@@ -26,4 +26,14 @@ public interface SysMenuMapper extends BaseMapper<SysMenu> {
      */
     List<String> selectPermsByUserId(Long roleId);
 
+    /**
+     * 根据多个角色ID批量查询权限标识
+     */
+    List<String> selectPermsByRoleIds(@org.apache.ibatis.annotations.Param("roleIds") List<Long> roleIds);
+
+    /**
+     * 根据用户ID查询路由菜单
+     */
+    List<SysMenu> selectMenuByUserId(@org.apache.ibatis.annotations.Param("userId") Long userId);
+
 }

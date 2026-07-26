@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [master, dev, "feature/**", "release/**", "hotfix/**"]
+  pull_request:
+    branches: [master, dev]
+
+jobs:
+  # 构建完整性：全模块编译 + 测试代码编译 + 打包
+  build:
+    name: Build (JDK 17)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build & package
+        run: mvn -B -ntp clean package -DskipTests
+
+      - name: Compile tests
+        run: mvn -B -ntp test-compile
+
+  # 集成测试：MySQL/Redis/MinIO 服务容器，空库由 Flyway 自动初始化（同时验证迁移脚本）
+  # 注意：孵化阶段暂容忍失败（continue-on-error），稳定后移除
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: xinghui_admin
+          MYSQL_USER: xinghuitec
+          MYSQL_PASSWORD: xinghuitec233
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      # bitnami/minio 版本化 tag 已随 Bitnami 目录迁移至 bitnamilegacy（只读镜像仓库）
+      minio:
+        image: bitnamilegacy/minio:2024
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+          MINIO_DEFAULT_BUCKETS: xinghui-admin
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      # 排除依赖真实第三方凭证的测试：邮件(163)/短信(阿里云)/三方登录(OAuth)
+      - name: Run tests
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: "3306"
+          DB_NAME: xinghui_admin
+          DB_USERNAME: xinghuitec
+          DB_PASSWORD: xinghuitec233
+          MINIO_ENDPOINT: http://127.0.0.1:9000
+          MINIO_ACCESS_KEY: minioadmin
+          MINIO_SECRET_KEY: minioadmin
+        run: >-
+          mvn -B -ntp test
+          -Dtest='!MailUtilsTest, !SmsTest, !SocialUtilsTest'
+          -DfailIfNoTests=false

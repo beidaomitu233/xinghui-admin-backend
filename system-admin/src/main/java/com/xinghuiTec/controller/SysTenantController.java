@@ -1,87 +1,81 @@
 package com.xinghuiTec.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xinghuiTec.domain.entity.SysTenant;
 import com.xinghuiTec.service.ISysTenantService;
 import com.xinghuiTec.utils.Result;
-import lombok.RequiredArgsConstructor;
+import com.xinghuiTec.utils.TenantHelper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 /**
- * 租户管理控制器
+ * 租户管理 Controller
  *
  * @author xinghuiTec
  */
 @RestController
 @RequestMapping("/system/tenant")
-@RequiredArgsConstructor
 public class SysTenantController {
 
-    private final ISysTenantService tenantService;
+    @Autowired
+    private ISysTenantService tenantService;
 
     /**
      * 查询租户列表
      */
     @GetMapping("/list")
-    public Result<List<SysTenant>> list(SysTenant tenant) {
-        return Result.success(tenantService.queryList(tenant));
+    @PreAuthorize("hasAuthority('system:tenant:list')")
+    public Result<Page<SysTenant>> list(@RequestParam(defaultValue = "1") Integer pageNum,
+                                        @RequestParam(defaultValue = "10") Integer pageSize) {
+        Page<SysTenant> page = TenantHelper.ignore(() ->
+            tenantService.page(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<SysTenant>().orderByAsc(SysTenant::getId))
+        );
+        return Result.ok(page);
     }
 
     /**
-     * 根据ID获取租户详细信息
+     * 根据ID查询租户详情
      */
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('system:tenant:query')")
     public Result<SysTenant> getInfo(@PathVariable Long id) {
-        return Result.success(tenantService.queryById(id));
-    }
-
-    /**
-     * 根据租户ID获取租户详细信息
-     */
-    @GetMapping("/info/{tenantId}")
-    public Result<SysTenant> getInfoByTenantId(@PathVariable String tenantId) {
-        return Result.success(tenantService.queryByTenantId(tenantId));
+        return TenantHelper.ignore(() -> Result.ok(tenantService.getById(id)));
     }
 
     /**
      * 新增租户
      */
-    @PostMapping("/add")
-    public Result<String> add(@RequestBody SysTenant tenant,
-                              @RequestParam String username,
-                              @RequestParam String password) {
-        if (!tenantService.checkCompanyNameUnique(tenant)) {
-            return Result.fail("企业名称已存在");
-        }
-        tenantService.insertByBo(tenant, username, password);
-        return Result.success("创建成功");
+    @PostMapping
+    @PreAuthorize("hasAuthority('system:tenant:add')")
+    public Result<Void> add(@RequestBody SysTenant tenant) {
+        TenantHelper.ignore(() -> tenantService.save(tenant));
+        return Result.ok();
     }
 
     /**
      * 修改租户
      */
-    @PostMapping("/edit")
-    public Result<String> edit(@RequestBody SysTenant tenant) {
-        tenantService.updateByBo(tenant);
-        return Result.success("修改成功");
-    }
-
-    /**
-     * 修改租户状态
-     */
-    @PostMapping("/changeStatus")
-    public Result<String> changeStatus(@RequestBody SysTenant tenant) {
-        tenantService.updateTenantStatus(tenant);
-        return Result.success("修改成功");
+    @PutMapping
+    @PreAuthorize("hasAuthority('system:tenant:edit')")
+    public Result<Void> edit(@RequestBody SysTenant tenant) {
+        TenantHelper.ignore(() -> tenantService.updateById(tenant));
+        return Result.ok();
     }
 
     /**
      * 删除租户
      */
-    @PostMapping("/remove/{ids}")
-    public Result<String> remove(@PathVariable List<Long> ids) {
-        tenantService.deleteWithValidByIds(ids, true);
-        return Result.success("删除成功");
+    @DeleteMapping("/{ids}")
+    @PreAuthorize("hasAuthority('system:tenant:remove')")
+    public Result<Void> remove(@PathVariable Long[] ids) {
+        TenantHelper.ignore(() -> {
+            for (Long id : ids) {
+                tenantService.removeById(id);
+            }
+        });
+        return Result.ok();
     }
 }

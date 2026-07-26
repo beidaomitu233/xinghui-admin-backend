@@ -5,7 +5,7 @@ import com.xinghuiTec.domain.entity.SysTenant;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 租户 Mapper
+ * 租户信息 Mapper
  *
  * @author xinghuiTec
  */

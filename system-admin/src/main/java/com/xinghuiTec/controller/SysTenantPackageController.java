@@ -1,65 +1,76 @@
 package com.xinghuiTec.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xinghuiTec.domain.entity.SysTenantPackage;
 import com.xinghuiTec.service.ISysTenantPackageService;
 import com.xinghuiTec.utils.Result;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 /**
- * 租户套餐管理控制器
+ * 租户套餐管理 Controller
  *
  * @author xinghuiTec
  */
 @RestController
-@RequestMapping("/system/tenant/package")
-@RequiredArgsConstructor
+@RequestMapping("/system/tenantPackage")
 public class SysTenantPackageController {
 
-    private final ISysTenantPackageService tenantPackageService;
+    @Autowired
+    private ISysTenantPackageService packageService;
 
     /**
-     * 查询租户套餐列表
+     * 查询套餐列表
      */
     @GetMapping("/list")
-    public Result<List<SysTenantPackage>> list(SysTenantPackage tenantPackage) {
-        return Result.success(tenantPackageService.queryList(tenantPackage));
+    @PreAuthorize("hasAuthority('system:tenantPackage:list')")
+    public Result<Page<SysTenantPackage>> list(@RequestParam(defaultValue = "1") Integer pageNum,
+                                               @RequestParam(defaultValue = "10") Integer pageSize) {
+        Page<SysTenantPackage> page = packageService.page(new Page<>(pageNum, pageSize),
+            new LambdaQueryWrapper<SysTenantPackage>().orderByAsc(SysTenantPackage::getPackageId));
+        return Result.ok(page);
     }
 
     /**
-     * 根据ID获取租户套餐详细信息
+     * 查询套餐详情
      */
     @GetMapping("/{packageId}")
+    @PreAuthorize("hasAuthority('system:tenantPackage:query')")
     public Result<SysTenantPackage> getInfo(@PathVariable Long packageId) {
-        return Result.success(tenantPackageService.queryById(packageId));
+        return Result.ok(packageService.getById(packageId));
     }
 
     /**
-     * 新增租户套餐
+     * 新增套餐
      */
-    @PostMapping("/add")
-    public Result<String> add(@RequestBody SysTenantPackage tenantPackage) {
-        tenantPackageService.insertByBo(tenantPackage);
-        return Result.success("创建成功");
+    @PostMapping
+    @PreAuthorize("hasAuthority('system:tenantPackage:add')")
+    public Result<Void> add(@RequestBody SysTenantPackage tenantPackage) {
+        packageService.save(tenantPackage);
+        return Result.ok();
     }
 
     /**
-     * 修改租户套餐
+     * 修改套餐
      */
-    @PostMapping("/edit")
-    public Result<String> edit(@RequestBody SysTenantPackage tenantPackage) {
-        tenantPackageService.updateByBo(tenantPackage);
-        return Result.success("修改成功");
+    @PutMapping
+    @PreAuthorize("hasAuthority('system:tenantPackage:edit')")
+    public Result<Void> edit(@RequestBody SysTenantPackage tenantPackage) {
+        packageService.updateById(tenantPackage);
+        return Result.ok();
     }
 
     /**
-     * 删除租户套餐
+     * 删除套餐
      */
-    @PostMapping("/remove/{ids}")
-    public Result<String> remove(@PathVariable List<Long> ids) {
-        tenantPackageService.deleteWithValidByIds(ids, true);
-        return Result.success("删除成功");
+    @DeleteMapping("/{packageIds}")
+    @PreAuthorize("hasAuthority('system:tenantPackage:remove')")
+    public Result<Void> remove(@PathVariable Long[] packageIds) {
+        for (Long id : packageIds) {
+            packageService.removeById(id);
+        }
+        return Result.ok();
     }
 }
