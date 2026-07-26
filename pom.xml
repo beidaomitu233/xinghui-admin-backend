@@ -17,6 +17,8 @@
     <modules>
         <module>common</module>
         <module>system-framework</module>
+        <module>web-admin</module>
+        <module>web-app</module>
         <module>system-admin</module>
     </modules>
 
