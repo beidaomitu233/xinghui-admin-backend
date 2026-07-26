@@ -1,5 +1,7 @@
 # 星辉后台管理系统 (XingHui Admin)
 
+[![CI](https://github.com/beidaomitu233/xinghui-admin-backend/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/beidaomitu233/xinghui-admin-backend/actions/workflows/ci.yml)
+
 星辉后台管理系统（XingHui Admin）是一款基于 **Spring Boot 3**、**MyBatis-Plus 3**、**Spring Security** 和 **Redisson** 构建的现代化企业级 SaaS 后台开发脚手架。项目采用模块化多租户设计，整合了一站式云存储、多通道短信、三方社交登录以及注解级防护（限流、防重）等高频业务组件，旨在帮助开发者快速构建安全、稳定、可扩展的分布式业务系统。
 
 ---
@@ -14,6 +16,9 @@
 *   **多通道短信聚合 (SMS)**：集成 `SMS4J` 框架，开箱即用支持阿里云、腾讯云、网易云信等多平台短信接口，且内置防刷限流机制。
 *   **多端社交联合登录**：通过 `JustAuth` 快速整合第三方社交登录（如微信、Gitee、GitHub、支付宝等），简化账户绑定流程。
 *   **模块化脚手架**：预置用户管理、角色权限、菜单管理、系统参数、定时任务调度（带日志追踪）、新闻资讯、软件下载管理等基础模块。
+*   **数据库版本化 (Flyway)**：表结构与种子数据全部由 Flyway 迁移脚本管理，应用启动自动建库升级，空库开箱即用，存量库自动打基线，彻底告别手工执行 SQL。
+*   **五模块企业级分层**：`common`（通用组件）/ `system-framework`（框架层）/ `system-admin`（系统核心+启动器）/ `web-admin`（管理端业务 API）/ `web-app`（应用端业务 API），系统能力与业务代码边界清晰。
+*   **持续集成 (CI)**：GitHub Actions 全模块构建 + MySQL/Redis/MinIO 服务容器集成测试，配合 GitFlow 分支模型（见 [GITFLOW.md](GITFLOW.md)）。
 
 ---
 
@@ -36,13 +41,21 @@ xinghui-admin
 │   ├── config.mybatis       // MyBatis-Plus 元数据自动填充（createTime/updateTime审计）
 │   ├── config.datascope     // 动态数据权限过滤解析处理器
 │   └── filter               // 登录凭证 JWT 验证过滤器
-└── system-admin (系统核心业务模块，主启动入口)
+├── web-admin (管理端业务 API 层)
+│   └── app.admin            // Admin* 前缀控制器，/admin/** 路由，管理后台业务接口
+├── web-app (应用端业务 API 层)
+│   └── app.mobile           // Mobile* 前缀控制器，/app/** 路由，移动端/用户端业务接口
+└── system-admin (系统核心模块，主启动入口，聚合装配 web-admin/web-app)
     ├── controller           // 用户、菜单、系统配置、下载、资讯及文件管理 API
     ├── domain               // 数据实体（SysUser, SysRole, SysMenu, SysFilePart 等）
     ├── mapper               // 数据库持久化 Mapper 接口与 SQL 映射
     ├── service              // 业务层逻辑实现
-    └── recorder             // FileRecorderImpl 对象存储上传记录器与分片续传持久化
+    ├── recorder             // FileRecorderImpl 对象存储上传记录器与分片续传持久化
+    └── resources/db/migration  // Flyway 数据库迁移脚本（V1 基线 + 增量演进）
 ```
+
+> 数据库表命名约定：系统表 `sys_*`（由 system-admin 维护），业务表 `app_*`（由 web-admin/web-app 业务模块维护），
+> 全部表结构变更须通过 Flyway 迁移脚本提交（规范见 [sql/README.md](sql/README.md)）。
 
 ---
 
@@ -60,6 +73,7 @@ xinghui-admin
 | **SMS4J** | 短信聚合框架 | 3.3.5 |
 | **JustAuth** | 第三方登录聚合客户端 | 1.16.7 |
 | **Druid** | 阿里数据库连接池 | 1.2.25 |
+| **Flyway** | 数据库版本化迁移 | 由 Spring Boot 管理 |
 | **MySQL Connector** | 数据库驱动 | 8.0.33 |
 
 ---
@@ -74,7 +88,20 @@ xinghui-admin
 *   **MinIO**（可选，用于本地云存储调试）
 
 ### 2. 初始化数据库
-在 MySQL 中创建数据库 `xinghui_admin`，并导入 [/sql/xinghui_admin.sql](file:///d:/changhuiengineer/DevProject/xinghui-admin2/springboot-admin-xinghui/xinghui-admin/sql/xinghui_admin.sql) 数据库脚本，完成基础表结构与预置菜单/租户数据的初始化。
+只需在 MySQL 中创建空数据库，表结构与种子数据由 **Flyway** 在应用首次启动时自动初始化：
+
+```sql
+CREATE DATABASE xinghui_admin DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+```
+
+初始化完成后的默认账号（**生产环境务必立即修改密码**）：
+
+| 账号 | 密码 | 角色 |
+| :--- | :--- | :--- |
+| admin | admin123 | 超级管理员、管理员 |
+| user | admin123 | 用户（演示） |
+
+> 存量数据库首次接入会自动打基线（跳过基线脚本），详细说明与迁移脚本编写规范见 [sql/README.md](sql/README.md)。
 
 ### 3. 系统配置
 修改 `system-admin/src/main/resources/application.yml` 与 `application-datasource.yml` 文件：
