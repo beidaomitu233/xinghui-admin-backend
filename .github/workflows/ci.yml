@@ -2,12 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [master, dev, "feature/**", "release/**", "hotfix/**"]
+    branches: [master, dev, "feature/**", "fix/**", "release/**", "hotfix/**"]
   pull_request:
     branches: [master, dev]
 
 jobs:
-  # 构建完整性：全模块编译 + 测试代码编译 + 打包
+  # 构建完整性：全模块编译打包 + fat jar 可启动性校验
+  # （package -DskipTests 已包含测试代码编译，无需单独 test-compile）
   build:
     name: Build (JDK 17)
     runs-on: ubuntu-latest
@@ -24,18 +25,28 @@ jobs:
       - name: Build & package
         run: mvn -B -ntp clean package -DskipTests
 
-      - name: Compile tests
-        run: mvn -B -ntp test-compile
+      # 防止 repackage 配置再次静默丢失（曾发生：打出普通 jar，java -jar 不可用）
+      - name: Verify executable fat jar
+        run: |
+          jar=system-admin/target/system-admin.jar
+          test -f "$jar" || { echo "fat jar missing: $jar"; exit 1; }
+          unzip -l "$jar" | grep -q "BOOT-INF/classes" || { echo "not a Spring Boot executable jar"; exit 1; }
+          unzip -p "$jar" META-INF/MANIFEST.MF | grep -q "JarLauncher" || { echo "manifest missing JarLauncher"; exit 1; }
 
-  # 集成测试：MySQL/Redis/MinIO 服务容器，空库由 Flyway 自动初始化（同时验证迁移脚本）
-  # 注意：孵化阶段暂容忍失败（continue-on-error），稳定后移除
+  # 集成测试：MySQL(5.7/8.0 矩阵)/Redis/MinIO 服务容器，空库由 Flyway 自动初始化
+  # （同时验证迁移脚本对两个 MySQL 版本的兼容性——基线兼容性声明的机器化保障）
+  # 注意：孵化阶段暂容忍失败（continue-on-error），测试全绿后移除（见 KNOWN_ISSUES.md）
   integration-test:
-    name: Integration Test
+    name: Integration Test (MySQL ${{ matrix.mysql-version }})
     runs-on: ubuntu-latest
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        mysql-version: ["5.7", "8.0"]
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:${{ matrix.mysql-version }}
         env:
           MYSQL_DATABASE: xinghuiadmin
           MYSQL_USER: xinghuiadmin
