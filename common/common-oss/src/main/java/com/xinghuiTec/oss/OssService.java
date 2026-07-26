@@ -65,8 +65,13 @@ public class OssService {
             response.setHeader("Content-Disposition",
                     "attachment; filename=" + java.net.URLEncoder.encode(fileInfo.getOriginalFilename(), java.nio.charset.StandardCharsets.UTF_8));
             fileStorageService.download(url).inputStream(in -> {
-                IoUtil.copy(in, response.getOutputStream());
-                response.getOutputStream().flush();
+                try {
+                    java.io.OutputStream out = response.getOutputStream();
+                    IoUtil.copy(in, out);
+                    out.flush();
+                } catch (java.io.IOException e) {
+                    throw new RuntimeException(e);
+                }
             });
         } catch (Exception e) {
             log.error("文件下载失败", e);

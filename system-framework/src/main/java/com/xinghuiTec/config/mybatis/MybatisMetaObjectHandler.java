@@ -70,8 +70,8 @@ public class MybatisMetaObjectHandler implements MetaObjectHandler {
      */
     private String getLoginUserId() {
         try {
-            String userId = SecurityUtils.getUserId();
-            return userId != null ? userId : DEFAULT_USER_ID;
+            Long userId = SecurityUtils.getUserId();
+            return userId != null ? String.valueOf(userId) : DEFAULT_USER_ID;
         } catch (Exception e) {
             return DEFAULT_USER_ID;
         }
