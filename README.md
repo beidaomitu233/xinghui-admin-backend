@@ -1,12 +1,12 @@
 # 星辉后台管理系统
 
-基于 Java 17、Spring Boot 3 的分模块后台开发候选，包含用户与权限、字典、配置、文件存储、任务、通知、站点、低代码表单和 AI 配置及普通应用运行能力。Agent、工具执行和 MCP 业务接入仍属后续建设范围。源码导入不代表正式发行或远端 CI 已通过。
+基于 Java 17、Spring Boot 3 的分模块后台开发候选，包含用户与权限、字典、配置、文件存储、任务、通知、资讯、低代码表单和 AI 配置及普通应用运行能力。Agent、工具执行和 MCP 业务接入仍属后续建设范围。源码导入不代表正式发行或远端 CI 已通过。
 
 配套前端：[xinghui-admin-vue3](https://github.com/beidaomitu233/xinghui-admin-vue3)。公开使用文档集中维护在前端仓库 `apps/docs/content/`，默认部署路径为 `/docs/`；部署者配置自己的访问域名。
 
 ## 本地启动
 
-准备 Java 17、Maven 3.9、MySQL 和 Redis。在当前终端通过私密配置注入 `DB_URL`、`DB_USERNAME`、`DB_PASSWORD`、`REDIS_PORT`、`REDIS_DATABASE`、`REDIS_PASSWORD`、`JWT_SECRET` 和 `CONFIG_MASTER_KEY`。默认 Redis 主机为回环地址，可通过 Spring 环境变量覆盖；准确映射见 `system-admin/src/main/resources/application.yml`。签名密钥与配置加密主密钥须独立生成，主密钥须稳定保存；不要使用测试夹具或提交真实凭据。
+准备 Java 17、Maven 3.9、MySQL 和 Redis。在当前终端通过私密配置注入 `DB_URL`、`DB_USERNAME`、`DB_PASSWORD`、`REDIS_PORT`、`REDIS_DATABASE`、`REDIS_PASSWORD`、`JWT_SECRET` 和 `CONFIG_MASTER_KEY`。默认 Redis 主机为回环地址，可通过 `SPRING_DATA_REDIS_HOST` 环境变量覆盖；准确映射见 `system-admin/src/main/resources/application.yml`。签名密钥与配置加密主密钥须独立生成，主密钥须稳定保存；不要使用测试夹具或提交真实凭据。
 
 ```bash
 mvn -B -ntp -DskipTests package
