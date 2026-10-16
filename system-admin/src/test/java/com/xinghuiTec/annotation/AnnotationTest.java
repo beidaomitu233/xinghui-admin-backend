@@ -2,8 +2,10 @@ package com.xinghuiTec.annotation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xinghuiTec.domain.dto.LoginDTO;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -11,12 +13,14 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -29,6 +33,18 @@ public class AnnotationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private RedissonClient redissonClient;
+
+    private String rateLimiterKey;
+
+    @AfterEach
+    void cleanRateLimiter() {
+        if (rateLimiterKey != null) {
+            redissonClient.getRateLimiter(rateLimiterKey).delete();
+        }
+    }
+
     @Test
     @DisplayName("测试登录接口的限流(@RateLimiter)")
     void testRateLimiterOnLogin() throws Exception {
@@ -37,7 +53,9 @@ public class AnnotationTest {
         AtomicInteger blockedCount = new AtomicInteger(0);
         
         LoginDTO dto = new LoginDTO();
-        dto.setPhone("13900000001");
+        // Use a fresh, valid phone so an earlier run's Redis limiter state cannot affect this test.
+        dto.setPhone("139" + String.format("%08d", ThreadLocalRandom.current().nextInt(100_000_000)));
+        rateLimiterKey = "rate_limit:/user/login:127.0.0.1:" + dto.getPhone();
         dto.setPassword("123456");
         String content = objectMapper.writeValueAsString(dto);
 
@@ -49,12 +67,12 @@ public class AnnotationTest {
             executor.submit(() -> {
                 try {
                     latch.await(); // 等待统一发车
-                    String response = mockMvc.perform(MockMvcRequestBuilders.post("/login")
+                    String response = mockMvc.perform(MockMvcRequestBuilders.post("/user/login")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(content))
-                            .andReturn().getResponse().getContentAsString();
+                            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
                     
-                    if (response.contains("访问过于频繁")) {
+                    if (response.contains("登录过于频繁")) {
                         blockedCount.incrementAndGet();
                     } else {
                         successCount.incrementAndGet();
@@ -76,7 +94,7 @@ public class AnnotationTest {
         System.out.println("被限流数: " + blockedCount.get());
         
         // 我们期望在短时间内并发请求会有部分被限流
-        assert blockedCount.get() > 0 : "没有请求被限流，RateLimiter 可能未生效";
+        assertTrue(blockedCount.get() > 0, "没有请求被限流，RateLimiter 可能未生效");
     }
 
     @Test

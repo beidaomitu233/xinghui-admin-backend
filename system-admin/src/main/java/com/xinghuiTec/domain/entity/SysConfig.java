@@ -35,6 +35,8 @@ public class SysConfig extends TenantEntity {
     private String configValue;
     // 系统内置（Y是 N否）
     private String configType;
+    // Existing rows default to 0; editing the captcha key activates the managed value.
+    private Integer runtimeActive;
     // 备注
     private String remark;
 

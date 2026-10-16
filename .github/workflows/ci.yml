@@ -1,109 +1,147 @@
 name: CI
-
 on:
   push:
     branches: [master, dev, "feature/**", "fix/**", "release/**", "hotfix/**"]
   pull_request:
     branches: [master, dev]
-
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  # 构建完整性：全模块编译打包 + fat jar 可启动性校验
-  # （package -DskipTests 已包含测试代码编译，无需单独 test-compile）
   build:
-    name: Build (JDK 17)
+    name: Backend build and required tests
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
           cache: maven
-
-      - name: Build & package
-        run: mvn -B -ntp clean package -DskipTests
-
-      # 防止 repackage 配置再次静默丢失（曾发生：打出普通 jar，java -jar 不可用）
-      - name: Verify executable fat jar
+      - name: Verify every AI test has an explicit CI or native classification
+        shell: pwsh
         run: |
-          jar=system-admin/target/system-admin.jar
-          test -f "$jar" || { echo "fat jar missing: $jar"; exit 1; }
-          unzip -l "$jar" | grep -q "BOOT-INF/classes" || { echo "not a Spring Boot executable jar"; exit 1; }
-          unzip -p "$jar" META-INF/MANIFEST.MF | grep -q "JarLauncher" || { echo "manifest missing JarLauncher"; exit 1; }
-
-  # 集成测试：MySQL(5.7/8.0 矩阵)/Redis/MinIO 服务容器，空库由 Flyway 自动初始化
-  # （同时验证迁移脚本对两个 MySQL 版本的兼容性——基线兼容性声明的机器化保障）
-  # 注意：孵化阶段暂容忍失败（continue-on-error），测试全绿后移除（见 KNOWN_ISSUES.md）
-  integration-test:
-    name: Integration Test (MySQL ${{ matrix.mysql-version }})
+          ./scripts/quality/Verify-Ai-TestInventory.ps1 -SelfTest
+          ./scripts/quality/Verify-Ai-TestInventory.ps1
+      - name: Execute required tests and package all modules
+        env:
+          JWT_SECRET: oss04_ci_neutral_jwt_fixture_32_characters
+          CONFIG_MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        run: >-
+          mvn -B -ntp clean package
+          -Dtest=$(paste -sd, scripts/quality/required-tests.txt)
+          -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Verify tests actually ran and executable jar
+        shell: pwsh
+        run: ./scripts/quality/Verify-Build.ps1
+      - name: Prove report gate rejects absent and invalid results
+        shell: pwsh
+        run: ./scripts/quality/Test-ReportGate.ps1
+  services:
+    name: Required services MySQL ${{ matrix.mysql }}
     runs-on: ubuntu-latest
-    continue-on-error: true
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        mysql-version: ["5.7", "8.0"]
+        mysql: ["5.7", "8.0"]
     services:
       mysql:
-        image: mysql:${{ matrix.mysql-version }}
+        image: mysql:${{ matrix.mysql }}
         env:
-          MYSQL_DATABASE: xinghuiadmin
-          MYSQL_USER: xinghuiadmin
-          MYSQL_PASSWORD: xinghuiadmin23
-          MYSQL_ROOT_PASSWORD: root
-        ports:
-          - 3306:3306
+          MYSQL_DATABASE: xinghui_oss04_ci
+          MYSQL_USER: oss04_ci
+          MYSQL_PASSWORD: oss04_ci_database_fixture
+          MYSQL_ROOT_PASSWORD: oss04_ci_root_fixture
+        ports: ["3306:3306"]
         options: >-
           --health-cmd "mysqladmin ping -h localhost"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+          --health-interval 10s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7
-        ports:
-          - 6379:6379
+        ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-      # bitnami/minio 版本化 tag 已随 Bitnami 目录迁移至 bitnamilegacy（只读镜像仓库）
+          --health-interval 10s --health-timeout 5s --health-retries 10
       minio:
         image: bitnamilegacy/minio:2024
         env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
+          MINIO_ROOT_USER: oss04_ci
+          MINIO_ROOT_PASSWORD: oss04_ci_storage_fixture
           MINIO_DEFAULT_BUCKETS: xinghui-admin
-        ports:
-          - 9000:9000
+        ports: ["9000:9000"]
         options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 10s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
           cache: maven
-
-      # 排除依赖真实第三方凭证的测试：邮件(163)/短信(阿里云)/三方登录(OAuth)
-      - name: Run tests
+      - name: Set isolated Redis neutral password
+        run: docker exec ${{ job.services.redis.id }} redis-cli CONFIG SET requirepass oss04_ci_cache_fixture
+      - name: Empty schema migration and authenticated service smoke
         env:
-          DB_HOST: 127.0.0.1
-          DB_PORT: "3306"
-          DB_NAME: xinghuiadmin
-          DB_USERNAME: xinghuiadmin
-          DB_PASSWORD: xinghuiadmin23
+          DB_URL: jdbc:mysql://127.0.0.1:3306/xinghui_oss04_ci?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+          DB_USERNAME: oss04_ci
+          DB_PASSWORD: oss04_ci_database_fixture
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: "6379"
+          REDIS_DATABASE: "15"
+          REDIS_PASSWORD: oss04_ci_cache_fixture
+          MAIL_ENABLED: "false"
+          OSS_ENABLED: "true"
+          DRUID_ENABLED: "false"
           MINIO_ENDPOINT: http://127.0.0.1:9000
-          MINIO_ACCESS_KEY: minioadmin
-          MINIO_SECRET_KEY: minioadmin
+          MINIO_ACCESS_KEY: oss04_ci
+          MINIO_SECRET_KEY: oss04_ci_storage_fixture
+          OSS04_DB_PORT: "3306"
+          OSS04_DB_PASSWORD: oss04_ci_database_fixture
+          OSS04_REDIS_PORT: "6379"
+          OSS04_REDIS_PASSWORD: oss04_ci_cache_fixture
+          OSS04_MINIO_PORT: "9000"
+          OSS04_MINIO_PASSWORD: oss04_ci_storage_fixture
+          OSS04_MYSQL_SERIES: ${{ matrix.mysql }}
+          JWT_SECRET: oss04_ci_neutral_jwt_fixture_32_characters
+          CONFIG_MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
         run: >-
-          mvn -B -ntp test
-          -Dtest='!MailUtilsTest, !SmsTest, !SocialUtilsTest'
-          -DfailIfNoTests=false
+          mvn -B -ntp -pl system-admin -am test
+          -Dtest=ReleaseServicesIT -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Reject missing or skipped smoke tests
+        shell: pwsh
+        run: ./scripts/quality/Verify-Build.ps1 -TestsOnly -RequiredClass ReleaseServicesIT
+      - name: Exercise AI configuration HTTP through Druid Wall on migrated MySQL
+        env:
+          CI: "true"
+          DB_URL: jdbc:mysql://127.0.0.1:3306/xinghui_oss04_ci?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+          DB_USERNAME: oss04_ci
+          DB_PASSWORD: oss04_ci_database_fixture
+          OSS04_MYSQL_SERIES: ${{ matrix.mysql }}
+          JWT_SECRET: oss04_ci_neutral_jwt_fixture_32_characters
+          CONFIG_MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        run: >-
+          mvn -B -ntp -pl system-admin -am test
+          -Dtest=AiConfigurationDruidMySqlIT -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Reject missing or skipped AI MySQL regression
+        shell: pwsh
+        run: ./scripts/quality/Verify-Build.ps1 -TestsOnly -RequiredList scripts/quality/required-service-tests.txt
+  quality:
+    name: Backend quality gate
+    if: ${{ always() }}
+    needs: [build, services]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Prove failure and skipped results are rejected
+        run: node scripts/quality/check-needs.mjs --self-test
+      - name: Require every dependency success
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          REQUIRED_JOBS: build,services
+        run: node scripts/quality/check-needs.mjs

@@ -11,6 +11,7 @@ import com.xinghuiTec.constants.CaptchaConstants;
 import com.xinghuiTec.domain.vo.CaptchaVO;
 import com.xinghuiTec.exception.user.CaptchaExpireException;
 import com.xinghuiTec.service.CaptchaService;
+import com.xinghuiTec.service.PublishedConfigReader;
 import com.xinghuiTec.utils.RedisCacheUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,9 @@ public class CaptchaServiceImpl implements CaptchaService {
     private CaptchaProperties captchaProperties;
 
     @Autowired
+    private PublishedConfigReader publishedConfigReader;
+
+    @Autowired
     private RedisCacheUtils redisCacheUtils;
 
     // 注: Redis 键前缀已迁移到 CaptchaConstants.REDIS_KEY_PREFIX
@@ -44,7 +48,7 @@ public class CaptchaServiceImpl implements CaptchaService {
     @Override
     public CaptchaVO generateCaptcha() {
         // 0. 极速返回: 验证码未开启时直接返回静态常量，避免对象创建和日志开销
-        if (!captchaProperties.isEnabled()) {
+        if (!publishedConfigReader.isCaptchaEnabled(captchaProperties.isEnabled())) {
             return DISABLED_CAPTCHA;
         }
 
@@ -71,7 +75,7 @@ public class CaptchaServiceImpl implements CaptchaService {
                 captchaProperties.getExpireTime(),
                 TimeUnit.MINUTES);
 
-        log.info("生成验证码 - UUID: {}, 类型: {}, 答案: {}", uuid, captchaProperties.getType(), captchaAnswer);
+        log.debug("生成验证码 - UUID: {}, 类型: {}", uuid, captchaProperties.getType());
 
         // 7. 返回 CaptchaVO
         return new CaptchaVO(uuid, base64Image, true);
@@ -81,7 +85,7 @@ public class CaptchaServiceImpl implements CaptchaService {
     public boolean validateCaptcha(String uuid, String code) {
         // 1. 从 Redis 中获取验证码
         String redisKey = CaptchaConstants.REDIS_KEY_PREFIX + uuid;
-        String cachedCode = redisCacheUtils.getCacheObject(redisKey);
+        String cachedCode = redisCacheUtils.getAndDeleteCacheObject(redisKey);
 
         // 2. 判断验证码是否存在(可能已过期)
         if (cachedCode == null) {
@@ -89,16 +93,13 @@ public class CaptchaServiceImpl implements CaptchaService {
             throw new CaptchaExpireException();
         }
 
-        // 3. 删除验证码(一次性使用)
-        redisCacheUtils.deleteObject(redisKey);
-
-        // 4. 比较验证码(忽略大小写)
+        // 3. 比较验证码(忽略大小写)
         boolean isValid = cachedCode.equalsIgnoreCase(code);
 
         if (isValid) {
             log.info("验证码验证成功 - UUID: {}", uuid);
         } else {
-            log.warn("验证码验证失败 - UUID: {}, 期望: {}, 实际: {}", uuid, cachedCode, code);
+            log.warn("验证码验证失败 - UUID: {}", uuid);
         }
 
         return isValid;

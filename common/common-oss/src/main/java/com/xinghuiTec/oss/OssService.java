@@ -3,7 +3,7 @@ package com.xinghuiTec.oss;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
-import lombok.RequiredArgsConstructor;
+import com.xinghuiTec.oss.config.OssRuntimeSettings;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.x.file.storage.core.FileInfo;
 import org.dromara.x.file.storage.core.FileStorageService;
@@ -21,10 +21,12 @@ import java.time.format.DateTimeFormatter;
  * @author xinghuiTec
  */
 @Slf4j
-@RequiredArgsConstructor
 public class OssService {
 
     private final FileStorageService fileStorageService;
+    private final OssRuntimeSettings runtime;
+    public OssService(FileStorageService storage) { this(storage,null); }
+    public OssService(FileStorageService storage,OssRuntimeSettings runtime) { this.fileStorageService=storage;this.runtime=runtime; }
 
     /** 上传文件，null 或空字符串使用默认平台 */
     public FileInfo upload(MultipartFile file, String platform) {
@@ -66,11 +68,19 @@ public class OssService {
     /** 流式下载，文件名由调用方提供（调用方已持有记录时避免再按 url 回查一次） */
     public void download(String url, String originalFilename, jakarta.servlet.http.HttpServletResponse response) {
         try {
-            response.setContentType("application/octet-stream");
-            response.setHeader("Content-Disposition",
-                    "attachment; filename=" + java.net.URLEncoder.encode(originalFilename, java.nio.charset.StandardCharsets.UTF_8));
-            fileStorageService.download(url).inputStream(in -> {
+            FileInfo fileInfo = getFileInfo(url);
+            if (fileInfo == null) {
+                throw new IllegalStateException("文件记录不存在");
+            }
+            fileStorageService.download(fileInfo).inputStream(in -> {
                 try {
+                    // 对象已打开后才写响应头；对象不存在时可返回正常的 JSON 错误状态。
+                    response.setContentType("application/octet-stream");
+                    response.setHeader("Content-Disposition",
+                            "attachment; filename=" + java.net.URLEncoder.encode(originalFilename, java.nio.charset.StandardCharsets.UTF_8));
+                    if (fileInfo.getSize() != null) {
+                        response.setContentLengthLong(fileInfo.getSize());
+                    }
                     java.io.OutputStream out = response.getOutputStream();
                     IoUtil.copy(in, out);
                     out.flush();
@@ -85,20 +95,34 @@ public class OssService {
     }
 
     public boolean delete(String url) {
-        return fileStorageService.delete(url);
+        FileInfo fileInfo = getFileInfo(url);
+        if (fileInfo == null || !fileStorageService.exists(fileInfo)) {
+            return false;
+        }
+        // 框架 delete(url) 会在 MinIO 接受删除请求后立即删记录；MinIO 对
+        // 不存在的对象也返回成功。先删并验证对象，再删数据库记录。
+        if (!fileStorageService.getFileStorageVerify(fileInfo).delete(fileInfo)
+                || fileStorageService.exists(fileInfo)) {
+            return false;
+        }
+        return fileStorageService.getFileRecorder().delete(url);
     }
 
     public boolean exists(String url) {
-        return fileStorageService.exists(url);
+        FileInfo info=getFileInfo(url);
+        return info!=null && fileStorageService.exists(info);
     }
 
     public FileInfo getFileInfo(String url) {
-        return fileStorageService.getFileInfoByUrl(url);
+        FileInfo info=fileStorageService.getFileInfoByUrl(url);
+        if(info!=null && runtime!=null) runtime.prepareRead(info);
+        return info;
     }
 
     /** 构建上传预处理：只有非空 platform 才设置，null 则使用默认平台 */
     private UploadPretreatment buildUpload(UploadPretreatment up, String platform) {
         up.setPath(buildPath());
+        if(runtime!=null) platform=runtime.uploadPlatform(platform);
         if (StrUtil.isNotBlank(platform)) {
             up.setPlatform(platform);
         }

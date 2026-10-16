@@ -71,9 +71,9 @@ public class SysRoleController {
     @PostMapping("/add")
     @PreAuthorize("hasAuthority('system:role:add')")
     @Log(title = "角色管理", businessType = BusinessType.INSERT)
-    public Result<Long> addRole(@Validated @RequestBody SysRoleAddDTO addDTO) {
+    public Result<String> addRole(@Validated @RequestBody SysRoleAddDTO addDTO) {
         Long roleId = sysRoleService.addRole(addDTO);
-        return Result.ok(roleId);
+        return Result.ok(roleId.toString());
     }
 
     /**
@@ -128,9 +128,9 @@ public class SysRoleController {
      */
     @GetMapping("/menuIds/{roleId}")
     @PreAuthorize("hasAuthority('system:role:query')")
-    public Result<List<Long>> getMenuIdsByRoleId(@PathVariable("roleId") Long roleId) {
+    public Result<List<String>> getMenuIdsByRoleId(@PathVariable("roleId") Long roleId) {
         List<Long> menuIds = sysRoleMenuService.getMenuIdsByRoleId(roleId);
-        return Result.ok(menuIds);
+        return Result.ok(menuIds.stream().map(String::valueOf).toList());
     }
 
     /**

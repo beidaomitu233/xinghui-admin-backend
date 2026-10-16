@@ -18,7 +18,7 @@ public class OssAutoConfig {
 
     @Bean
     @ConditionalOnMissingBean(OssService.class)
-    public OssService ossService(FileStorageService fileStorageService) {
-        return new OssService(fileStorageService);
+    public OssService ossService(FileStorageService fileStorageService,OssRuntimeSettings runtime) {
+        return new OssService(fileStorageService,runtime);
     }
 }

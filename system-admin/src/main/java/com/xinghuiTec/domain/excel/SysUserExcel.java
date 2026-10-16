@@ -6,8 +6,7 @@ import lombok.Data;
 import java.io.Serializable;
 
 /**
- * 用户Excel导入导出数据模型
- * 用于映射Excel文件中的用户数据
+ * 用户 Excel 导出模型。
  *
  * @author beidoa23
  * @since 2025-12-31

@@ -25,7 +25,7 @@ public class SysTenantPackageController {
      * 查询套餐列表
      */
     @GetMapping("/list")
-    @PreAuthorize("hasAuthority('system:tenantPackage:list')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('system:tenantPackage:list')")
     public Result<Page<SysTenantPackage>> list(@RequestParam(defaultValue = "1") Integer pageNum,
                                                @RequestParam(defaultValue = "10") Integer pageSize) {
         Page<SysTenantPackage> page = packageService.page(new Page<>(pageNum, pageSize),
@@ -37,7 +37,7 @@ public class SysTenantPackageController {
      * 查询套餐详情
      */
     @GetMapping("/{packageId}")
-    @PreAuthorize("hasAuthority('system:tenantPackage:query')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('system:tenantPackage:query')")
     public Result<SysTenantPackage> getInfo(@PathVariable Long packageId) {
         return Result.ok(packageService.getById(packageId));
     }
@@ -46,7 +46,7 @@ public class SysTenantPackageController {
      * 新增套餐
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('system:tenantPackage:add')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('system:tenantPackage:add')")
     public Result<Void> add(@RequestBody SysTenantPackage tenantPackage) {
         packageService.save(tenantPackage);
         return Result.ok();
@@ -56,7 +56,7 @@ public class SysTenantPackageController {
      * 修改套餐
      */
     @PutMapping
-    @PreAuthorize("hasAuthority('system:tenantPackage:edit')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('system:tenantPackage:edit')")
     public Result<Void> edit(@RequestBody SysTenantPackage tenantPackage) {
         packageService.updateById(tenantPackage);
         return Result.ok();
@@ -66,7 +66,7 @@ public class SysTenantPackageController {
      * 删除套餐
      */
     @DeleteMapping("/{packageIds}")
-    @PreAuthorize("hasAuthority('system:tenantPackage:remove')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('system:tenantPackage:remove')")
     public Result<Void> remove(@PathVariable Long[] packageIds) {
         for (Long id : packageIds) {
             packageService.removeById(id);

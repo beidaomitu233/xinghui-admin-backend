@@ -7,6 +7,8 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 菜单权限表(SysMenu)表实体类
@@ -22,6 +24,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 @TableName("sys_menu")
 public class SysMenu extends BaseEntity {
     @TableId
+    @JsonSerialize(using = ToStringSerializer.class)
     // 菜单ID
     private Long menuId;
 

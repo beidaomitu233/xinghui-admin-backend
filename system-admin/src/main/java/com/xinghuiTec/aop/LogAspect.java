@@ -1,14 +1,13 @@
 package com.xinghuiTec.aop;
 
-import com.alibaba.fastjson2.JSON;
 import com.xinghuiTec.annotation.Log;
 import com.xinghuiTec.domain.entity.SysOperLog;
 import com.xinghuiTec.domain.entity.SysUser;
 import com.xinghuiTec.service.SysOperLogService;
 import com.xinghuiTec.utils.IpUtils;
 import com.xinghuiTec.utils.SecurityUtils;
+import com.xinghuiTec.utils.Result;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -19,14 +18,10 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
 import java.lang.reflect.Method;
-import java.util.Arrays;
 import java.util.Date;
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 操作日志记录切面
@@ -73,24 +68,14 @@ public class LogAspect {
             // 执行目标方法
             result = joinPoint.proceed();
 
-            // 记录响应结果（截取前 2000 字符）
-            if (result != null) {
-                String jsonResult = JSON.toJSONString(result);
-                if (jsonResult.length() > 2000) {
-                    jsonResult = jsonResult.substring(0, 2000);
-                }
-                operLog.setJsonResult(jsonResult);
-            }
+            // 仅保留非敏感结果码，不持久化可能含令牌的响应数据。
+            operLog.setJsonResult(result instanceof Result<?> response
+                    ? "code=" + response.getCode() : "completed");
 
         } catch (Exception e) {
             // 记录异常信息
             operLog.setStatus(1); // 操作失败
-            String errorMsg = e.getMessage();
-            if (errorMsg != null && errorMsg.length() > 2000) {
-                errorMsg = errorMsg.substring(0, 2000);
-            }
-            operLog.setErrorMsg(errorMsg);
-            log.error("操作日志记录异常", e);
+            operLog.setErrorMsg("exception=" + e.getClass().getSimpleName());
             throw e; // 继续抛出异常，不影响业务流程
 
         } finally {
@@ -122,8 +107,8 @@ public class LogAspect {
                 if (requestAttributes != null) {
                     HttpServletRequest request = requestAttributes.getRequest();
 
-                    // 设置请求 URL
-                    operLog.setOperUrl(request.getRequestURI());
+                    // URI 可能包含令牌或重置凭据；方法名已用于定位操作。
+                    operLog.setOperUrl("[omitted]");
 
                     // 设置请求方式
                     operLog.setRequestMethod(request.getMethod());
@@ -131,14 +116,7 @@ public class LogAspect {
                     // 设置 IP 地址
                     operLog.setOperIp(IpUtils.getIpAddr(request));
 
-                    // 设置请求参数（过滤掉文件、Request、Response 等对象）
-                    Object[] args = joinPoint.getArgs();
-                    List<Object> filteredArgs = filterArgs(args);
-                    String operParam = JSON.toJSONString(filteredArgs);
-                    if (operParam.length() > 2000) {
-                        operParam = operParam.substring(0, 2000);
-                    }
-                    operLog.setOperParam(operParam);
+                    operLog.setOperParam("[omitted]");
                 }
 
                 // 获取操作人员
@@ -148,7 +126,7 @@ public class LogAspect {
                         operLog.setOperName(user.getUsername());
                     }
                 } catch (Exception e) {
-                    log.warn("获取当前用户信息失败，可能未登录: {}", e.getMessage());
+                    log.warn("获取当前用户信息失败，可能未登录: {}", e.getClass().getSimpleName());
                     operLog.setOperName("anonymous");
                 }
 
@@ -156,7 +134,7 @@ public class LogAspect {
                 sysOperLogService.saveOperLog(operLog);
 
             } catch (Exception e) {
-                log.error("操作日志保存失败", e);
+                log.error("操作日志保存失败: {}", e.getClass().getSimpleName());
                 // 日志保存失败不影响业务流程
             }
         }
@@ -164,17 +142,4 @@ public class LogAspect {
         return result;
     }
 
-    /**
-     * 过滤参数，移除文件、Request、Response 等对象
-     * 
-     * @param args 原始参数数组
-     * @return 过滤后的参数列表
-     */
-    private List<Object> filterArgs(Object[] args) {
-        return Arrays.stream(args)
-                .filter(arg -> !(arg instanceof MultipartFile)
-                        && !(arg instanceof HttpServletRequest)
-                        && !(arg instanceof HttpServletResponse))
-                .collect(Collectors.toList());
-    }
 }

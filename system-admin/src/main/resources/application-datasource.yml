@@ -70,8 +70,8 @@ spring:
         # 具体的 Filter 配置细节
         filter:
           stat:
-            enabled: true
-            log-slow-sql: true
+            enabled: ${DRUID_ENABLED:false}
+            log-slow-sql: false
             slow-sql-millis: 1000
             merge-sql: true
           wall:
@@ -85,13 +85,13 @@ spring:
     # ===================================================================
     druid:
       stat-view-servlet:
-        enabled: true
+        enabled: ${DRUID_ENABLED:false}
         url-pattern: /druid/*
         # 默认仅本机可访问（原为空=全网段开放，配合仓库公开的默认口令构成暴露面）；
         # 需要远程访问时通过 DRUID_ALLOW 显式放开
         allow: ${DRUID_ALLOW:127.0.0.1}
-        login-username: ${DRUID_USERNAME:xinghuiadmin}
-        login-password: ${DRUID_PASSWORD:xinghuiadmin23}
+        login-username: ${DRUID_USERNAME:}
+        login-password: ${DRUID_PASSWORD:}
       
       web-stat-filter:
         enabled: true
