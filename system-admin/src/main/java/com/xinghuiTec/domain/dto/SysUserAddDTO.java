@@ -25,7 +25,6 @@ public class SysUserAddDTO {
     private String username;
 
     /** 密码（必填） */
-    @NotBlank(message = "密码不能为空")
     @Size(min = 6, max = 20, message = "密码长度必须在6-20个字符之间")
     private String password;
 
@@ -39,6 +38,7 @@ public class SysUserAddDTO {
     private String email;
 
     /** 手机号码 */
+    @NotBlank(message = "手机号码不能为空")
     @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号码格式不正确")
     private String mobile;
 
@@ -47,6 +47,7 @@ public class SysUserAddDTO {
     private String avatar;
 
     /** 帐号状态（1正常 0停用），默认为1 */
+    @NotNull(message = "状态不能为空")
     @Min(value = 0, message = "状态值只能是0或1")
     @Max(value = 1, message = "状态值只能是0或1")
     private Integer status = 1;

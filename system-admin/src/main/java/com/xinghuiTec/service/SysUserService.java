@@ -8,10 +8,9 @@ import com.xinghuiTec.domain.dto.SysUserAddDTO;
 import com.xinghuiTec.domain.dto.SysUserQueryDTO;
 import com.xinghuiTec.domain.entity.SysUser;
 import com.xinghuiTec.domain.vo.UserInfoVO;
-import com.xinghuiTec.utils.Result;
+import com.xinghuiTec.domain.vo.UserImportSummary;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.multipart.MultipartFile;
-import java.util.List;
 
 /**
  * 用户信息表(SysUser)表服务接口层
@@ -44,14 +43,6 @@ public interface SysUserService extends IService<SysUser> {
     Long addUser(SysUserAddDTO sysUserAddDTO);
 
     /**
-     * 批量新增用户
-     *
-     * @param sysUserAddDTOList 用户DTO列表
-     * @return 成功导入的条数
-     */
-    int batchAddUser(List<SysUserAddDTO> sysUserAddDTOList);
-
-    /**
      * 修改用户（包含角色更新）
      * 该方法会同时处理：
      * 1. 更新用户基本信息
@@ -71,13 +62,8 @@ public interface SysUserService extends IService<SysUser> {
      */
     void deleteUser(Long userId);
 
-    /**
-     * 重置用户密码
-     * 
-     * @param userId      用户ID
-     * @param newPassword 新密码
-     */
-    void resetPassword(Long userId, String newPassword);
+    /** Generate and set a unique, one-time temporary password. */
+    String resetPassword(Long userId);
 
     /**
      * 下载用户导入模板
@@ -90,9 +76,9 @@ public interface SysUserService extends IService<SysUser> {
      * 批量导入用户
      * 
      * @param file Excel文件
-     * @return 导入结果信息
+     * @return 可定位到工作表行的导入结果
      */
-    String importUsers(MultipartFile file);
+    UserImportSummary importUsers(MultipartFile file);
 
     /**
      * 批量导出用户

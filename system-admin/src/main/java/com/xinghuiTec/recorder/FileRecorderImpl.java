@@ -5,6 +5,8 @@ import com.xinghuiTec.domain.entity.SysFilePart;
 import com.xinghuiTec.mapper.SysFilePartMapper;
 import com.xinghuiTec.oss.entity.SysOss;
 import com.xinghuiTec.oss.service.ISysOssService;
+import com.xinghuiTec.utils.SecurityUtils;
+import com.xinghuiTec.utils.TenantHelper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.x.file.storage.core.FileInfo;
@@ -34,6 +36,12 @@ public class FileRecorderImpl implements FileRecorder {
     @Override
     public boolean save(FileInfo fileInfo) {
         SysOss sysOss = toEntity(fileInfo);
+        if (SecurityUtils.getUserId() != null) {
+            sysOss.setCreateBy(String.valueOf(SecurityUtils.getUserId()));
+        }
+        if (TenantHelper.isEnable()) {
+            sysOss.setTenantId(TenantHelper.getTenantId());
+        }
         boolean result = sysOssService.save(sysOss);
         if (result && sysOss.getOssId() != null) {
             // 将生成的自增主键反写回 FileInfo，解决 Issue #2
@@ -120,6 +128,19 @@ public class FileRecorderImpl implements FileRecorder {
      */
     private FileInfo toFileInfo(SysOss sysOss) {
         FileInfo fileInfo = new FileInfo();
+        // 当前 MinIO 记录的 url 是桶内完整对象键：basePath + path + filename。
+        // 旧表未保存 basePath/path，必须从对象键恢复，否则下载只找 filename，
+        // 删除会对错误对象键返回成功并误删数据库记录。
+        String url = sysOss.getUrl();
+        String filename = sysOss.getFileName();
+        if (url == null || filename == null || filename.isBlank()
+                || filename.contains("/") || filename.contains("\\")
+                || url.contains("://") || url.contains("..")
+                || !url.endsWith("/" + filename)) {
+            throw new IllegalStateException("文件对象路径无法恢复");
+        }
+        fileInfo.setBasePath("");
+        fileInfo.setPath(url.substring(0, url.length() - filename.length()));
         fileInfo.setUrl(sysOss.getUrl());
         fileInfo.setSize(sysOss.getSize());
         fileInfo.setFilename(sysOss.getFileName());

@@ -6,6 +6,7 @@ import cn.hutool.jwt.JWTUtil;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static com.xinghuiTec.constants.JwtConstants.TOKEN_EXPIRATION;
 import static com.xinghuiTec.constants.JwtConstants.TOKEN_SIGN_KEY;
@@ -28,6 +29,7 @@ public class JwtUtil {
             private static final long serialVersionUID = 1L;
             {
                 put("userId", userId);
+                put("jti", UUID.randomUUID().toString());
                 put("expire_time", System.currentTimeMillis() + TOKEN_EXPIRATION);
                 if (tenantId != null && !tenantId.isBlank()) {
                     put("tenantId", tenantId);

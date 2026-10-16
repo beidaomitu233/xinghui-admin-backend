@@ -26,7 +26,7 @@ public class SysTenantController {
      * 查询租户列表
      */
     @GetMapping("/list")
-    @PreAuthorize("hasAuthority('system:tenant:list')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('system:tenant:list')")
     public Result<Page<SysTenant>> list(@RequestParam(defaultValue = "1") Integer pageNum,
                                         @RequestParam(defaultValue = "10") Integer pageSize) {
         Page<SysTenant> page = TenantHelper.ignore(() ->
@@ -40,7 +40,7 @@ public class SysTenantController {
      * 根据ID查询租户详情
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('system:tenant:query')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('system:tenant:query')")
     public Result<SysTenant> getInfo(@PathVariable Long id) {
         return TenantHelper.ignore(() -> Result.ok(tenantService.getById(id)));
     }
@@ -49,7 +49,7 @@ public class SysTenantController {
      * 新增租户
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('system:tenant:add')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('system:tenant:add')")
     public Result<Void> add(@RequestBody SysTenant tenant) {
         TenantHelper.ignore(() -> tenantService.save(tenant));
         return Result.ok();
@@ -59,7 +59,7 @@ public class SysTenantController {
      * 修改租户
      */
     @PutMapping
-    @PreAuthorize("hasAuthority('system:tenant:edit')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('system:tenant:edit')")
     public Result<Void> edit(@RequestBody SysTenant tenant) {
         TenantHelper.ignore(() -> tenantService.updateById(tenant));
         return Result.ok();
@@ -69,7 +69,7 @@ public class SysTenantController {
      * 删除租户
      */
     @DeleteMapping("/{ids}")
-    @PreAuthorize("hasAuthority('system:tenant:remove')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('system:tenant:remove')")
     public Result<Void> remove(@PathVariable Long[] ids) {
         TenantHelper.ignore(() -> {
             for (Long id : ids) {

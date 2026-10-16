@@ -13,6 +13,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.BindException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -230,6 +231,11 @@ public class GlobalExceptionHandler {
     public Result<Void> handleDisabledException(DisabledException e) {
         log.warn("停用账号尝试登录: {}", e.getMessage());
         return Result.fail("账号已被停用，请联系管理员");
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public Result<Void> handleBadCredentialsException(BadCredentialsException e) {
+        return Result.fail(ResultCodeEnum.ADMIN_ACCOUNT_ERROR.getCode(), "手机号或密码错误");
     }
 
     // ==================== 数据库异常 ====================

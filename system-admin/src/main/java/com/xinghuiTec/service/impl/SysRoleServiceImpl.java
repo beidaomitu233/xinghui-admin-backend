@@ -211,6 +211,9 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateRoleStatus(Long roleId, Integer status) {
+        if (status == null || (status != 0 && status != 1)) {
+            throw new IllegalArgumentException("角色状态只能是0或1");
+        }
         SysRole role = this.getById(roleId);
         if (role == null) {
             throw new RuntimeException("角色不存在");
@@ -243,6 +246,7 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
             redisCacheUtils.deleteObject(routerCacheKey);
             String userInfoCacheKey = com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId;
             redisCacheUtils.deleteObject(userInfoCacheKey);
+            redisCacheUtils.deleteObject(com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX + userId);
         }
 
         log.info("已清除 {} 个用户的路由缓存", userRoles.size());

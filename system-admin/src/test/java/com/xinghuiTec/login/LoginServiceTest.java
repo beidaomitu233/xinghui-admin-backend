@@ -152,6 +152,13 @@ public class LoginServiceTest {
         LoginUser cached = redisCacheUtils.getCacheObject(RedisConstants.ADMIN_LOGIN_PREFIX + userId);
         assertNotNull(cached);
         assertEquals(TEST_PHONE, cached.getUser().getMobile());
+        assertEquals(jwt, cached.getToken());
+
+        // 同一用户再次登录会轮换令牌，旧 JWT 不应被会话过滤器接受。
+        String nextJwt = loginService.login(dto);
+        assertNotEquals(jwt, nextJwt);
+        LoginUser rotated = redisCacheUtils.getCacheObject(RedisConstants.ADMIN_LOGIN_PREFIX + userId);
+        assertEquals(nextJwt, rotated.getToken());
 
         System.out.println("✓ 完整登录通过, userId=" + userId + ", tenantId=" + tenantId);
     }

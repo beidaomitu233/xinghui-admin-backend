@@ -65,8 +65,10 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // 配置授权规则 指定user/login路径.允许匿名访问(未登录可访问已登陆不能访问). 其他路径需要身份认证
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpConstants.PATH_LOGIN, HttpConstants.PATH_ROOT, HttpConstants.PATH_CAPTCHA,
-                                "/druid/**")
+                        // Druid's console must not be reachable through the anonymous allowlist.
+                        .requestMatchers("/druid", "/druid/**").denyAll()
+                        .requestMatchers("/auth/wechat/capability", "/auth/wechat/authorize", "/auth/wechat/callback").permitAll()
+                        .requestMatchers(HttpConstants.PATH_LOGIN, HttpConstants.PATH_ROOT, HttpConstants.PATH_CAPTCHA)
                         .anonymous()
                         .anyRequest().authenticated())
                 // 配置异常处理

@@ -7,6 +7,11 @@
         <result property="jobName" column="job_name" />
         <result property="jobGroup" column="job_group" />
         <result property="invokeTarget" column="invoke_target" />
+        <result property="handlerKey" column="handler_key" />
+        <result property="handlerParams" column="handler_params" />
+        <result property="timeZone" column="time_zone" />
+        <result property="nextFireTime" column="next_fire_time" />
+        <result property="revision" column="revision" />
         <result property="cronExpression" column="cron_expression" />
         <result property="misfirePolicy" column="misfire_policy" />
         <result property="concurrent" column="concurrent" />

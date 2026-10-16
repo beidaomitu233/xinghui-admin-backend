@@ -31,8 +31,16 @@ import java.util.Objects;
  * @Version 1.0
  */
 @Component
-// OncePerRequestFilter 每次HTTP请求只会被调用一次
+// OncePerRequestFilter 在每次需要认证的派发中执行一次。
 public class LoginFilter extends OncePerRequestFilter {
+
+    /** Stateless security has no saved context on MVC's async completion dispatch (including SSE).
+     * Revalidate the original JWT/current session there before AuthorizationFilter runs; never
+     * exempt async requests from authorization or copy authentication into a global/thread context. */
+    @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        return false;
+    }
 
     /**
      * 自定义Redis缓存工具类，用于从Redis中获取缓存对象
@@ -41,7 +49,7 @@ public class LoginFilter extends OncePerRequestFilter {
     private RedisCacheUtils redisCacheUtils;
 
     /**
-     * 过滤器核心方法，每次HTTP请求只会被调用一次
+     * 过滤器核心方法，在REQUEST及ASYNC派发中分别认证一次
      * 主要功能：
      * 1. 从请求头中获取Authorization令牌
      * 2. 如果没有令牌则放行，由Spring Security的其他过滤器处理
@@ -103,7 +111,7 @@ public class LoginFilter extends OncePerRequestFilter {
         }
 
         // 缓存不存在视为登录凭证已过期，按未认证处理
-        if (Objects.isNull(loginUser)) {
+        if (Objects.isNull(loginUser) || !authorization.equals(loginUser.getToken())) {
             SecurityContextHolder.clearContext();
             filterChain.doFilter(request, response);
             return;

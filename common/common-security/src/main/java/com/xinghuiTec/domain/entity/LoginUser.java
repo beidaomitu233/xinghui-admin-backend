@@ -30,6 +30,8 @@ public class LoginUser implements UserDetails {
      * 租户ID
      */
     private String tenantId;
+    /** 当前有效令牌；同一账号再次登录时旧令牌失效。 */
+    private String token;
 
     public LoginUser(SysUser user, List<String> validPermissions) {
         this.user = user;

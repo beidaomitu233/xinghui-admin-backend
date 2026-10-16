@@ -8,6 +8,7 @@ import com.xinghuiTec.domain.entity.SysUser;
 import com.xinghuiTec.domain.vo.SysMenuVO;
 import com.xinghuiTec.domain.vo.UserDetailVO;
 import com.xinghuiTec.domain.vo.UserInfoVO;
+import com.xinghuiTec.domain.vo.UserImportSummary;
 import com.xinghuiTec.emues.BusinessType;
 import com.xinghuiTec.service.LoginService;
 import com.xinghuiTec.service.SysUserService;
@@ -24,6 +25,10 @@ import com.xinghuiTec.ratelimiter.enums.LimitType;
 import com.xinghuiTec.idempotent.annotation.RepeatSubmit;
 
 import java.util.List;
+import java.util.Map;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.xinghuiTec.domain.entity.SysUserRole;
+import com.xinghuiTec.service.SysUserRoleService;
 
 import static com.xinghuiTec.emues.ResultCodeEnum.ADMIN_USER_NOT_EXIST_ERROR;
 
@@ -40,6 +45,8 @@ import static com.xinghuiTec.emues.ResultCodeEnum.ADMIN_USER_NOT_EXIST_ERROR;
 public class SysUserController {
     @Resource
     private SysUserService sysUserService;
+    @Resource
+    private SysUserRoleService sysUserRoleService;
 
     @Resource
     private LoginService loginService;
@@ -56,6 +63,18 @@ public class SysUserController {
     public Result<Page<SysUser>> getUserList(@Validated SysUserQueryDTO sysUserQueryDTO) {
         Page<SysUser> userListPage = sysUserService.getUserList(sysUserQueryDTO);
         return Result.ok(userListPage);
+    }
+
+    @GetMapping("/{userId}")
+    @PreAuthorize("hasAuthority('system:user:query')")
+    public Result<Map<String, Object>> getUser(@PathVariable Long userId) {
+        SysUser user = sysUserService.getUserInfo(userId);
+        if (user == null) {
+            return Result.fail(ADMIN_USER_NOT_EXIST_ERROR);
+        }
+        List<String> roleIds = sysUserRoleService.list(new LambdaQueryWrapper<SysUserRole>()
+                .eq(SysUserRole::getUserId, userId)).stream().map(role -> role.getRoleId().toString()).toList();
+        return Result.ok(Map.of("user", user, "roleIds", roleIds));
     }
 
     /**
@@ -120,9 +139,12 @@ public class SysUserController {
     @PostMapping("/add")
     @PreAuthorize("hasAuthority('system:user:add')")
     @Log(title = "用户管理", businessType = BusinessType.INSERT)
-    public Result<Long> addUser(@Validated @RequestBody SysUserAddDTO sysUserAddDTO) {
+    public Result<String> addUser(@Validated @RequestBody SysUserAddDTO sysUserAddDTO) {
+        if (sysUserAddDTO.getPassword() == null || sysUserAddDTO.getPassword().isBlank()) {
+            throw new IllegalArgumentException("密码不能为空");
+        }
         Long userId = sysUserService.addUser(sysUserAddDTO);
-        return Result.ok(userId);
+        return Result.ok(userId.toString());
     }
 
     /**
@@ -158,9 +180,7 @@ public class SysUserController {
     }
 
     /**
-     * 重置密码
-     * 该接口用于重置指定用户的密码为默认密码
-     * 默认密码是 123456
+     * 为用户生成独立的一次性临时密码
      * 需要具备'system:user:edit'权限才能访问
      *
      * @param userId 用户ID
@@ -169,9 +189,8 @@ public class SysUserController {
     @PostMapping("/resetPwd")
     @PreAuthorize("hasAuthority('system:user:edit')")
     @Log(title = "用户管理", businessType = BusinessType.UPDATE)
-    public Result<Void> resetPassword(@RequestParam("userId") Long userId) {
-        sysUserService.resetPassword(userId, "123456");
-        return Result.ok();
+    public Result<String> resetPassword(@RequestParam("userId") Long userId) {
+        return Result.ok(sysUserService.resetPassword(userId));
     }
 
     /**
@@ -193,16 +212,15 @@ public class SysUserController {
      * 需要具备'system:user:add'权限才能访问
      *
      * @param file 上传的 Excel 文件
-     * @return Result<String> 返回导入结果信息
+     * @return Result<UserImportSummary> 返回可定位到工作表行的导入结果
      */
     @PostMapping("/import")
     @PreAuthorize("hasAuthority('system:user:add')")
     @Log(title = "用户管理", businessType = BusinessType.IMPORT)
     @RateLimiter(time = 60, count = 3, limitType = LimitType.IP)
     @RepeatSubmit(interval = 5000)
-    public Result<String> importUsers(@RequestPart("file") MultipartFile file) {
-        String result = sysUserService.importUsers(file);
-        return Result.ok(result);
+    public Result<UserImportSummary> importUsers(@RequestPart("file") MultipartFile file) {
+        return Result.ok(sysUserService.importUsers(file));
     }
 
     /**
