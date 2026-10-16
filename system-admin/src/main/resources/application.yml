@@ -9,9 +9,9 @@ server:
 # Flyway 与 dynamic-datasource 主库共同引用 ${db.*}，避免两处双写产生参数漂移
 # -------------------------------------------------------------------
 db:
-  url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:xinghuiadmin}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&allowMultiQueries=true
-  username: ${DB_USERNAME:xinghuiadmin}
-  password: ${DB_PASSWORD:xinghuiadmin23}
+  url: ${DB_URL}
+  username: ${DB_USERNAME}
+  password: ${DB_PASSWORD}
 
 # -------------------------------------------------------------------
 # 3. Spring 核心配置
@@ -24,7 +24,7 @@ spring:
   # Flyway 数据库版本化迁移
   # 注意: 项目使用 dynamic-datasource，Flyway 无法从 spring.datasource 自动推导连接，
   # 必须显式指定连接信息（引用上方 db.* 单一来源）。
-  # baseline-version=2: 存量库（已有表结构+种子数据）首次接入时自动打基线跳过 V1/V2；
+  # baseline-version=2 仅为经审查的存量库手动基线保留；默认关闭自动 baseline。
   # 全新空库则完整执行 V1(表结构) + V2(种子数据)；之后的增量脚本对两者都会执行。
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
@@ -32,10 +32,11 @@ spring:
     user: ${db.username}
     password: ${db.password}
     locations: classpath:db/migration
-    baseline-on-migrate: true
+    baseline-on-migrate: false
     baseline-version: 2
     validate-on-migrate: true
     out-of-order: false
+    ignore-migration-patterns: ['']
     clean-disabled: true
     connect-retries: 3
 
@@ -43,8 +44,9 @@ spring:
   data:
     redis:
       host: 127.0.0.1
-      port: 6379
-      database: 0
+      port: ${REDIS_PORT}
+      database: ${REDIS_DATABASE}
+      password: ${REDIS_PASSWORD}
 
   # Servlet 文件上传配置（必须位于 spring: 节点下才生效）
   servlet:
@@ -68,7 +70,7 @@ redisson:
 logging:
   level:
     root: info
-    com.xinghuiTec.mapper: debug
+    com.xinghuiTec.mapper: warn
 
 # -------------------------------------------------------------------
 # 4. 用户配置
@@ -129,37 +131,17 @@ dromara:
     default-platform: minio-1
     thumbnail-suffix: ".min.jpg"
 
-    # ========== MinIO 存储（默认启用） ==========
+    # ========== MinIO 存储（默认关闭；启用时完整覆盖本列表） ==========
     minio:
       - platform: minio-1
-        enable-storage: true
-        access-key: ${MINIO_ACCESS_KEY:}
-        secret-key: ${MINIO_SECRET_KEY:}
-        end-point: ${MINIO_ENDPOINT:http://192.168.2.101:9000}
-        bucket-name: xinghui-admin
-        base-path: upload/
+        enable-storage: ${OSS_ENABLED:false}
+        access-key: ${OSS_ACCESS_KEY:}
+        secret-key: ${OSS_SECRET_KEY:}
+        end-point: ${OSS_ENDPOINT:}
+        bucket-name: ${OSS_BUCKET:}
+        base-path: ${OSS_PREFIX:}
 
-    # ========== 阿里云 OSS（按需启用） ==========
-    # aliyun-oss:
-    #   - platform: aliyun-oss-1
-    #     enable-storage: false
-    #     access-key: your_access_key
-    #     secret-key: your_secret_key
-    #     end-point: oss-cn-beijing.aliyuncs.com
-    #     bucket-name: xinghui
-    #     domain: https://xinghui.oss-cn-beijing.aliyuncs.com/
-    #     base-path: upload/
-
-    # ========== 腾讯云 COS（按需启用） ==========
-    # tencent-cos:
-    #   - platform: tencent-cos-1
-    #     enable-storage: false
-    #     access-key: your_secret_id
-    #     secret-key: your_secret_key
-    #     end-point: cos.ap-beijing.myqcloud.com
-    #     bucket-name: xinghui-1234567890
-    #     domain: https://xinghui-1234567890.cos.ap-beijing.myqcloud.com/
-    #     base-path: upload/
+    # 其他存储平台按供应商文档在私有外部配置中完整声明。
 
 # -------------------------------------------------------------------
 # 9. SMS 短信配置（sms4j 多厂商）
@@ -173,9 +155,9 @@ sms:
     # 阿里云短信
     alibaba:
       supplier: alibaba
-      access-key-id: ${SMS_ALIBABA_ACCESS_KEY:your_key}
-      access-key-secret: ${SMS_ALIBABA_SECRET_KEY:your_secret}
-      signature: 兴辉科技
+      access-key-id: ${SMS_ALIBABA_ACCESS_KEY:}
+      access-key-secret: ${SMS_ALIBABA_SECRET_KEY:}
+      signature: ${SMS_SIGNATURE:}
       sdk-app-id: ${SMS_ALIBABA_APP_ID:}
     # 腾讯云短信
     # tencent:
@@ -187,15 +169,15 @@ sms:
     #   template-id: your_template_id
 
 # -------------------------------------------------------------------
-# 10. Mail 邮件配置（163邮箱）
+# 10. Mail 邮件配置（默认关闭）
 # -------------------------------------------------------------------
 mail:
-  enabled: true
-  host: ${MAIL_HOST:smtp.163.com}
+  enabled: ${MAIL_ENABLED:false}
+  host: ${MAIL_HOST:}
   port: ${MAIL_PORT:465}
   auth: true
-  from: ${MAIL_FROM:XingHuiZhiChuang@163.com}
-  user: ${MAIL_USER:XingHuiZhiChuang@163.com}
+  from: ${MAIL_FROM:}
+  user: ${MAIL_USER:}
   pass: ${MAIL_PASS:}
   starttlsEnable: true
   sslEnable: true
@@ -203,15 +185,8 @@ mail:
 # -------------------------------------------------------------------
 # 11. JustAuth 三方登录配置
 # -------------------------------------------------------------------
-justauth:
-  type:
-    # Gitee 登录
-    gitee:
-      client-id: your_client_id
-      client-secret: your_client_secret
-      redirect-uri: http://localhost:7799/auth/social/callback?source=gitee
-    # GitHub 登录
-    # github:
-    #   client-id: your_client_id
-    #   client-secret: your_client_secret
-    #   redirect-uri: http://localhost:7799/auth/social/callback?source=github
+# 第三方登录仅在私有外部配置中显式声明应用信息；默认不配置。
+
+# NTF-01: exact HTTPS host allowlist for optional template links; empty means external links are denied.
+notification:
+  allowed-link-hosts: ${NOTIFICATION_ALLOWED_LINK_HOSTS:}

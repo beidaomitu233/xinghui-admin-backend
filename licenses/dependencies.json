@@ -1,0 +1,3598 @@
+{
+  "scope": "Resolved packaged runtime and executed test classpath; POM license declarations, not an MIT grant for dependencies",
+  "dependencies": [
+    {
+      "groupId": "ch.qos.logback",
+      "artifactId": "logback-classic",
+      "version": "1.5.12",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Public License - v 1.0",
+          "url": "http://www.eclipse.org/legal/epl-v10.html",
+          "distribution": ""
+        },
+        {
+          "name": "GNU Lesser General Public License",
+          "url": "http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "ch.qos.logback",
+      "artifactId": "logback-core",
+      "version": "1.5.12",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Public License - v 1.0",
+          "url": "http://www.eclipse.org/legal/epl-v10.html",
+          "distribution": ""
+        },
+        {
+          "name": "GNU Lesser General Public License",
+          "url": "http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "cn.hutool",
+      "artifactId": "hutool-all",
+      "version": "5.8.38",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Mulan Permissive Software License，Version 2",
+          "url": "https://license.coscl.org.cn/MulanPSL2",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "cn.hutool",
+      "artifactId": "hutool-core",
+      "version": "5.8.28",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Mulan Permissive Software License，Version 2",
+          "url": "https://license.coscl.org.cn/MulanPSL2",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "cn.hutool",
+      "artifactId": "hutool-crypto",
+      "version": "5.8.28",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Mulan Permissive Software License，Version 2",
+          "url": "https://license.coscl.org.cn/MulanPSL2",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "cn.hutool",
+      "artifactId": "hutool-http",
+      "version": "5.8.28",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Mulan Permissive Software License，Version 2",
+          "url": "https://license.coscl.org.cn/MulanPSL2",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "cn.hutool",
+      "artifactId": "hutool-json",
+      "version": "5.8.28",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Mulan Permissive Software License，Version 2",
+          "url": "https://license.coscl.org.cn/MulanPSL2",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "cn.idev.excel",
+      "artifactId": "fastexcel",
+      "version": "1.3.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "cn.idev.excel",
+      "artifactId": "fastexcel-support",
+      "version": "0.0.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.alibaba",
+      "artifactId": "druid",
+      "version": "1.2.25",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.alibaba",
+      "artifactId": "druid-spring-boot-3-starter",
+      "version": "1.2.25",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.alibaba",
+      "artifactId": "fastjson",
+      "version": "1.2.83",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.alibaba.fastjson2",
+      "artifactId": "fastjson2",
+      "version": "2.0.59",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "alibabacloud-gateway-spi",
+      "version": "0.0.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "aliyun-java-sdk-core",
+      "version": "4.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "",
+          "url": "",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "aliyun-java-sdk-kms",
+      "version": "2.11.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "",
+          "url": "",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "aliyun-java-sdk-ram",
+      "version": "3.1.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "",
+          "url": "",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "credentials-java",
+      "version": "0.2.4",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "dysmsapi20170525",
+      "version": "2.0.23",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "endpoint-util",
+      "version": "0.0.7",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "openapiutil",
+      "version": "0.2.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "tea",
+      "version": "1.2.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "tea-openapi",
+      "version": "0.2.8",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "tea-util",
+      "version": "0.2.16",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun",
+      "artifactId": "tea-xml",
+      "version": "0.1.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.aliyun.oss",
+      "artifactId": "aliyun-sdk-oss",
+      "version": "3.17.4",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "dynamic-datasource-creator",
+      "version": "4.3.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "dynamic-datasource-spring",
+      "version": "4.3.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "dynamic-datasource-spring-boot-common",
+      "version": "4.3.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "dynamic-datasource-spring-boot3-starter",
+      "version": "4.3.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "mybatis-plus",
+      "version": "3.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "mybatis-plus-annotation",
+      "version": "3.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "mybatis-plus-core",
+      "version": "3.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "mybatis-plus-extension",
+      "version": "3.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "mybatis-plus-jsqlparser",
+      "version": "3.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "mybatis-plus-jsqlparser-common",
+      "version": "3.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "mybatis-plus-spring",
+      "version": "3.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "mybatis-plus-spring-boot-autoconfigure",
+      "version": "3.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.baomidou",
+      "artifactId": "mybatis-plus-spring-boot3-starter",
+      "version": "3.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.carrotsearch.thirdparty",
+      "artifactId": "simple-xml-safe",
+      "version": "2.7.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.esotericsoftware",
+      "artifactId": "kryo",
+      "version": "5.6.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "3-Clause BSD License",
+          "url": "https://opensource.org/licenses/BSD-3-Clause",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.esotericsoftware",
+      "artifactId": "minlog",
+      "version": "1.3.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "3-Clause BSD License",
+          "url": "https://opensource.org/licenses/BSD-3-Clause",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.esotericsoftware",
+      "artifactId": "reflectasm",
+      "version": "1.11.9",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "3-Clause BSD License",
+          "url": "https://opensource.org/licenses/BSD-3-Clause",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.fasterxml",
+      "artifactId": "classmate",
+      "version": "1.7.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.fasterxml.jackson.core",
+      "artifactId": "jackson-annotations",
+      "version": "2.17.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.fasterxml.jackson.core",
+      "artifactId": "jackson-core",
+      "version": "2.17.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.fasterxml.jackson.core",
+      "artifactId": "jackson-databind",
+      "version": "2.17.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.fasterxml.jackson.dataformat",
+      "artifactId": "jackson-dataformat-toml",
+      "version": "2.17.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.fasterxml.jackson.dataformat",
+      "artifactId": "jackson-dataformat-yaml",
+      "version": "2.17.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.fasterxml.jackson.datatype",
+      "artifactId": "jackson-datatype-jdk8",
+      "version": "2.17.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.fasterxml.jackson.datatype",
+      "artifactId": "jackson-datatype-jsr310",
+      "version": "2.17.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.fasterxml.jackson.module",
+      "artifactId": "jackson-module-parameter-names",
+      "version": "2.17.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.github.jsqlparser",
+      "artifactId": "jsqlparser",
+      "version": "5.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "GNU Library or Lesser General Public License (LGPL) V2.1",
+          "url": "http://www.gnu.org/licenses/lgpl-2.1.html",
+          "distribution": "repo"
+        },
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.github.virtuald",
+      "artifactId": "curvesapi",
+      "version": "1.08",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "BSD License",
+          "url": "http://opensource.org/licenses/BSD-3-Clause",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.google.code.findbugs",
+      "artifactId": "jsr305",
+      "version": "3.0.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.google.code.gson",
+      "artifactId": "gson",
+      "version": "2.10.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache-2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.google.errorprone",
+      "artifactId": "error_prone_annotations",
+      "version": "2.23.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.google.guava",
+      "artifactId": "failureaccess",
+      "version": "1.0.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.google.guava",
+      "artifactId": "guava",
+      "version": "33.0.0-jre",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.google.guava",
+      "artifactId": "listenablefuture",
+      "version": "9999.0-empty-to-avoid-conflict-with-guava",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.google.j2objc",
+      "artifactId": "j2objc-annotations",
+      "version": "2.8",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.google.protobuf",
+      "artifactId": "protobuf-java",
+      "version": "3.21.9",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "BSD-3-Clause",
+          "url": "https://opensource.org/licenses/BSD-3-Clause",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.h2database",
+      "artifactId": "h2",
+      "version": "2.2.224",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": []
+    },
+    {
+      "groupId": "com.jayway.jsonpath",
+      "artifactId": "json-path",
+      "version": "2.9.0",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.mysql",
+      "artifactId": "mysql-connector-j",
+      "version": "8.0.33",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The GNU General Public License, v2 with Universal FOSS Exception, v1.0",
+          "url": "",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.squareup.okhttp3",
+      "artifactId": "okhttp",
+      "version": "4.12.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "com.squareup.okio",
+      "artifactId": "okio",
+      "version": "3.6.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.squareup.okio",
+      "artifactId": "okio-jvm",
+      "version": "3.6.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.sun.activation",
+      "artifactId": "jakarta.activation",
+      "version": "1.2.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "EDL 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.sun.istack",
+      "artifactId": "istack-commons-runtime",
+      "version": "4.1.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Distribution License - v 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.sun.xml.bind",
+      "artifactId": "jaxb-core",
+      "version": "4.0.5",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Distribution License - v 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.sun.xml.bind",
+      "artifactId": "jaxb-impl",
+      "version": "4.0.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Distribution License - v 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.vaadin.external.google",
+      "artifactId": "android-json",
+      "version": "0.0.20131108.vaadin1",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.xkcoding.http",
+      "artifactId": "simple-http",
+      "version": "1.0.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "GNU Lesser General Public License v3.0",
+          "url": "https://www.gnu.org/licenses/lgpl-3.0.html",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.zaxxer",
+      "artifactId": "HikariCP",
+      "version": "5.1.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "com.zaxxer",
+      "artifactId": "SparseBitSet",
+      "version": "1.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "commons-codec",
+      "artifactId": "commons-codec",
+      "version": "1.16.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache-2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "commons-io",
+      "artifactId": "commons-io",
+      "version": "2.16.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache-2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "commons-logging",
+      "artifactId": "commons-logging",
+      "version": "1.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "io.lettuce",
+      "artifactId": "lettuce-core",
+      "version": "6.3.2.RELEASE",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "io.micrometer",
+      "artifactId": "micrometer-commons",
+      "version": "1.13.8",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "io.micrometer",
+      "artifactId": "micrometer-observation",
+      "version": "1.13.8",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "io.minio",
+      "artifactId": "minio",
+      "version": "8.5.10",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "io.netty",
+      "artifactId": "netty-buffer",
+      "version": "4.1.115.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "io.netty",
+      "artifactId": "netty-codec",
+      "version": "4.1.115.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "io.netty",
+      "artifactId": "netty-codec-dns",
+      "version": "4.1.115.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "io.netty",
+      "artifactId": "netty-common",
+      "version": "4.1.115.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "io.netty",
+      "artifactId": "netty-handler",
+      "version": "4.1.115.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "io.netty",
+      "artifactId": "netty-resolver",
+      "version": "4.1.115.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "io.netty",
+      "artifactId": "netty-resolver-dns",
+      "version": "4.1.115.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "io.netty",
+      "artifactId": "netty-transport",
+      "version": "4.1.115.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "io.netty",
+      "artifactId": "netty-transport-native-unix-common",
+      "version": "4.1.115.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "io.opentracing",
+      "artifactId": "opentracing-api",
+      "version": "0.33.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "io.opentracing",
+      "artifactId": "opentracing-noop",
+      "version": "0.33.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "io.opentracing",
+      "artifactId": "opentracing-util",
+      "version": "0.33.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "io.projectreactor",
+      "artifactId": "reactor-core",
+      "version": "3.6.12",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "io.reactivex.rxjava3",
+      "artifactId": "rxjava",
+      "version": "3.1.9",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "jakarta.activation",
+      "artifactId": "jakarta.activation-api",
+      "version": "2.1.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "EDL 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "jakarta.annotation",
+      "artifactId": "jakarta.annotation-api",
+      "version": "2.1.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "EPL 2.0",
+          "url": "http://www.eclipse.org/legal/epl-2.0",
+          "distribution": "repo"
+        },
+        {
+          "name": "GPL2 w/ CPE",
+          "url": "https://www.gnu.org/software/classpath/license.html",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "jakarta.mail",
+      "artifactId": "jakarta.mail-api",
+      "version": "2.1.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "EPL 2.0",
+          "url": "http://www.eclipse.org/legal/epl-2.0",
+          "distribution": "repo"
+        },
+        {
+          "name": "GPL2 w/ CPE",
+          "url": "https://www.gnu.org/software/classpath/license.html",
+          "distribution": "repo"
+        },
+        {
+          "name": "EDL 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "jakarta.validation",
+      "artifactId": "jakarta.validation-api",
+      "version": "3.0.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "jakarta.xml.bind",
+      "artifactId": "jakarta.xml.bind-api",
+      "version": "4.0.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Distribution License - v 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "javax.activation",
+      "artifactId": "activation",
+      "version": "1.1.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": []
+    },
+    {
+      "groupId": "javax.activation",
+      "artifactId": "javax.activation-api",
+      "version": "1.2.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "CDDL/GPLv2+CE",
+          "url": "https://github.com/javaee/activation/blob/master/LICENSE.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "javax.cache",
+      "artifactId": "cache-api",
+      "version": "1.1.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "javax.xml.bind",
+      "artifactId": "jaxb-api",
+      "version": "2.3.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "CDDL 1.1",
+          "url": "https://oss.oracle.com/licenses/CDDL+GPL-1.1",
+          "distribution": "repo"
+        },
+        {
+          "name": "GPL2 w/ CPE",
+          "url": "https://oss.oracle.com/licenses/CDDL+GPL-1.1",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "me.zhyd.oauth",
+      "artifactId": "JustAuth",
+      "version": "1.16.7",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "MIT",
+          "url": "https://gitee.com/yadong.zhang/JustAuth/blob/master/LICENSE",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "net.bytebuddy",
+      "artifactId": "byte-buddy",
+      "version": "1.14.19",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "net.bytebuddy",
+      "artifactId": "byte-buddy-agent",
+      "version": "1.14.19",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "net.coobird",
+      "artifactId": "thumbnailator",
+      "version": "0.4.20",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "MIT License",
+          "url": "https://spdx.org/licenses/MIT.html",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "net.minidev",
+      "artifactId": "accessors-smart",
+      "version": "2.5.1",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "net.minidev",
+      "artifactId": "json-smart",
+      "version": "2.5.1",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.commons",
+      "artifactId": "commons-collections4",
+      "version": "4.4",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.commons",
+      "artifactId": "commons-compress",
+      "version": "1.26.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache-2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.commons",
+      "artifactId": "commons-csv",
+      "version": "1.11.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache-2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.commons",
+      "artifactId": "commons-lang3",
+      "version": "3.14.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache-2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.commons",
+      "artifactId": "commons-math3",
+      "version": "3.6.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.httpcomponents",
+      "artifactId": "httpclient",
+      "version": "4.5.13",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.httpcomponents",
+      "artifactId": "httpcore",
+      "version": "4.4.16",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.logging.log4j",
+      "artifactId": "log4j-api",
+      "version": "2.23.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache-2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.logging.log4j",
+      "artifactId": "log4j-to-slf4j",
+      "version": "2.23.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache-2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.poi",
+      "artifactId": "poi",
+      "version": "5.4.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.poi",
+      "artifactId": "poi-ooxml",
+      "version": "5.4.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.poi",
+      "artifactId": "poi-ooxml-lite",
+      "version": "5.4.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.tika",
+      "artifactId": "tika-core",
+      "version": "2.4.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.tomcat.embed",
+      "artifactId": "tomcat-embed-core",
+      "version": "10.1.33",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.tomcat.embed",
+      "artifactId": "tomcat-embed-el",
+      "version": "10.1.33",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.tomcat.embed",
+      "artifactId": "tomcat-embed-websocket",
+      "version": "10.1.33",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.apache.xmlbeans",
+      "artifactId": "xmlbeans",
+      "version": "5.3.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": []
+    },
+    {
+      "groupId": "org.apiguardian",
+      "artifactId": "apiguardian-api",
+      "version": "1.1.2",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.aspectj",
+      "artifactId": "aspectjweaver",
+      "version": "1.9.22.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Public License - v 2.0",
+          "url": "https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.assertj",
+      "artifactId": "assertj-core",
+      "version": "3.25.3",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.awaitility",
+      "artifactId": "awaitility",
+      "version": "4.2.2",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.bouncycastle",
+      "artifactId": "bcpkix-jdk15on",
+      "version": "1.65",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": []
+    },
+    {
+      "groupId": "org.bouncycastle",
+      "artifactId": "bcprov-jdk15on",
+      "version": "1.65",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": []
+    },
+    {
+      "groupId": "org.bouncycastle",
+      "artifactId": "bcprov-jdk18on",
+      "version": "1.78",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": []
+    },
+    {
+      "groupId": "org.checkerframework",
+      "artifactId": "checker-qual",
+      "version": "3.41.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The MIT License",
+          "url": "http://opensource.org/licenses/MIT",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.codehaus.jettison",
+      "artifactId": "jettison",
+      "version": "1.5.4",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.dom4j",
+      "artifactId": "dom4j",
+      "version": "2.0.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "BSD 3-clause New License",
+          "url": "https://github.com/dom4j/dom4j/blob/master/LICENSE",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.dromara.sms4j",
+      "artifactId": "sms4j-api",
+      "version": "3.3.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.dromara.sms4j",
+      "artifactId": "sms4j-comm",
+      "version": "3.3.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.dromara.sms4j",
+      "artifactId": "sms4j-core",
+      "version": "3.3.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.dromara.sms4j",
+      "artifactId": "sms4j-provider",
+      "version": "3.3.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.dromara.sms4j",
+      "artifactId": "sms4j-spring-boot-starter",
+      "version": "3.3.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.dromara.x-file-storage",
+      "artifactId": "x-file-storage-core",
+      "version": "2.2.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.dromara.x-file-storage",
+      "artifactId": "x-file-storage-spring",
+      "version": "2.2.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.eclipse.angus",
+      "artifactId": "angus-activation",
+      "version": "2.0.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "EDL 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.eclipse.angus",
+      "artifactId": "jakarta.mail",
+      "version": "2.0.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "EPL 2.0",
+          "url": "http://www.eclipse.org/legal/epl-2.0",
+          "distribution": "repo"
+        },
+        {
+          "name": "GPL2 w/ CPE",
+          "url": "https://www.gnu.org/software/classpath/license.html",
+          "distribution": "repo"
+        },
+        {
+          "name": "EDL 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.ehcache",
+      "artifactId": "ehcache",
+      "version": "3.10.8",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.flywaydb",
+      "artifactId": "flyway-core",
+      "version": "10.10.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://flywaydb.org/licenses/flyway-oss",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.flywaydb",
+      "artifactId": "flyway-mysql",
+      "version": "10.10.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://flywaydb.org/licenses/flyway-oss",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.glassfish.jaxb",
+      "artifactId": "jaxb-runtime",
+      "version": "2.3.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Distribution License - v 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.glassfish.jaxb",
+      "artifactId": "txw2",
+      "version": "4.0.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Distribution License - v 1.0",
+          "url": "http://www.eclipse.org/org/documents/edl-v10.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.hamcrest",
+      "artifactId": "hamcrest",
+      "version": "2.2",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "BSD License 3",
+          "url": "http://opensource.org/licenses/BSD-3-Clause",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.hibernate.validator",
+      "artifactId": "hibernate-validator",
+      "version": "8.0.1.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.ini4j",
+      "artifactId": "ini4j",
+      "version": "0.5.4",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache 2",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.jacoco",
+      "artifactId": "org.jacoco.agent",
+      "version": "0.8.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Public License 2.0",
+          "url": "https://www.eclipse.org/legal/epl-2.0/",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.jboss.logging",
+      "artifactId": "jboss-logging",
+      "version": "3.5.3.Final",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License 2.0",
+          "url": "https://repository.jboss.org/licenses/apache-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.jdom",
+      "artifactId": "jdom2",
+      "version": "2.0.6.1",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": []
+    },
+    {
+      "groupId": "org.jetbrains",
+      "artifactId": "annotations",
+      "version": "13.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.jetbrains.kotlin",
+      "artifactId": "kotlin-stdlib",
+      "version": "1.9.25",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.jetbrains.kotlin",
+      "artifactId": "kotlin-stdlib-common",
+      "version": "1.9.25",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.jetbrains.kotlin",
+      "artifactId": "kotlin-stdlib-jdk7",
+      "version": "1.9.25",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.jetbrains.kotlin",
+      "artifactId": "kotlin-stdlib-jdk8",
+      "version": "1.9.25",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.jodd",
+      "artifactId": "jodd-util",
+      "version": "6.3.0",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "BSD-2-Clause",
+          "url": "https://github.com/oblac/jodd-util/blob/master/LICENSE",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.junit.jupiter",
+      "artifactId": "junit-jupiter",
+      "version": "5.10.5",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Public License v2.0",
+          "url": "https://www.eclipse.org/legal/epl-v20.html",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.junit.jupiter",
+      "artifactId": "junit-jupiter-api",
+      "version": "5.10.5",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Public License v2.0",
+          "url": "https://www.eclipse.org/legal/epl-v20.html",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.junit.jupiter",
+      "artifactId": "junit-jupiter-engine",
+      "version": "5.10.5",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Public License v2.0",
+          "url": "https://www.eclipse.org/legal/epl-v20.html",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.junit.jupiter",
+      "artifactId": "junit-jupiter-params",
+      "version": "5.10.5",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Public License v2.0",
+          "url": "https://www.eclipse.org/legal/epl-v20.html",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.junit.platform",
+      "artifactId": "junit-platform-commons",
+      "version": "1.10.5",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Public License v2.0",
+          "url": "https://www.eclipse.org/legal/epl-v20.html",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.junit.platform",
+      "artifactId": "junit-platform-engine",
+      "version": "1.10.5",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Eclipse Public License v2.0",
+          "url": "https://www.eclipse.org/legal/epl-v20.html",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.mockito",
+      "artifactId": "mockito-core",
+      "version": "5.11.0",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "MIT",
+          "url": "https://opensource.org/licenses/MIT",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.mockito",
+      "artifactId": "mockito-junit-jupiter",
+      "version": "5.11.0",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "MIT",
+          "url": "https://opensource.org/licenses/MIT",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.mybatis",
+      "artifactId": "mybatis",
+      "version": "3.5.19",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.mybatis",
+      "artifactId": "mybatis-spring",
+      "version": "3.0.4",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.objenesis",
+      "artifactId": "objenesis",
+      "version": "3.3",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.opentest4j",
+      "artifactId": "opentest4j",
+      "version": "1.3.0",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.ow2.asm",
+      "artifactId": "asm",
+      "version": "9.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "BSD-3-Clause",
+          "url": "https://asm.ow2.io/license.html",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.projectlombok",
+      "artifactId": "lombok",
+      "version": "1.18.30",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The MIT License",
+          "url": "https://projectlombok.org/LICENSE",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.reactivestreams",
+      "artifactId": "reactive-streams",
+      "version": "1.0.4",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "MIT-0",
+          "url": "https://spdx.org/licenses/MIT-0.html",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.redisson",
+      "artifactId": "redisson",
+      "version": "3.40.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache v2",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.html",
+          "distribution": "manual"
+        }
+      ]
+    },
+    {
+      "groupId": "org.redisson",
+      "artifactId": "redisson-spring-boot-starter",
+      "version": "3.40.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache v2",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.html",
+          "distribution": "manual"
+        }
+      ]
+    },
+    {
+      "groupId": "org.redisson",
+      "artifactId": "redisson-spring-data-34",
+      "version": "3.40.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache v2",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.html",
+          "distribution": "manual"
+        }
+      ]
+    },
+    {
+      "groupId": "org.skyscreamer",
+      "artifactId": "jsonassert",
+      "version": "1.5.3",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.slf4j",
+      "artifactId": "jul-to-slf4j",
+      "version": "2.0.16",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "MIT License",
+          "url": "http://www.opensource.org/licenses/mit-license.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.slf4j",
+      "artifactId": "slf4j-api",
+      "version": "2.0.16",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "MIT License",
+          "url": "http://www.opensource.org/licenses/mit-license.php",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-aop",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-beans",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-context",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-context-support",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-core",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-expression",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-jcl",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-jdbc",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-oxm",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-test",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-tx",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-web",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework",
+      "artifactId": "spring-webmvc",
+      "version": "6.1.15",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-autoconfigure",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter-aop",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter-data-redis",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter-jdbc",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter-json",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter-logging",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter-security",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter-test",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter-tomcat",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter-validation",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-starter-web",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-test",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.boot",
+      "artifactId": "spring-boot-test-autoconfigure",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.data",
+      "artifactId": "spring-data-commons",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.data",
+      "artifactId": "spring-data-keyvalue",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.data",
+      "artifactId": "spring-data-redis",
+      "version": "3.3.6",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.security",
+      "artifactId": "spring-security-config",
+      "version": "6.3.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.security",
+      "artifactId": "spring-security-core",
+      "version": "6.3.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.security",
+      "artifactId": "spring-security-crypto",
+      "version": "6.3.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.security",
+      "artifactId": "spring-security-test",
+      "version": "6.3.5",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.springframework.security",
+      "artifactId": "spring-security-web",
+      "version": "6.3.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0",
+          "distribution": ""
+        }
+      ]
+    },
+    {
+      "groupId": "org.xerial.snappy",
+      "artifactId": "snappy-java",
+      "version": "1.1.10.5",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache-2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.xmlunit",
+      "artifactId": "xmlunit-core",
+      "version": "2.9.1",
+      "origins": [
+        "executed-test-classpath"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "The Apache Software License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    },
+    {
+      "groupId": "org.yaml",
+      "artifactId": "snakeyaml",
+      "version": "2.2",
+      "origins": [
+        "executed-test-classpath",
+        "packaged-runtime"
+      ],
+      "declaredLicenses": [
+        {
+          "name": "Apache License, Version 2.0",
+          "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+          "distribution": "repo"
+        }
+      ]
+    }
+  ],
+  "missingRuntimeMetadata": [
+    {
+      "jar": "jaxb-core-4.0.5.jar",
+      "pomCandidates": 2
+    },
+    {
+      "jar": "spring-boot-jarmode-tools-3.3.6.jar",
+      "pomCandidates": 0
+    }
+  ],
+  "firstPartyPomFiles": [
+    "common\\common-core\\pom.xml",
+    "common\\common-idempotent\\pom.xml",
+    "common\\common-mail\\pom.xml",
+    "common\\common-oss\\pom.xml",
+    "common\\common-ratelimiter\\pom.xml",
+    "common\\common-redis\\pom.xml",
+    "common\\common-security\\pom.xml",
+    "common\\common-sms\\pom.xml",
+    "common\\common-social\\pom.xml",
+    "common\\common-tenant\\pom.xml",
+    "common\\pom.xml",
+    "pom.xml",
+    "system-admin\\pom.xml",
+    "system-framework\\pom.xml",
+    "web-admin\\pom.xml",
+    "web-app\\pom.xml"
+  ]
+}

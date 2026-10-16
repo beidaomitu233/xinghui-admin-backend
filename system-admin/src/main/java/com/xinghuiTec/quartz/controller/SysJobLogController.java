@@ -1,59 +1,54 @@
 package com.xinghuiTec.quartz.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.xinghuiTec.quartz.domain.SysJobLog;
-import com.xinghuiTec.quartz.service.SysJobLogService;
+import com.xinghuiTec.quartz.service.JobFireLogService;
 import com.xinghuiTec.utils.Result;
-import jakarta.annotation.Resource;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.util.StringUtils;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/**
- * 定时任务调度日志表(SysJobLog)表控制层
- *
- * @author beidoa23
- * @since 2026-01-25
- */
+/** Safe JOB-02 fire ledger projection. Legacy sys_job_log is never serialized. */
 @RestController
 @RequestMapping("/monitor/jobLog")
 public class SysJobLogController {
-    @Resource
-    private SysJobLogService sysJobLogService;
+    private final JobFireLogService logs;
 
-    /**
-     * 查询定时任务日志列表
-     */
+    public SysJobLogController(JobFireLogService logs) {
+        this.logs = logs;
+    }
+
     @GetMapping("/list")
-    public Result<Page<SysJobLog>> list(SysJobLog jobLog,
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('monitor:jobLog:list')")
+    public Result<JobFireLogService.FirePage> list(
             @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize) {
-        LambdaQueryWrapper<SysJobLog> wrapper = new LambdaQueryWrapper<>();
-        wrapper.like(StringUtils.hasText(jobLog.getJobName()), SysJobLog::getJobName, jobLog.getJobName())
-                .eq(StringUtils.hasText(jobLog.getJobGroup()), SysJobLog::getJobGroup, jobLog.getJobGroup())
-                .eq(StringUtils.hasText(jobLog.getStatus()), SysJobLog::getStatus, jobLog.getStatus())
-                .orderByDesc(SysJobLog::getCreateTime);
-
-        Page<SysJobLog> page = new Page<>(pageNum, pageSize);
-        return Result.ok(sysJobLogService.page(page, wrapper));
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) Long jobId,
+            @RequestParam(required = false) String jobName,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String triggerType) {
+        return Result.ok(logs.list(pageNum, pageSize, jobId, jobName, status, triggerType));
     }
 
-    /**
-     * 删除定时任务日志
-     */
-    @DeleteMapping("/{jobLogIds}")
-    public Result<Void> remove(@PathVariable List<Long> jobLogIds) {
-        return sysJobLogService.removeBatchByIds(jobLogIds) ? Result.ok() : Result.fail(500, "删除日志失败");
+    @GetMapping("/{fireId}")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('monitor:jobLog:query')")
+    public Result<JobFireLogService.FireLog> detail(@PathVariable Long fireId) {
+        return Result.ok(logs.detail(fireId));
     }
 
-    /**
-     * 清空定时任务日志
-     */
     @DeleteMapping("/clean")
-    public Result<Void> clean() {
-        sysJobLogService.remove(new LambdaQueryWrapper<>()); // 清空所有
-        return Result.ok();
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('monitor:jobLog:clean')")
+    public Result<Integer> clean() {
+        return Result.ok(logs.clean());
+    }
+
+    @DeleteMapping("/{fireIds}")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('monitor:jobLog:remove')")
+    public Result<Integer> remove(@PathVariable List<Long> fireIds) {
+        return Result.ok(logs.remove(fireIds));
     }
 }

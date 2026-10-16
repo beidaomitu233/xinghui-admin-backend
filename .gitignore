@@ -1,4 +1,12 @@
 target/
+.idea/
+.claude/
+.qa-local/
+*.dpapi
+.env
+.env.*
+!.env.example
+!.env.*.example
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -40,7 +48,8 @@ build/
 .DS_Store
 
 
-docs/
+/docs/*
+!/docs/*.md
 # JVM 崩溃转储
 hs_err_pid*.log
 replay_pid*.log

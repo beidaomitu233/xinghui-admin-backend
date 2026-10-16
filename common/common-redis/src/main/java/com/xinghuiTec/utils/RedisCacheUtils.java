@@ -81,6 +81,12 @@ public class RedisCacheUtils {
         return operation.get(key);
     }
 
+    /** 原子取出并删除一次性验证码。 */
+    public <T> T getAndDeleteCacheObject(final String key) {
+        ValueOperations<String, T> operation = redisTemplate.opsForValue();
+        return operation.getAndDelete(key);
+    }
+
     /**
      * 删除单个对象
      *

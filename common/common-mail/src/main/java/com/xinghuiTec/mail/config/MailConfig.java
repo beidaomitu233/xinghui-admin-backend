@@ -18,6 +18,12 @@ public class MailConfig {
     @Bean
     @ConditionalOnProperty(value = "mail.enabled", havingValue = "true")
     public MailAccount mailAccount(MailProperties props) {
+        if (props.getHost() == null || props.getHost().isBlank()
+                || props.getUser() == null || props.getUser().isBlank()
+                || props.getPass() == null || props.getPass().isBlank()
+                || props.getFrom() == null || props.getFrom().isBlank()) {
+            throw new IllegalStateException("Enabled mail requires host, user, pass and from");
+        }
         MailAccount account = new MailAccount();
         account.setHost(props.getHost());
         account.setPort(props.getPort());

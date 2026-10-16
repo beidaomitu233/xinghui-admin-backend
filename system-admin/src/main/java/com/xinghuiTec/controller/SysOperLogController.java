@@ -33,7 +33,7 @@ public class SysOperLogController {
      * @return Result<Page<SysOperLog>> 分页结果
      */
     @GetMapping("/list")
-    @PreAuthorize("hasAuthority('monitor:operlog:list')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('monitor:operlog:list')")
     public Result<Page<SysOperLog>> getOperLogList(@Validated SysOperLogQueryDTO queryDTO) {
         Page<SysOperLog> page = sysOperLogService.getOperLogList(queryDTO);
         return Result.ok(page);
@@ -46,7 +46,7 @@ public class SysOperLogController {
      * @return Result<Void>
      */
     @PostMapping("/remove")
-    @PreAuthorize("hasAuthority('monitor:operlog:remove')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('monitor:operlog:remove')")
     public Result<Void> deleteOperLog(@RequestBody List<Long> operIds) {
         sysOperLogService.deleteOperLog(operIds);
         return Result.ok();
@@ -58,7 +58,7 @@ public class SysOperLogController {
      * @return Result<Void>
      */
     @PostMapping("/clean")
-    @PreAuthorize("hasAuthority('monitor:operlog:remove')")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('monitor:operlog:clean')")
     public Result<Void> cleanOperLog() {
         sysOperLogService.cleanOperLog();
         return Result.ok();

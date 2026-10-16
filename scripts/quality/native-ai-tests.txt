@@ -1,0 +1,10 @@
+AiRequestStoreMySqlIT
+RedisAiRuntimeEventsIT
+AiConfigurationDruidNativeQaIT
+AiConfigurationNativeQaTest
+OpenRouterNativeQaTest
+AiBusinessPromptQaTest
+AiSceneReadNativeQaTest
+TemplateDataMySqlFlowIT
+TemplateDataMySqlIT
+AiDistributedRuntimeMySqlIT

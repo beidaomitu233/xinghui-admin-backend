@@ -7,6 +7,8 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 角色信息表(SysRole)表实体类
@@ -22,6 +24,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 @TableName("sys_role")
 public class SysRole extends TenantEntity {
     @TableId
+    @JsonSerialize(using = ToStringSerializer.class)
     // 角色ID
     private Long roleId;
 

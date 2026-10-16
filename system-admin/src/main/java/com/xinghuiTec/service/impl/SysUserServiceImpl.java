@@ -1,20 +1,32 @@
 package com.xinghuiTec.service.impl;
 
+import cn.idev.excel.ExcelWriter;
 import cn.idev.excel.FastExcel;
+import cn.idev.excel.write.metadata.WriteSheet;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xinghuiTec.domain.dto.SysUserAddDTO;
 import com.xinghuiTec.domain.dto.SysUserQueryDTO;
+import com.xinghuiTec.domain.entity.SysRole;
+import com.xinghuiTec.domain.entity.SysUser;
 import com.xinghuiTec.domain.entity.SysUserRole;
 import com.xinghuiTec.domain.excel.SysUserExcel;
+import com.xinghuiTec.domain.excel.SysUserImportExcel;
+import com.xinghuiTec.domain.vo.UserImportRowResult;
+import com.xinghuiTec.domain.vo.UserImportSummary;
 import com.xinghuiTec.listener.SysUserImportListener;
 import com.xinghuiTec.mapper.SysUserMapper;
-import com.xinghuiTec.domain.entity.SysUser;
 import com.xinghuiTec.service.SysRoleService;
 import com.xinghuiTec.service.SysUserRoleService;
 import com.xinghuiTec.service.SysUserService;
+import com.xinghuiTec.constants.TenantConstants;
+import com.xinghuiTec.utils.TenantHelper;
+import com.xinghuiTec.utils.TemporaryPasswordGenerator;
+import com.xinghuiTec.utils.UserExcelSafety;
 import jakarta.annotation.Resource;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,16 +34,37 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.UUID;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * 用户信息表(SysUser)表服务实现类
  */
 @Service
 public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements SysUserService {
+    private static final long MAX_IMPORT_FILE_BYTES = 5L * 1024 * 1024;
+    private static final long MAX_IMPORT_EXPANDED_BYTES = 50L * 1024 * 1024;
+    private static final int MAX_XLSX_ENTRIES = 2_000;
+    private static final int MAX_EXPORT_ROWS = 10_000;
+    private static final int EXPORT_PAGE_SIZE = 500;
+    private static final String IMPORT_PENDING_ACTIVATION_REASON =
+            "已创建为待激活账号（禁用）；请检查角色、重置密码并安全交付后再启用";
 
     @Resource
     private BCryptPasswordEncoder passwordEncoder;
@@ -48,9 +81,11 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     @Resource
     private com.xinghuiTec.utils.RedisCacheUtils redisCacheUtils;
 
+    @Resource
+    private Validator validator;
+
     /**
-     * 自身代理引用：Excel 导入监听器回调 batchAddUser 时必须经过代理，
-     * 直接传 this（目标对象）会绕过 AOP 使 @Transactional 失效
+     * 导入逐行调用代理以确保每个用户及其角色关联在同一事务中提交。
      */
     @org.springframework.beans.factory.annotation.Autowired
     @org.springframework.context.annotation.Lazy
@@ -73,17 +108,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         Page<SysUser> page = new Page<>(sysUserQueryDTO.getPageNum(), sysUserQueryDTO.getPageSize());
 
         // 1.校验用户名、手机号、用户状态、创建时间范围是否为空，不为空则添加到查询条件中
-        LambdaQueryWrapper<SysUser> userListWrapper = new LambdaQueryWrapper<SysUser>()
-                .like(StringUtils.hasText(sysUserQueryDTO.getUsername()), SysUser::getUsername,
-                        sysUserQueryDTO.getUsername())
-                .like(StringUtils.hasText(sysUserQueryDTO.getNickname()), SysUser::getNickname,
-                        sysUserQueryDTO.getNickname())
-                .like(StringUtils.hasText(sysUserQueryDTO.getMobile()), SysUser::getMobile, sysUserQueryDTO.getMobile())
-                .eq(sysUserQueryDTO.getStatus() != null, SysUser::getStatus, sysUserQueryDTO.getStatus())
-                .ge(sysUserQueryDTO.getCreateTimeStart() != null,
-                        SysUser::getCreateTime, sysUserQueryDTO.getCreateTimeStart())
-                .le(sysUserQueryDTO.getCreateTimeEnd() != null,
-                        SysUser::getCreateTime, sysUserQueryDTO.getCreateTimeEnd());
+        LambdaQueryWrapper<SysUser> userListWrapper = buildUserFilters(sysUserQueryDTO);
         // 3. 处理排序
         // 步骤 A: 确定排序方向（升序还是降序）
         // 逻辑：取出前端传来的 order 字段，忽略大小写判断是否等于 "asc"。
@@ -112,6 +137,16 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         return SysUserPage;
     }
 
+    private LambdaQueryWrapper<SysUser> buildUserFilters(SysUserQueryDTO query) {
+        return new LambdaQueryWrapper<SysUser>()
+                .like(StringUtils.hasText(query.getUsername()), SysUser::getUsername, query.getUsername())
+                .like(StringUtils.hasText(query.getNickname()), SysUser::getNickname, query.getNickname())
+                .like(StringUtils.hasText(query.getMobile()), SysUser::getMobile, query.getMobile())
+                .eq(query.getStatus() != null, SysUser::getStatus, query.getStatus())
+                .ge(query.getCreateTimeStart() != null, SysUser::getCreateTime, query.getCreateTimeStart())
+                .le(query.getCreateTimeEnd() != null, SysUser::getCreateTime, query.getCreateTimeEnd());
+    }
+
     /**
      * 根据用户ID获取用户详细信息
      *
@@ -138,6 +173,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long addUser(SysUserAddDTO sysUserAddDTO) {
+        validateRoles(sysUserAddDTO.getRoleIds(), null);
         // 1. 校验用户名是否已存在
         LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(SysUser::getUsername, sysUserAddDTO.getUsername());
@@ -159,6 +195,12 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         SysUser user = new SysUser();
         // ID 由 MyBatis-Plus ASSIGN_ID 自动生成
         user.setUsername(sysUserAddDTO.getUsername());
+
+        String tenantId = TenantHelper.getTenantId();
+        if (TenantHelper.isEnable() && !StringUtils.hasText(tenantId)) {
+            throw new IllegalStateException("当前租户信息缺失");
+        }
+        user.setTenantId(StringUtils.hasText(tenantId) ? tenantId : TenantConstants.DEFAULT_TENANT_ID);
 
         // 使用BCrypt加密密码
         String encryptedPassword = passwordEncoder.encode(sysUserAddDTO.getPassword());
@@ -200,90 +242,6 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     }
 
     /**
-     * 批量新增用户
-     *
-     * @param sysUserAddDTOList 用户DTO列表
-     * @return 成功导入的条数
-     */
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public int batchAddUser(List<SysUserAddDTO> sysUserAddDTOList) {
-        if (sysUserAddDTOList == null || sysUserAddDTOList.isEmpty()) {
-            return 0;
-        }
-
-        List<SysUser> sysUsers = new ArrayList<>();
-        List<SysUserRole> sysUserRoles = new ArrayList<>();
-
-        // 1. 预处理数据
-        List<String> importUsernames = sysUserAddDTOList.stream()
-                .map(SysUserAddDTO::getUsername)
-                .filter(StringUtils::hasText)
-                .collect(java.util.stream.Collectors.toList());
-
-        java.util.Set<String> existingUsernames = new java.util.HashSet<>();
-        if (!importUsernames.isEmpty()) {
-            List<SysUser> existingUsers = this.list(new LambdaQueryWrapper<SysUser>().in(SysUser::getUsername, importUsernames));
-            existingUsernames = existingUsers.stream().map(SysUser::getUsername).collect(java.util.stream.Collectors.toSet());
-        }
-
-        java.util.Set<String> currentBatchUsernames = new java.util.HashSet<>();
-
-        for (SysUserAddDTO dto : sysUserAddDTOList) {
-            String username = dto.getUsername();
-            if (!StringUtils.hasText(username) || existingUsernames.contains(username) || currentBatchUsernames.contains(username)) {
-                continue; // 跳过已存在或当前批次重复的用户，防范 DuplicateKeyException (Issue #14)
-            }
-            currentBatchUsernames.add(username);
-
-            SysUser user = new SysUser();
-            Long userId = com.baomidou.mybatisplus.core.toolkit.IdWorker.getId();
-            user.setUserId(userId);
-            user.setUsername(username);
-            user.setNickname(dto.getNickname());
-            user.setEmail(dto.getEmail());
-            user.setMobile(dto.getMobile());
-            user.setStatus(dto.getStatus());
-            // 统一加密密码
-            user.setPassword(passwordEncoder.encode(dto.getPassword()));
-
-            sysUsers.add(user);
-
-            // 处理角色关联
-            if (dto.getRoleIds() != null && !dto.getRoleIds().isEmpty()) {
-                for (Long roleId : dto.getRoleIds()) {
-                    SysUserRole userRole = new SysUserRole();
-                    userRole.setUserId(userId);
-                    userRole.setRoleId(roleId);
-                    sysUserRoles.add(userRole);
-                }
-            }
-        }
-
-        if (sysUsers.isEmpty()) {
-            return 0;
-        }
-
-        // 2. 批量保存用户
-        // 校验用户名是否存在逻辑比较复杂，批量操作通常假设数据已经校验过
-        // 或者依赖数据库唯一索引抛出异常。这里简单起见直接保存。
-        boolean saveUserSuccess = this.saveBatch(sysUsers);
-        if (!saveUserSuccess) {
-            throw new RuntimeException("批量保存用户失败");
-        }
-
-        // 3. 批量保存角色关联
-        if (!sysUserRoles.isEmpty()) {
-            boolean saveRoleSuccess = sysUserRoleService.saveBatch(sysUserRoles);
-            if (!saveRoleSuccess) {
-                throw new RuntimeException("批量保存用户角色失败");
-            }
-        }
-
-        return sysUsers.size();
-    }
-
-    /**
      * 修改用户（包含角色更新）
      * 该方法会同时处理：
      * 1. 更新用户基本信息
@@ -305,6 +263,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (existUser == null) {
             throw new RuntimeException("用户不存在");
         }
+        validateRoles(sysUserAddDTO.getRoleIds(), userId);
 
         // 2. 如果修改了用户名，校验新用户名是否已被其他用户使用
         if (StringUtils.hasText(sysUserAddDTO.getUsername())
@@ -429,31 +388,20 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         redisCacheUtils.deleteObject(routerCacheKey);
     }
 
-    /**
-     * 重置用户密码
-     * 使用BCrypt加密新密码
-     *
-     * @param userId      用户ID
-     * @param newPassword 新密码
-     */
+    /** Creates a distinct 20-character temporary password and returns it only once. */
     @Override
-    public void resetPassword(Long userId, String newPassword) {
-        // 1. 校验参数
+    @Transactional(rollbackFor = Exception.class)
+    public String resetPassword(Long userId) {
         if (userId == null) {
             throw new RuntimeException("用户ID不能为空");
         }
-        if (!StringUtils.hasText(newPassword)) {
-            throw new RuntimeException("新密码不能为空");
-        }
-
-        // 2. 校验用户是否存在
         SysUser existUser = this.getById(userId);
         if (existUser == null) {
             throw new RuntimeException("用户不存在");
         }
 
-        // 3. 使用BCrypt加密新密码
-        String encryptedPassword = passwordEncoder.encode(newPassword);
+        String temporaryPassword = TemporaryPasswordGenerator.generate();
+        String encryptedPassword = passwordEncoder.encode(temporaryPassword);
 
         // 4. 更新用户密码
         SysUser updateUser = new SysUser();
@@ -470,162 +418,367 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         redisCacheUtils.deleteObject(com.xinghuiTec.constants.RedisConstants.ADMIN_LOGIN_PREFIX + userId);
         redisCacheUtils.deleteObject(com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX + userId);
         redisCacheUtils.deleteObject(com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX + userId);
+        return temporaryPassword;
     }
 
-    /**
-     * 下载用户导入模板
-     * 生成包含表头和示例数据的Excel文件
-     *
-     * @param response HttpServletResponse
-     */
+    void validateRoles(List<Long> roleIds, Long existingUserId) {
+        if (roleIds == null || roleIds.isEmpty()) {
+            return;
+        }
+        if (roleIds.stream().anyMatch(java.util.Objects::isNull)
+                || new HashSet<>(roleIds).size() != roleIds.size()) {
+            throw new IllegalArgumentException("角色ID不能重复或为空");
+        }
+        List<com.xinghuiTec.domain.entity.SysRole> roles = sysRoleService.list(
+                new LambdaQueryWrapper<com.xinghuiTec.domain.entity.SysRole>()
+                        .in(com.xinghuiTec.domain.entity.SysRole::getRoleId, roleIds));
+        if (roles.size() != roleIds.size()) {
+            throw new IllegalArgumentException("角色不存在");
+        }
+        java.util.Set<Long> assignedRoleIds = existingUserId == null ? java.util.Set.of()
+                : sysUserRoleService.list(new LambdaQueryWrapper<SysUserRole>()
+                        .eq(SysUserRole::getUserId, existingUserId)).stream()
+                        .map(SysUserRole::getRoleId).collect(java.util.stream.Collectors.toSet());
+        if (roles.stream().anyMatch(role -> !Integer.valueOf(1).equals(role.getStatus())
+                && !assignedRoleIds.contains(role.getRoleId()))) {
+            throw new IllegalArgumentException("不能新分配已停用角色");
+        }
+    }
+
+    /** Download a neutral import template containing only the six required headers. */
     @Override
     public void downloadImportTemplate(HttpServletResponse response) throws Exception {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("utf-8");
-        String fileName = URLEncoder.encode("用户导入模板", "UTF-8").replaceAll("\\+", "%20");
-        response.setHeader("Content-disposition", "attachment;filename*=utf-8''" + fileName + ".xlsx");
-
-        // 创建示例数据
-        List<SysUserExcel> exampleData = new ArrayList<>();
-        SysUserExcel example = new SysUserExcel();
-        example.setUsername("zhangsan");
-        example.setNickname("张三");
-        example.setEmail("zhangsan@example.com");
-        example.setMobile("13800138000");
-        example.setStatus("正常");
-        example.setRoleKeys("admin,common");
-        example.setRoleNames("管理员,普通用户");
-        exampleData.add(example);
-
-        // 写出包含示例数据的Excel文件
-        FastExcel.write(response.getOutputStream(), SysUserExcel.class)
-                .sheet("用户信息")
-                .doWrite(exampleData);
+        String fileName = URLEncoder.encode("用户导入模板.xlsx", StandardCharsets.UTF_8);
+        response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + fileName);
+        FastExcel.write(response.getOutputStream(), SysUserImportExcel.class)
+                .sheet("用户导入")
+                .doWrite(List.of());
     }
 
-    /**
-     * 批量导入用户
-     * 解析上传的Excel文件并批量保存用户信息
-     *
-     * @param file Excel文件
-     * @return 导入结果信息
-     */
+    /** Parses and validates the whole bounded workbook before saving any row. */
     @Override
-    public String importUsers(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new RuntimeException("上传文件不能为空");
+    public UserImportSummary importUsers(MultipartFile file) {
+        validateImportFile(file);
+        SysUserImportListener listener = new SysUserImportListener();
+        try (InputStream input = file.getInputStream()) {
+            FastExcel.read(input, SysUserImportExcel.class, listener).sheet(0).doRead();
+        } catch (Exception ignored) {
+            throw new IllegalArgumentException("Excel 文件无法解析，请检查文件内容和表头");
+        }
+        if (listener.isRowLimitExceeded()) {
+            throw new IllegalArgumentException("每个文件最多导入 1000 行；未写入任何用户");
+        }
+        if (!listener.areHeadersValid()) {
+            throw new IllegalArgumentException("Excel 表头错误，请使用系统下载的导入模板");
         }
 
+        Map<String, List<Long>> visibleRoleIds = new HashMap<>();
         try {
-            // 创建监听器（需要角色服务来根据roleKey查询roleId）
-            // 传入自身代理而非 this，保证监听器回调 batchAddUser 时 @Transactional 生效
-            SysUserImportListener listener = new SysUserImportListener(
-                    selfProxy, sysRoleService);
-
-            // 读取Excel文件
-            FastExcel.read(file.getInputStream(), SysUserExcel.class, listener)
-                    .sheet()
-                    .doRead();
-
-            // 返回导入结果
-            int successCount = listener.getSuccessCount();
-            int failCount = listener.getFailCount();
-            StringBuilder result = new StringBuilder();
-            result.append(String.format("导入完成！成功: %d 条, 失败: %d 条", successCount, failCount));
-
-            if (failCount > 0) {
-                result.append("\n失败详情：\n");
-                List<String> failMessages = listener.getFailMessages();
-                for (int i = 0; i < Math.min(failMessages.size(), 10); i++) {
-                    result.append(failMessages.get(i)).append("\n");
-                }
-                if (failMessages.size() > 10) {
-                    result.append(String.format("...还有 %d 条失败记录未显示", failMessages.size() - 10));
+            for (SysRole role : sysRoleService.list()) {
+                if (StringUtils.hasText(role.getRoleKey())) {
+                    visibleRoleIds.computeIfAbsent(role.getRoleKey(), key -> new ArrayList<>()).add(role.getRoleId());
                 }
             }
+        } catch (RuntimeException ignored) {
+            throw new IllegalStateException("读取当前租户角色失败");
+        }
 
-            return result.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("文件解析失败: " + e.getMessage());
+        int successCount = 0;
+        int failureCount = 0;
+        int skippedCount = 0;
+        List<UserImportRowResult> results = new ArrayList<>();
+        for (SysUserImportListener.ParsedRow row : listener.getRows()) {
+            SysUserImportExcel data = row.data();
+            if (isBlankImportRow(data)) {
+                skippedCount++;
+                results.add(new UserImportRowResult(row.rowNumber(), "skipped", "", "空行已忽略"));
+                continue;
+            }
+            try {
+                SysUserAddDTO dto = toImportDto(data, visibleRoleIds);
+                validateImportDto(dto);
+                selfProxy.addUser(dto);
+                successCount++;
+                results.add(new UserImportRowResult(row.rowNumber(), "success", "",
+                        IMPORT_PENDING_ACTIVATION_REASON));
+            } catch (RowImportException e) {
+                failureCount++;
+                results.add(new UserImportRowResult(row.rowNumber(), "failed", e.field, e.reason));
+            } catch (RuntimeException e) {
+                RowImportException safeFailure = safeServiceFailure(e);
+                failureCount++;
+                results.add(new UserImportRowResult(row.rowNumber(), "failed", safeFailure.field, safeFailure.reason));
+            }
+        }
+        return new UserImportSummary(results.size(), successCount, failureCount, skippedCount, List.copyOf(results));
+    }
+
+    private void validateImportFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("上传文件不能为空");
+        }
+        if (file.getSize() > MAX_IMPORT_FILE_BYTES) {
+            throw new IllegalArgumentException("XLSX 文件不能超过 5 MiB");
+        }
+        String filename = file.getOriginalFilename();
+        if (filename == null || !filename.toLowerCase(Locale.ROOT).endsWith(".xlsx")) {
+            throw new IllegalArgumentException("仅支持 .xlsx 文件");
+        }
+        try (InputStream signatureStream = file.getInputStream()) {
+            byte[] signature = signatureStream.readNBytes(4);
+            if (signature.length != 4 || signature[0] != 'P' || signature[1] != 'K'
+                    || signature[2] != 3 || signature[3] != 4) {
+                throw new IllegalArgumentException("上传文件不是有效的 XLSX 工作簿");
+            }
+        } catch (IOException ignored) {
+            throw new IllegalArgumentException("上传文件无法读取");
+        }
+
+        Set<String> packageEntries = readBoundedXlsxPackage(file);
+        boolean hasWorksheet = packageEntries.stream()
+                .anyMatch(name -> name.startsWith("xl/worksheets/") && name.endsWith(".xml"));
+        if (!packageEntries.contains("[Content_Types].xml")
+                || !packageEntries.contains("xl/workbook.xml") || !hasWorksheet) {
+            throw new IllegalArgumentException("上传文件不是有效的 XLSX 工作簿");
         }
     }
 
-    /**
-     * 批量导出用户
-     * 根据查询条件导出用户列表到Excel文件
-     *
-     * @param sysUserQueryDTO 查询条件
-     * @param response        HttpServletResponse
-     */
+    private Set<String> readBoundedXlsxPackage(MultipartFile file) {
+        Path archivePath = null;
+        byte[] buffer = new byte[8192];
+        try {
+            archivePath = Files.createTempFile("sys-user-import-", ".xlsx");
+            try (InputStream upload = file.getInputStream()) {
+                Files.copy(upload, archivePath, StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            long expandedBytes = 0;
+            int entryCount = 0;
+            Set<String> packageEntries = new HashSet<>();
+            try (ZipFile zip = new ZipFile(archivePath.toFile(), StandardCharsets.UTF_8)) {
+                Enumeration<? extends ZipEntry> entries = zip.entries();
+                while (entries.hasMoreElements()) {
+                    ZipEntry entry = entries.nextElement();
+                    entryCount++;
+                    if (entryCount > MAX_XLSX_ENTRIES) {
+                        throw new IllegalArgumentException("XLSX 文件包含过多内容");
+                    }
+                    String name = entry.getName();
+                    if (name == null || name.toLowerCase(Locale.ROOT).endsWith("vbaproject.bin")) {
+                        throw new IllegalArgumentException("不支持含宏的工作簿");
+                    }
+                    if (!packageEntries.add(name)) {
+                        throw new IllegalArgumentException("XLSX 文件包含重复内容项");
+                    }
+                    long declaredSize = entry.getSize();
+                    if (declaredSize > MAX_IMPORT_EXPANDED_BYTES - expandedBytes) {
+                        throw new IllegalArgumentException("XLSX 解压后内容超过 50 MiB");
+                    }
+                    try (InputStream content = zip.getInputStream(entry)) {
+                        int read;
+                        while ((read = content.read(buffer)) != -1) {
+                            expandedBytes += read;
+                            if (expandedBytes > MAX_IMPORT_EXPANDED_BYTES) {
+                                throw new IllegalArgumentException("XLSX 解压后内容超过 50 MiB");
+                            }
+                        }
+                    }
+                }
+            }
+            return packageEntries;
+        } catch (IOException ignored) {
+            throw new IllegalArgumentException("XLSX 文件损坏或格式错误");
+        } finally {
+            if (archivePath != null) {
+                try {
+                    Files.deleteIfExists(archivePath);
+                } catch (IOException ignored) {
+                    archivePath.toFile().deleteOnExit();
+                }
+            }
+        }
+    }
+
+    private boolean isBlankImportRow(SysUserImportExcel data) {
+        return data == null || (!StringUtils.hasText(data.getUsername())
+                && !StringUtils.hasText(data.getNickname())
+                && !StringUtils.hasText(data.getEmail())
+                && !StringUtils.hasText(data.getMobile())
+                && !StringUtils.hasText(data.getRoleKeys()));
+    }
+
+    private SysUserAddDTO toImportDto(SysUserImportExcel row, Map<String, List<Long>> visibleRoleIds) {
+        SysUserAddDTO dto = new SysUserAddDTO();
+        dto.setUsername(trimToNull(row.getUsername()));
+        dto.setNickname(trimToNull(row.getNickname()));
+        dto.setEmail(trimToNull(row.getEmail()));
+        dto.setMobile(trimToNull(row.getMobile()));
+        dto.setPassword(TemporaryPasswordGenerator.generate());
+        // Import creates a pre-provisioned account only. It stays disabled until an
+        // authorized administrator issues its one-time password and enables it.
+        dto.setStatus(0);
+
+        String roleKeys = trimToNull(row.getRoleKeys());
+        if (roleKeys == null) {
+            dto.setRoleIds(List.of());
+            return dto;
+        }
+        if (roleKeys.length() > 200) {
+            throw new RowImportException("角色标识", "角色标识长度不能超过 200 个字符");
+        }
+        List<Long> roleIds = new ArrayList<>();
+        Set<String> seenKeys = new HashSet<>();
+        for (String rawKey : roleKeys.split(",", -1)) {
+            String key = rawKey.strip();
+            List<Long> matches = visibleRoleIds.get(key);
+            if (key.isEmpty() || !seenKeys.add(key) || matches == null || matches.size() != 1) {
+                throw new RowImportException("角色标识", "角色标识无效、重复或不可分配");
+            }
+            roleIds.add(matches.get(0));
+        }
+        dto.setRoleIds(roleIds);
+        return dto;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.strip();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void validateImportDto(SysUserAddDTO dto) {
+        List<ConstraintViolation<SysUserAddDTO>> violations = new ArrayList<>(validator.validate(dto));
+        if (violations.isEmpty()) {
+            return;
+        }
+        ConstraintViolation<SysUserAddDTO> violation = violations.stream()
+                .min(Comparator.comparing(item -> item.getPropertyPath().toString()))
+                .orElseThrow();
+        String property = violation.getPropertyPath().toString();
+        switch (property) {
+            case "username" -> throw new RowImportException("用户账号", "账号必填且需为 2 至 30 位字母、数字或下划线");
+            case "mobile" -> throw new RowImportException("手机号码", "手机号必填且格式不正确");
+            case "nickname" -> throw new RowImportException("用户昵称", "昵称不能超过 30 个字符");
+            case "email" -> throw new RowImportException("邮箱", "邮箱格式不正确或长度超过 50 个字符");
+            case "status" -> throw new RowImportException("用户状态", "状态值无效");
+            default -> throw new RowImportException("", "数据格式不正确");
+        }
+    }
+
+    private RowImportException safeServiceFailure(RuntimeException exception) {
+        String message = exception.getMessage();
+        if (message != null && message.contains("用户名已存在")) {
+            return new RowImportException("用户账号", "用户账号已存在");
+        }
+        if (message != null && message.contains("手机号已被其他用户使用")) {
+            return new RowImportException("手机号码", "手机号已被其他用户使用");
+        }
+        if (message != null && (message.contains("不能新分配已停用角色") || message.contains("角色不存在")
+                || message.contains("角色ID不能重复或为空"))) {
+            return new RowImportException("角色标识", "角色无效、已停用或不可分配");
+        }
+        return new RowImportException("", "新增失败，请核对数据后重试");
+    }
+
+    private static final class RowImportException extends RuntimeException {
+        private final String field;
+        private final String reason;
+
+        private RowImportException(String field, String reason) {
+            super(reason);
+            this.field = field;
+            this.reason = reason;
+        }
+    }
+
+    /** Exports only the current list scope, in bounded pages with one role query per page. */
     @Override
-    public void exportUsers(SysUserQueryDTO sysUserQueryDTO,
-            HttpServletResponse response) throws Exception {
+    public void exportUsers(SysUserQueryDTO query, HttpServletResponse response) throws Exception {
+        long rowCount = this.count(buildUserFilters(query));
+        if (rowCount > MAX_EXPORT_ROWS) {
+            throw new IllegalArgumentException("导出结果超过 10000 条，请缩小筛选范围");
+        }
+
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("utf-8");
-        String fileName = URLEncoder.encode("用户列表", "UTF-8").replaceAll("\\+", "%20");
-        response.setHeader("Content-disposition", "attachment;filename*=utf-8''" + fileName + ".xlsx");
-
-        // 查询用户列表（不分页，导出所有符合条件的数据）
-        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<SysUser>()
-                .like(StringUtils.hasText(sysUserQueryDTO.getUsername()), SysUser::getUsername,
-                        sysUserQueryDTO.getUsername())
-                .like(StringUtils.hasText(sysUserQueryDTO.getNickname()), SysUser::getNickname,
-                        sysUserQueryDTO.getNickname())
-                .like(StringUtils.hasText(sysUserQueryDTO.getMobile()), SysUser::getMobile,
-                        sysUserQueryDTO.getMobile())
-                .eq(sysUserQueryDTO.getStatus() != null, SysUser::getStatus, sysUserQueryDTO.getStatus())
-                .ge(sysUserQueryDTO.getCreateTimeStart() != null,
-                        SysUser::getCreateTime, sysUserQueryDTO.getCreateTimeStart())
-                .le(sysUserQueryDTO.getCreateTimeEnd() != null,
-                        SysUser::getCreateTime, sysUserQueryDTO.getCreateTimeEnd());
-
-        List<SysUser> userList = this.list(queryWrapper);
-
-        // 转换为Excel数据模型
-        List<com.xinghuiTec.domain.excel.SysUserExcel> excelDataList = new ArrayList<>();
-        for (SysUser user : userList) {
-            com.xinghuiTec.domain.excel.SysUserExcel excelData = new com.xinghuiTec.domain.excel.SysUserExcel();
-            excelData.setUsername(user.getUsername());
-            excelData.setNickname(user.getNickname());
-            excelData.setEmail(user.getEmail());
-            excelData.setMobile(user.getMobile());
-            excelData.setStatus(user.getStatus() == 1 ? "正常" : "停用");
-
-            // 查询用户的角色信息（包括roleKey和roleName）
-            LambdaQueryWrapper<SysUserRole> roleWrapper = new LambdaQueryWrapper<>();
-            roleWrapper.eq(SysUserRole::getUserId, user.getUserId());
-            List<SysUserRole> userRoles = sysUserRoleService.list(roleWrapper);
-            if (!userRoles.isEmpty()) {
-                // 查询角色详细信息
-                List<Long> roleIds = userRoles.stream()
-                        .map(SysUserRole::getRoleId)
-                        .collect(java.util.stream.Collectors.toList());
-
-                LambdaQueryWrapper<com.xinghuiTec.domain.entity.SysRole> roleQuery = new LambdaQueryWrapper<>();
-                roleQuery.in(com.xinghuiTec.domain.entity.SysRole::getRoleId, roleIds);
-                List<com.xinghuiTec.domain.entity.SysRole> roles = sysRoleService.list(roleQuery);
-
-                // 提取角色标识和角色名称
-                String roleKeys = roles.stream()
-                        .map(com.xinghuiTec.domain.entity.SysRole::getRoleKey)
-                        .collect(java.util.stream.Collectors.joining(","));
-                String roleNames = roles.stream()
-                        .map(com.xinghuiTec.domain.entity.SysRole::getRoleName)
-                        .collect(java.util.stream.Collectors.joining(","));
-
-                excelData.setRoleKeys(roleKeys);
-                excelData.setRoleNames(roleNames);
+        String fileName = URLEncoder.encode("用户列表.xlsx", StandardCharsets.UTF_8);
+        response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + fileName);
+        try (ExcelWriter writer = FastExcel.write(response.getOutputStream(), SysUserExcel.class)
+                .autoCloseStream(false).build()) {
+            WriteSheet sheet = FastExcel.writerSheet("用户列表").build();
+            if (rowCount == 0) {
+                writer.write(List.of(), sheet);
+                return;
             }
-
-            excelDataList.add(excelData);
+            long written = 0;
+            long pageNumber = 1;
+            while (written < rowCount) {
+                Page<SysUser> page = new Page<>(pageNumber++, EXPORT_PAGE_SIZE, false);
+                page = this.page(page, applyExportOrdering(buildUserFilters(query), query));
+                List<SysUser> users = page.getRecords();
+                if (users == null || users.isEmpty()) {
+                    break;
+                }
+                int remaining = (int) Math.min(rowCount - written, MAX_EXPORT_ROWS - written);
+                List<SysUser> exportPage = users.size() > remaining ? users.subList(0, remaining) : users;
+                writer.write(buildExportRows(exportPage), sheet);
+                written += exportPage.size();
+            }
         }
-
-        // 写入Excel文件
-        cn.idev.excel.FastExcel.write(response.getOutputStream(), com.xinghuiTec.domain.excel.SysUserExcel.class)
-                .sheet("用户列表")
-                .doWrite(excelDataList);
     }
 
+    private LambdaQueryWrapper<SysUser> applyExportOrdering(LambdaQueryWrapper<SysUser> wrapper,
+            SysUserQueryDTO query) {
+        boolean ascending = "asc".equalsIgnoreCase(query.getOrder());
+        if ("updateTime".equals(query.getOrderBy())) {
+            return wrapper.orderBy(true, ascending, SysUser::getUpdateTime).orderByAsc(SysUser::getUserId);
+        }
+        return wrapper.orderBy(true, ascending, SysUser::getCreateTime).orderByAsc(SysUser::getUserId);
+    }
+
+    private List<SysUserExcel> buildExportRows(List<SysUser> users) {
+        List<Long> userIds = users.stream().map(SysUser::getUserId).toList();
+        List<SysUserRole> associations = sysUserRoleService.list(
+                new LambdaQueryWrapper<SysUserRole>().in(SysUserRole::getUserId, userIds));
+        Set<Long> roleIds = new HashSet<>();
+        associations.forEach(association -> roleIds.add(association.getRoleId()));
+
+        Map<Long, SysRole> roleById = new HashMap<>();
+        if (!roleIds.isEmpty()) {
+            sysRoleService.list(new LambdaQueryWrapper<SysRole>().in(SysRole::getRoleId, roleIds))
+                    .forEach(role -> roleById.put(role.getRoleId(), role));
+        }
+        Map<Long, List<SysRole>> rolesByUser = new HashMap<>();
+        for (SysUserRole association : associations) {
+            SysRole role = roleById.get(association.getRoleId());
+            if (role != null) {
+                rolesByUser.computeIfAbsent(association.getUserId(), key -> new ArrayList<>()).add(role);
+            }
+        }
+
+        List<SysUserExcel> rows = new ArrayList<>(users.size());
+        for (SysUser user : users) {
+            SysUserExcel row = new SysUserExcel();
+            row.setUsername(UserExcelSafety.safeCell(user.getUsername()));
+            row.setNickname(UserExcelSafety.safeCell(user.getNickname()));
+            row.setEmail(UserExcelSafety.safeCell(user.getEmail()));
+            row.setMobile(UserExcelSafety.safeCell(user.getMobile()));
+            row.setStatus(user.getStatus() != null && user.getStatus() == 1 ? "正常" : "停用");
+            List<SysRole> userRoles = rolesByUser.getOrDefault(user.getUserId(), List.of());
+            row.setRoleKeys(UserExcelSafety.safeCell(userRoles.stream()
+                    .map(SysRole::getRoleKey).filter(StringUtils::hasText).sorted().reduce((a, b) -> a + "," + b)
+                    .orElse("")));
+            row.setRoleNames(UserExcelSafety.safeCell(userRoles.stream()
+                    .map(SysRole::getRoleName).filter(StringUtils::hasText).sorted().reduce((a, b) -> a + "," + b)
+                    .orElse("")));
+            rows.add(row);
+        }
+        return rows;
+    }
     // ==================== 个人中心管理实现 ====================
 
     /**

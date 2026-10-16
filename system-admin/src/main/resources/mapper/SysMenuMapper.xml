@@ -28,6 +28,7 @@
         SELECT DISTINCT m.perms
         FROM sys_menu m
         LEFT JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
+        JOIN sys_role r ON r.role_id = rm.role_id AND r.status = 1
         WHERE rm.role_id = #{roleId}
           AND m.perms IS NOT NULL
           AND m.perms != ''
@@ -39,6 +40,7 @@
         SELECT DISTINCT m.perms
         FROM sys_menu m
         LEFT JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
+        JOIN sys_role r ON r.role_id = rm.role_id AND r.status = 1
         WHERE rm.role_id IN
         <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
             #{roleId}
@@ -54,10 +56,26 @@
         FROM sys_menu m
         LEFT JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
         LEFT JOIN sys_user_role ur ON rm.role_id = ur.role_id
+        JOIN sys_role r ON r.role_id = rm.role_id AND r.status = 1
         WHERE ur.user_id = #{userId}
           AND m.menu_type IN ('M', 'C')
           AND m.status = '0'
-        ORDER BY m.parent_id, m.order_num
+        UNION
+        <!-- Both Tabs share one entry. Derive navigation only from a real list action,
+             including future role assignments without an explicitly checked parent.
+             Permission queries remain unchanged: data:list never yields template:list. -->
+        SELECT nav.* FROM sys_menu nav
+        WHERE nav.menu_id IN (107,202610160180000001)
+          AND nav.status='0' AND nav.is_deleted=0
+          AND EXISTS (
+            SELECT 1 FROM sys_role_menu granted_action
+            JOIN sys_user_role members ON members.role_id=granted_action.role_id
+            JOIN sys_role active_role ON active_role.role_id=granted_action.role_id AND active_role.status=1 AND active_role.is_deleted=0
+            JOIN sys_menu action_menu ON action_menu.menu_id=granted_action.menu_id AND action_menu.status='0' AND action_menu.is_deleted=0
+            WHERE members.user_id=#{userId}
+              AND action_menu.perms IN ('ai:template:list','ai:data:list','ai:prompt:list')
+          )
+        ORDER BY parent_id, order_num
     </select>
 
 </mapper>

@@ -6,10 +6,12 @@ import com.xinghuiTec.domain.dto.LoginDTO;
 import com.xinghuiTec.domain.entity.SysUser;
 import com.xinghuiTec.domain.entity.LoginUser;
 import com.xinghuiTec.domain.vo.SysMenuVO;
+import com.xinghuiTec.exception.ServiceException;
 import com.xinghuiTec.exception.user.CaptchaException;
-import com.xinghuiTec.exception.user.UserNotExistsException;
 import com.xinghuiTec.service.CaptchaService;
 import com.xinghuiTec.service.LoginService;
+import com.xinghuiTec.service.PublishedConfigReader;
+import com.xinghuiTec.security.PlatformVisibilityService;
 import com.xinghuiTec.utils.JwtUtil;
 import com.xinghuiTec.utils.RedisCacheUtils;
 import com.xinghuiTec.utils.SecurityUtils;
@@ -54,6 +56,12 @@ public class LoginServiceImpl implements LoginService {
         @Autowired
         private CaptchaProperties captchaProperties;
 
+        @Autowired
+        private PublishedConfigReader publishedConfigReader;
+
+        @Autowired
+        private PlatformVisibilityService platformVisibilityService;
+
         @Resource
         private RedisCacheUtils redisCacheUtils;
 
@@ -96,6 +104,7 @@ public class LoginServiceImpl implements LoginService {
 
                 // 3. 生成 JWT（包含 userId 和 tenantId）
                 String jwt = JwtUtil.createJWT(String.valueOf(userId), tenantId);
+                loginUser.setToken(jwt);
 
                 // 4. 存储 loginUser 到 Redis
                 Integer days = Math.toIntExact(TimeUnit.MILLISECONDS.toDays(TOKEN_EXPIRATION));
@@ -107,10 +116,7 @@ public class LoginServiceImpl implements LoginService {
         @Override
         public String logout() {
                 Long userId = SecurityUtils.getUser().getUserId();
-                boolean b = redisCacheUtils.deleteObject(ADMIN_LOGIN_PREFIX + userId);
-                if (!b) {
-                        throw new RuntimeException("登出失败");
-                }
+                redisCacheUtils.deleteObject(ADMIN_LOGIN_PREFIX + userId);
                 return "登出成功";
         }
 
@@ -130,7 +136,7 @@ public class LoginServiceImpl implements LoginService {
                 UserInfoVO cachedUserInfo = redisCacheUtils.getCacheObject(cacheKey);
 
                 if (cachedUserInfo != null) {
-                        return cachedUserInfo;
+                        return platformVisibilityService.visibleInfo(cachedUserInfo);
                 }
 
                 LambdaQueryWrapper<SysUserRole> wrapper = new LambdaQueryWrapper<>();
@@ -175,7 +181,7 @@ public class LoginServiceImpl implements LoginService {
                 redisCacheUtils.setCacheObject(cacheKey, userInfoVO, RedisConstants.USER_INFO_TTL_SEC,
                                 TimeUnit.SECONDS);
 
-                return userInfoVO;
+                return platformVisibilityService.visibleInfo(userInfoVO);
         }
 
         @Override
@@ -194,7 +200,7 @@ public class LoginServiceImpl implements LoginService {
                 List<SysMenuVO> cachedRouter = redisCacheUtils.getCacheList(routerCacheKey);
 
                 if (cachedRouter != null) {
-                        return cachedRouter;
+                        return platformVisibilityService.visibleMenus(cachedRouter);
                 }
 
                 LambdaQueryWrapper<SysUserRole> userRoleWrapper = new LambdaQueryWrapper<>();
@@ -226,13 +232,16 @@ public class LoginServiceImpl implements LoginService {
                 redisCacheUtils.setCacheList(routerCacheKey, menuTree, RedisConstants.USER_ROUTER_TTL_SEC,
                                 TimeUnit.SECONDS);
 
-                return menuTree;
+                return platformVisibilityService.visibleMenus(menuTree);
         }
 
         /**
          * 登录前置校验（手机号格式 + 验证码）
          */
         private void loginPreCheck(LoginDTO loginDTO) {
+                if (loginDTO == null) {
+                        throw new ServiceException("请输入手机号和密码");
+                }
                 String phone = loginDTO.getPhone();
                 String password = loginDTO.getPassword();
                 String code = loginDTO.getCode();
@@ -240,7 +249,7 @@ public class LoginServiceImpl implements LoginService {
 
                 // 手机号或密码为空
                 if (!StringUtils.hasText(phone) || !StringUtils.hasText(password)) {
-                        throw new UserNotExistsException();
+                        throw new ServiceException("请输入手机号和密码");
                 }
 
                 // 手机号格式校验
@@ -249,7 +258,7 @@ public class LoginServiceImpl implements LoginService {
                 }
 
                 // 验证码校验
-                if (captchaProperties.getEnabled()) {
+                if (publishedConfigReader.isCaptchaEnabled(captchaProperties.isEnabled())) {
                         if (!StringUtils.hasText(code) || !StringUtils.hasText(uuid)) {
                                 throw new CaptchaException();
                         }
