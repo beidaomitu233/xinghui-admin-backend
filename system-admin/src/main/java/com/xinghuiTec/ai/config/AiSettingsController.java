@@ -37,8 +37,8 @@ public class AiSettingsController {
     @GetMapping
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAnyAuthority('ai:config:list','ai:model:list')")
     public Result<AiSettingsDtos.Page> page(@RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "20") int pageSize) {
-        return Result.ok(service.page(pageNum, pageSize));
+            @RequestParam(defaultValue = "20") int pageSize,@RequestParam(required=false) String search) {
+        return Result.ok(service.page(pageNum, pageSize,search));
     }
 
     @GetMapping("/{id}")
@@ -50,13 +50,13 @@ public class AiSettingsController {
     @PostMapping
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAnyAuthority('ai:config:add','ai:model:add')")
     public Result<AiSettingsDtos.View> create(@RequestBody AiSettingsDtos.Change body) {
-        return Result.ok(service.create(body));
+        return Result.ok(service.create(body, identity.current()));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAnyAuthority('ai:config:edit','ai:model:edit')")
     public Result<AiSettingsDtos.View> save(@PathVariable String id, @RequestBody AiSettingsDtos.Change body) {
-        return Result.ok(service.save(AiConfigurationService.id(id), body));
+        return Result.ok(service.save(AiConfigurationService.id(id), body, identity.current()));
     }
 
     @PostMapping("/{id}/connection-tests")

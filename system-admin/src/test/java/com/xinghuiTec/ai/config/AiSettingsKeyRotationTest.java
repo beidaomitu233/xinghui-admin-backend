@@ -92,6 +92,15 @@ class AiSettingsKeyRotationTest {
     }
     private AiSettingsDtos.View replace(long id) {
         var current = settings.get(id);
+        if(current.keys().size()>1) {
+            var original=fixture.service.get(id).draft().keys();
+            var changes=new ArrayList<AiSettingsDtos.KeyChange>();
+            for(int i=0;i<original.size();i++) {
+                var old=original.get(i);
+                changes.add(new AiSettingsDtos.KeyChange(old.keyRef(),old.label(),i==0?NEW:"",old.modelCodes()));
+            }
+            return settings.save(id,new AiSettingsDtos.Change(current.revision(),current.name(),current.provider(),null,null,current.models().stream().map(AiSettingsDtos.Model::code).toList(),changes));
+        }
         return settings.save(id, new AiSettingsDtos.Change(current.revision(), current.name(), current.provider(), null,
                 NEW, current.models().stream().map(AiSettingsDtos.Model::code).toList()));
     }
@@ -506,6 +515,17 @@ class AiSettingsKeyRotationTest {
                 fixture.json.writeValueAsString(definition));
         assertThrows(AiConfigurationException.class, () -> replace(id));
         unchanged(id, old);
+    }
+
+    @Test void addingAndDeletingNamedKeyMaintainsManagedSceneWithoutApplicationSteps() throws Exception {
+        long id=active();attach(id,true,false);var original=settings.get(id);var first=original.keys().get(0);
+        var codes=original.models().stream().map(AiSettingsDtos.Model::code).toList();
+        settings.save(id,new AiSettingsDtos.Change(original.revision(),original.name(),original.provider(),null,null,codes,List.of(new AiSettingsDtos.KeyChange(first.keyId(),first.name(),"",null),new AiSettingsDtos.KeyChange(null,"Backup",NEW,codes))));
+        assertEquals(1,current());var added=finish(id,settings.startTest(id,new AiSettingsDtos.Test(true,true),actor));assertTrue(added.active());assertEquals(2,current());
+        var two=settings.get(id);var backup=two.keys().get(1);
+        settings.save(id,new AiSettingsDtos.Change(two.revision(),two.name(),two.provider(),null,null,codes,List.of(new AiSettingsDtos.KeyChange(backup.keyId(),backup.name(),"",codes))));
+        assertTrue(finish(id,settings.startTest(id,new AiSettingsDtos.Test(true,true),actor)).active());assertEquals(3,current());
+        assertEquals(1,settings.get(id).keys().size());assertEquals(COMPILED,fixture.jdbc.queryForObject("SELECT compiled_json FROM sys_ai_scene_version WHERE scene_version_id=?",String.class,current()));
     }
 
 }

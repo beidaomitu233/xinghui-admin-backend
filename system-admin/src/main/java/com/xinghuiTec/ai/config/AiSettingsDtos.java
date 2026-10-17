@@ -8,8 +8,9 @@ import java.util.List;
 public final class AiSettingsDtos {
     private AiSettingsDtos() {}
     public record Change(Integer expectedRevision,String name,String provider,String endpointUrl,
-                         @JsonProperty(access=JsonProperty.Access.WRITE_ONLY) String apiKey,List<String> modelCodes,List<KeyChange> keys) {
-        public Change(Integer expectedRevision,String name,String provider,String endpointUrl,String apiKey,List<String> modelCodes) {this(expectedRevision,name,provider,endpointUrl,apiKey,modelCodes,null);}
+                         @JsonProperty(access=JsonProperty.Access.WRITE_ONLY) String apiKey,List<String> modelCodes,List<KeyChange> keys,String clientMutationId) {
+        public Change(Integer expectedRevision,String name,String provider,String endpointUrl,String apiKey,List<String> modelCodes,List<KeyChange> keys) {this(expectedRevision,name,provider,endpointUrl,apiKey,modelCodes,keys,null);}
+        public Change(Integer expectedRevision,String name,String provider,String endpointUrl,String apiKey,List<String> modelCodes) {this(expectedRevision,name,provider,endpointUrl,apiKey,modelCodes,null,null);}
         public Change {modelCodes=modelCodes==null?List.of():List.copyOf(modelCodes);keys=keys==null?null:List.copyOf(keys);}
         @Override public String toString(){return "AiSettingsChange[REDACTED]";}
     }

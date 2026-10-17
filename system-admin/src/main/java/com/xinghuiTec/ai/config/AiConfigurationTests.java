@@ -58,7 +58,10 @@ public class AiConfigurationTests {
             var old=h.active()==null?null:configs.snapshot(configId,h.active());
             boolean rotation=settings && old!=null && configs.pureKeyRotation(old,s);
             for(var m:s.models()) for(var k:s.keys()) {
-                if(rotation && old.keys().contains(k)) continue;
+                if(!AiConfigurationService.associated(m,k)) continue;
+                if(settings && old!=null && !old.configVersion().equals(s.configVersion()) && configs.compatibleSettings(old,s) && old.models().contains(m)
+                        && old.keys().stream().anyMatch(prior->prior.keyRef().equals(k.keyRef()) && prior.keyVersion().equals(k.keyVersion()) && AiConfigurationService.associated(m,prior))
+                        && (rotation || configs.validProof(s,m,k) && configs.keyUsable(k))) continue;
                 configs.insert("INSERT INTO sys_ai_configuration_test_pair(test_id,model_ref,key_ref,key_version,proof_hash) VALUES(?,?,?,?,?)",test,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()),AiConfigurationService.id(k.keyVersion()),configs.proof(s,m,k));
             }
             configs.jdbc.update("UPDATE sys_ai_configuration SET latest_test_id=?,running_test_id=? WHERE config_id=?",test,test,configId);
@@ -100,7 +103,7 @@ public class AiConfigurationTests {
                     String secret=configs.resolveSecret(k); Instant deadline=Instant.now().plusSeconds(s.timeoutSeconds());
                     actualProof=configs.proof(s,m,k,secret);
                     boolean json=OpenRouterCapabilities.jsonEnabled(m);
-                    result=transport.call(m.modelCode(),s.timeoutSeconds(),secret,List.of(new AiMessage(MessageRole.USER,json?"Return exactly one JSON object with the field ok set to true.":"Reply with exactly OK.")),new Requirements(json?OutputFormat.JSON_OBJECT:OutputFormat.TEXT,false,false),256,new StreamObserver() {
+                    result=call(s,m.modelCode(),secret,List.of(new AiMessage(MessageRole.USER,json?"Return exactly one JSON object with the field ok set to true.":"Reply with exactly OK.")),new Requirements(json?OutputFormat.JSON_OBJECT:OutputFormat.TEXT,false,false),256,new StreamObserver() {
                         public void onDelta(String text) {} public void onUsage(Usage usage) {}
                     },new InvocationControl() {
                         public Instant deadline() { return deadline; } public boolean cancelled() { return AiConfigurationTests.this.cancelled(run); }
@@ -115,11 +118,26 @@ public class AiConfigurationTests {
             }
         } catch(RuntimeException unavailable) { finalState="INTERRUPTED"; }
         finally {
+            // Restore health only after a complete non-cancelled probe; any 401 for this material wins.
+            if("COMPLETED".equals(finalState)) {
+                long checkedVersion=configs.jdbc.queryForObject("SELECT version_id FROM sys_ai_configuration_test WHERE test_id=?",Long.class,run);
+                for(var key:configs.snapshot(configId,checkedVersion).keys()) {
+                    var states=configs.jdbc.query("SELECT status,error_code FROM sys_ai_configuration_test_pair WHERE test_id=? AND key_ref=?",(rs,n)->new String[]{rs.getString(1),rs.getString(2)},run,AiConfigurationService.id(key.keyRef()));
+                    if(!states.isEmpty() && states.stream().allMatch(p->"AUTH_FAILED".equals(p[1]))) configs.keyRetested(key,true);
+                    else if(!states.isEmpty() && states.stream().allMatch(p->"SUCCESS".equals(p[0]))) configs.keyRetested(key,false);
+                }
+            }
             stopHeartbeat(run);
             configs.jdbc.update("UPDATE sys_ai_configuration_test SET status=?,update_time=CURRENT_TIMESTAMP WHERE test_id=? AND status IN ('QUEUED','RUNNING')",finalState,run);
             configs.jdbc.update("UPDATE sys_ai_configuration SET running_test_id=NULL WHERE config_id=? AND running_test_id=?",configId,run);
             if(completionObservers!=null){var observer=completionObservers.getIfUnique();if(observer!=null)observer.completed(configId,run);}
         }
+    }
+    private ExecutionOutcome call(Snapshot snapshot,String model,String secret,List<AiMessage> messages,Requirements requirements,
+                                  int tokens,StreamObserver observer,InvocationControl control) {
+        // Preserve the original OpenRouter transport seam; both branches use the same bounded parser.
+        if("openrouter".equals(snapshot.providerCode())) return transport.call(model,snapshot.timeoutSeconds(),secret,messages,requirements,tokens,observer,control);
+        return transport.callForProvider(snapshot.providerCode(),snapshot.endpointUrl(),model,snapshot.timeoutSeconds(),secret,messages,requirements,tokens,observer,control);
     }
     public TestRun get(long configId,long run) {
         var rows=configs.jdbc.query("SELECT version_id,status FROM sys_ai_configuration_test WHERE config_id=? AND test_id=?",(rs,n)->new String[]{rs.getString(1),rs.getString(2)},configId,run);

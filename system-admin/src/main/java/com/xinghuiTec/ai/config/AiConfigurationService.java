@@ -184,9 +184,9 @@ public class AiConfigurationService {
         if(d==null||d.name()==null||d.name().isBlank()||d.name().length()>100||d.environment()==null||!d.environment().matches("[A-Za-z0-9_-]{1,32}"))
             throw fail(400,"请填写配置名称和环境");
         rules.providerCode(d.providerCode()); rules.endpointUrl(d.endpointUrl()); rules.timeoutSeconds(d.timeoutSeconds());
-        if(!"openrouter".equals(d.providerCode())||!"OPENAI_CHAT".equals(d.protocol())||!"https://openrouter.ai/api/v1/chat/completions".equals(d.endpointUrl()))
-            throw fail(400,"当前仅支持官方OpenRouter Chat端点，其他提供商尚未实现");
-        if(d.models()==null||d.keys()==null||d.models().size()>16||d.keys().size()>16||d.models().size()*d.keys().size()>64)
+        AiProviderPresets.require(d.providerCode(),d.endpointUrl());
+        if(!"OPENAI_CHAT".equals(d.protocol())) throw fail(400,"请选择支持的聊天协议");
+        if(d.models()==null||d.keys()==null||d.models().size()>16||d.keys().size()>16)
             throw fail(400,"最多16个模型、16个Key及64个搭配");
         var codes=new HashSet<String>();
         for(var m:d.models()) {
@@ -232,22 +232,29 @@ public class AiConfigurationService {
                     if(old==null||!"DB".equals(old.mode())) throw fail(400,"新增数据库Key不能为空");
                     version=old.keyVersion();
                 }
-                keys.add(new KeySpec(ref,version,label,mode,null));
+                keys.add(new KeySpec(ref,version,label,mode,null,input.modelCodes()));
             } else if("ENV".equals(mode)) {
                 if(input.apiKey()!=null&&!input.apiKey().isBlank()) throw fail(400,"ENV模式不能填写Key明文");
                 String env=rules.credentialEnvName(input.envName());
                 if(env==null) throw fail(400,"请填写环境变量引用");
                 version=old!=null&&"ENV".equals(old.mode())&&env.equals(old.envName())?old.keyVersion():str(insert(
                         "INSERT INTO sys_ai_configuration_key_material(key_ref,credential_mode,credential_env_name) VALUES(?,?,?)",id(ref),"ENV",env));
-                keys.add(new KeySpec(ref,version,label,mode,env));
+                keys.add(new KeySpec(ref,version,label,mode,env,input.modelCodes()));
             } else throw fail(400,"Key来源无效");
         }
+        int associations=0;
+        var modelCodes=models.stream().map(ModelSpec::modelCode).collect(java.util.stream.Collectors.toSet());
+        for(var key:keys) {
+            if(key.modelCodes()!=null && (key.modelCodes().isEmpty() || new HashSet<>(key.modelCodes()).size()!=key.modelCodes().size() || !modelCodes.containsAll(key.modelCodes()))) throw fail(400,"Key关联模型无效");
+            associations+=key.modelCodes()==null?models.size():key.modelCodes().size();
+        }
+        if(associations>64) throw fail(400,"最多64个Key与模型关联");
         var h=head(configId,false);
         if(h.active()!=null) {
             var active=snapshot(configId,h.active());
             var candidate=new Snapshot("pending",d.providerCode(),d.endpointUrl(),d.protocol(),d.timeoutSeconds(),models,keys);
-            if(settings && pureKeyRotation(active,candidate))
-                rotate(active,candidate,models.stream().map(ModelSpec::modelRef).collect(java.util.stream.Collectors.toSet()),null,false);
+            if(settings && compatibleSettings(active,candidate))
+                rotate(active,candidate,models.stream().filter(m->keys.stream().anyMatch(k->associated(m,k))).map(ModelSpec::modelRef).collect(java.util.stream.Collectors.toSet()),null,false);
             else protectReferences(configId,h.active(),models,keys);
         }
         long version=insert("INSERT INTO sys_ai_configuration_version(config_id,snapshot_json) VALUES(?,?)",configId,"{}");
@@ -277,6 +284,21 @@ public class AiConfigurationService {
         head(configId,false);
         return versions(configId).stream().filter(Version::activated).flatMap(v->v.snapshot().models().stream()
                 .flatMap(m->refs.modelReferences(new ModelVersionRef(m.modelRef(),v.configVersion())).stream())).distinct().toList();
+    }
+    <T> T settingsGuard(Supplier<T> action) { return guarded(action); }
+    String settingsFingerprint(String purpose,Object values) {
+        try { return cipher.fingerprint(purpose,json.writeValueAsBytes(values)); }
+        catch(Exception unavailable) { throw fail(503,"配置维护服务暂不可用"); }
+    }
+    static boolean associated(ModelSpec model,KeySpec key) { return key.modelCodes()==null || key.modelCodes().contains(model.modelCode()); }
+    boolean compatibleSettings(Snapshot previous,Snapshot next) {
+        if(!previous.providerCode().equals(next.providerCode()) || !previous.endpointUrl().equals(next.endpointUrl())
+                || !previous.protocol().equals(next.protocol()) || previous.timeoutSeconds()!=next.timeoutSeconds()) return false;
+        for(var model:next.models()) {
+            var old=previous.models().stream().filter(m->m.modelRef().equals(model.modelRef())).findFirst();
+            if(old.isPresent() && !old.get().equals(model)) return false;
+        }
+        return true;
     }
     boolean pureKeyRotation(Snapshot previous,Snapshot next) {
         if(!previous.providerCode().equals(next.providerCode()) || !previous.endpointUrl().equals(next.endpointUrl())
@@ -312,15 +334,17 @@ public class AiConfigurationService {
             var s=snapshot(configId,version);
             if(s.models().isEmpty()||s.keys().isEmpty()) throw fail(409,"至少配置一个模型和Key");
             var accepted=new ArrayList<AdmittedPair>();
-            for(var model:s.models()) for(var key:s.keys()) if(validProof(s,model,key)) accepted.add(new AdmittedPair(model.modelRef(),key.keyRef(),key.keyVersion(),proof(s,model,key)));
+            for(var model:s.models()) for(var key:s.keys()) if(associated(model,key) && validProof(s,model,key) && keyUsable(key)) accepted.add(new AdmittedPair(model.modelRef(),key.keyRef(),key.keyVersion(),proof(s,model,key)));
             if(accepted.isEmpty()) throw fail(409,"没有当前版本验证通过的搭配");
-            if(accepted.size()!=s.models().size()*s.keys().size()&&!change.onlyAvailable()) throw fail(409,"部分搭配未通过，请明确选择仅启用可用部分");
-            boolean rotation=settings && h.active()!=null && pureKeyRotation(snapshot(configId,h.active()),s);
+            if(accepted.size()!=s.models().stream().mapToLong(m->s.keys().stream().filter(k->associated(m,k)).count()).sum()&&!change.onlyAvailable()) throw fail(409,"部分搭配未通过，请明确选择仅启用可用部分");
+            boolean rotation=settings && h.active()!=null && compatibleSettings(snapshot(configId,h.active()),s);
             if(rotation) {
                 var old=snapshot(configId,h.active());
                 // A working unchanged key must not hide a failed replacement key for a used model.
                 var changed=s.keys().stream().filter(k->old.keys().stream().noneMatch(k::equals)).toList();
-                var proven=s.models().stream().filter(m->changed.stream().allMatch(k->accepted.stream().anyMatch(p->p.modelRef().equals(m.modelRef())&&p.keyRef().equals(k.keyRef())&&p.keyVersion().equals(k.keyVersion())))).map(ModelSpec::modelRef).collect(java.util.stream.Collectors.toSet());
+                var proven=s.models().stream().filter(m->accepted.stream().anyMatch(p->p.modelRef().equals(m.modelRef())))
+                        .filter(m->!pureKeyRotation(old,s) || changed.stream().filter(k->associated(m,k)).allMatch(k->accepted.stream().anyMatch(p->p.modelRef().equals(m.modelRef())&&p.keyRef().equals(k.keyRef())&&p.keyVersion().equals(k.keyVersion()))))
+                        .map(ModelSpec::modelRef).collect(java.util.stream.Collectors.toSet());
                 String receipt=rotate(old,s,proven,actor,true);
                 jdbc.update("UPDATE sys_ai_settings_test_intent SET rotation_from_version=?,rotation_receipt_json=? WHERE test_id=? AND config_id=?",h.active(),receipt,testId,configId);
             }
@@ -367,6 +391,16 @@ public class AiConfigurationService {
             String input=encode(parts);
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8)));
         } catch(Exception invalid) { throw fail(500,"搭配签名失败"); }
+    }
+    boolean keyUsable(KeySpec key) {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_key_health WHERE key_ref=? AND key_version=? AND status='AUTH_FAILED'",Integer.class,id(key.keyRef()),id(key.keyVersion()))==0;
+    }
+    void keyRejected(KeySpec key) {
+        jdbc.update("INSERT INTO sys_ai_key_health(key_ref,key_version,status) VALUES(?,?,'AUTH_FAILED') ON DUPLICATE KEY UPDATE status='AUTH_FAILED',update_time=CURRENT_TIMESTAMP",id(key.keyRef()),id(key.keyVersion()));
+    }
+    void keyRetested(KeySpec key,boolean rejected) {
+        if(rejected) keyRejected(key);
+        else jdbc.update("DELETE FROM sys_ai_key_health WHERE key_ref=? AND key_version=?",id(key.keyRef()),id(key.keyVersion()));
     }
     boolean validProof(Snapshot s,ModelSpec model,KeySpec key) {
         var rows=jdbc.query("SELECT status,checked_at FROM sys_ai_configuration_test_pair WHERE proof_hash=? AND checked_at IS NOT NULL ORDER BY pair_id DESC LIMIT 1",(rs,n)->
