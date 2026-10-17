@@ -69,6 +69,7 @@ OpenRouterJsonObjectTest
 OpenRouterRetryBoundaryTest
 OpenRouterTransportTest
 SceneDataServiceTest
+DatabaseBindingsTest
 SceneHttpBoundaryTest
 SceneLegacyCompatibilityTest
 SceneLogMvcTest
