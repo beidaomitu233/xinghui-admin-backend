@@ -8,7 +8,7 @@
 
 `sceneKey` 由服务端生成：摘要为 `lowcode.record.summary.<formId>`，通用场景为 `scene.<服务端UUID无连字符>`。名称可改，key、种类和绑定表单不可由保存接口改换。摘要 formId 由有权候选列表选择；重复摘要场景返回 409，不猜最新 ID。
 
-权限动作：管理列表 `ai:scene:list`；详情/工作区/模型选项 `ai:scene:query`；创建 `ai:scene:add`；保存 `ai:scene:edit`；启停 `ai:scene:enable`；预览/主动试运行 `ai:scene:test`。所有管理动作还要求既有平台身份，不向租户开放配置权限。业务候选和提交要求 `ai:scene:invoke`，并继续检查场景主体范围、真实业务权限和数据范围。管理权不等于取数权。
+权限动作：管理列表 `ai:scene:list`；详情/模型选项 `ai:scene:query`；创建 `ai:scene:add`；保存 `ai:scene:edit`；启停 `ai:scene:enable`；预览/主动试运行 `ai:scene:test`。工作区列表必须 list，含 selected 正文还必须 query；无 query 不返回正文，显式请求 selected 则403。所有管理动作还要求既有平台身份，不向租户开放配置权限。新原生场景只允许真实当前登录用户且具有 `ai:scene:invoke`，不从保存者身份派生后台服务主体；有数据对象时仍需 C 的真实记录查询权限与数据范围。旧迁移场景同时保留原主体/动作限制，新场景接口不能扩大旧授权。管理权不等于取数权。
 
 ## 管理入口
 
@@ -46,7 +46,7 @@
     "purpose": "概括当前授权记录",
     "promptText": "概括当前记录，遵守用户要求：{{user_request}}",
     "outputRequirement": "输出简短中文摘要",
-    "dataObjects": [{"objectKey":"lowcode.record","fields":["subject"]}],
+    "dataObjects": [{"objectKey":"lowcode.record","formId":"42","fields":["subject"]}],
     "modelPolicy": {
       "mode":"FIXED",
       "models":[{"model":{"modelRef":"17","configVersion":"8"},"keyMode":"AUTO","allowedKeys":[],"fixedKey":null,"fallbackKeys":[]}],
@@ -61,7 +61,7 @@
 }
 ```
 
-变量/内置对象由 C 的唯一目录及编译契约校验；`dataObjects` 不能增加 SQL、URL、类名、身份或任意记录正文。摘要只允许绑定表单内的授权 subject/summary 字段，排除 internal_note。promptText 是单编辑器完整指令，业务数据独立消息注入。
+变量/内置对象由 C 的唯一目录及编译契约校验；`dataObjects` 不能增加 SQL、URL、类名、身份或任意记录正文。每个选择含 objectKey/formId/fields，表单来自安全候选；摘要 formId 可省略由服务端补绑定表单，提供时必须一致。GENERAL 带对象必须明确安全表单选择。摘要只允许绑定表单内的授权 subject/summary 字段，排除 internal_note。promptText 是单编辑器完整指令，业务数据独立消息注入。
 
 自动保存约 600ms debounce，同场景单写在途。expectedRevision 必须匹配；同 clientMutationId 同内容重放原保存结果，不同内容 409。合法完整保存在事务内 CAS、生成不可变内部快照和真实 sceneVersion、切 current 指针；响应确认后才显示已保存。无效中间输入 HTTP400，客户端保留输入，服务端不保存另一个待发布 buffer，也不改变旧有效配置。模型暂不可用不阻止合法保存，availability 返回 UNAVAILABLE 及安全原因；配置已生效不等于当前供应商可用。保存不读真实业务记录、不测试 Key、不调用供应商，不依赖成功 BUSINESS/TEST。
 
@@ -82,7 +82,9 @@
 {"businessRef":{"type":"lowcode.record","id":"42:305"},"inputs":{"user_request":"请概括重点"},"idempotencyKey":"4a1f8cc3-b769-4ba2-a902-e80e3e79a738"}
 ```
 
-只传受控记录引用和用户输入，不传 actor/tenant/appId/模板版本/业务正文。服务端校验摘要场景与 formId 对应，C 核对真实记录、schema、字段与当前主体。受理固定当前 sceneVersion，同幂等键同输入返回原请求，即使随后保存新版；不同输入409。在途不随场景编辑换内容/重启输出。一般场景可无数据对象；业务引用仍须满足有界、类型化规则。
+只传受控记录引用和用户输入，不传 actor/tenant/appId/模板版本/业务正文。服务端校验摘要场景与 formId 对应，C 核对真实记录、schema、字段与当前主体。受理固定当前 sceneVersion，同幂等键同输入返回原请求，即使随后保存新版；不同输入409。在途不随场景编辑换内容/重启输出。
+
+GENERAL 无数据对象时，预览/试运行/业务提交省略 businessRef（或 null），服务端生成语义引用 `{type:"ai.scene",id:"<该真实sceneKey>"}`；这是场景级调用关联而非伪造业务记录 ID，不读业务记录。客户端若提供不同引用则400。GENERAL 有数据对象或 RECORD_SUMMARY 必须由安全记录选择生成 lowcode.record 引用；不可手输或伪造别的表单。预览/试运行还要求 scene:test 与 scene:invoke 及实际数据权限，不借管理身份绕过。
 
 `Request` 返回 requestId、sceneKey、sceneVersionId、kind（BUSINESS/TEST）、businessRef、status/stage/errorCode、outputStarted/attemptCount、nullable token 用量与时间。不包含 appId。原 `/ai/applications` 和 `/ai/requests` 兼容入口保留原响应，不改变旧 ID 含义；scene 管理接管的旧写接口返回 SCENE_MANAGED，不能绕过新 CAS。
 

@@ -26,7 +26,7 @@ public final class SceneDtos {
         public ModelPolicy { models=List.copyOf(models); }
     }
     /** Directory keys and selected field names only; never SQL, URLs, classes, record bodies or caller identity. */
-    public record DataObject(String objectKey,List<String> fields) {
+    public record DataObject(String objectKey,String formId,List<String> fields) {
         public DataObject { fields=List.copyOf(fields); }
     }
     public record Definition(String name,String purpose,String promptText,String outputRequirement,
