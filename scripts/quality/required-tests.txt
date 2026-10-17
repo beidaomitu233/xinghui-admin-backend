@@ -74,6 +74,7 @@ SceneLogMvcTest
 SceneLogPermissionMigrationTest
 SceneManagementTest
 SceneMonitorTest
+ScenePreviewTest
 SceneRuntimeTest
 SceneTestReplayTest
 TemplateDataServiceTest
