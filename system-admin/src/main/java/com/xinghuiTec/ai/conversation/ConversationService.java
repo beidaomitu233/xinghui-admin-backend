@@ -66,8 +66,9 @@ public class ConversationService {
     }
     public ConversationDtos.Page page(TrustedActor actor, boolean platform, String scope, String sceneKey, String kind,
             String search, int page, int size) {
-        require(actor.authorities().contains("ai:request:list"), 403, "FORBIDDEN");
         boolean audit = audit(scope, actor, platform);
+        require(actor.authorities().contains("ai:request:list")
+                || (!audit && actor.authorities().contains("ai:scene:invoke")), 403, "FORBIDDEN");
         store.reconcile();
         var owner = new AiRequestStore.Owner(actor.subjectId(), actor.tenantId());
         var rows = store.page(owner, audit, sceneKey, kind, search, page, size);

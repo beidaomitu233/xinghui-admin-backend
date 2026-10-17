@@ -75,6 +75,7 @@ ConversationMigrationTest
 ConversationMvcTest
 ConversationServiceTest
 SceneCandidateContextTest
+ScenePracticalDefinitionTest
 SceneHttpBoundaryTest
 SceneLegacyCompatibilityTest
 SceneLogMvcTest

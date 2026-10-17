@@ -106,4 +106,18 @@ class AiAccessActionsTest {
         assertFalse(permissions(2).contains("ai:scene:edit"));
         assertFalse(permissions(2).contains("ai:scene:invoke"));
     }
+
+    @Test void invocationDerivesConversationNavigationWithoutTechnicalLogOrConfigurationGrants() throws Exception {
+        jdbc.update("UPDATE sys_menu SET perms='ai:monitor:enter' WHERE menu_id=202610160180000003");
+        jdbc.update("DELETE FROM sys_role_menu WHERE role_id=2");
+        jdbc.update("INSERT INTO sys_menu(menu_id,parent_id,order_num,menu_type,status,perms,is_deleted,path) VALUES(997,202610160180000003,10,'F','0','ai:scene:invoke',0,'')");
+        jdbc.update("INSERT INTO sys_role_menu VALUES(2,997)");
+        assertEquals(List.of(202610160180000001L,202610160180000003L),routes(22));
+        assertEquals(java.util.Set.of("ai:scene:invoke","ai:monitor:enter"),new java.util.HashSet<>(resolvedPermissions(2)));
+        assertFalse(permissions(2).contains("ai:request:list"));
+        assertFalse(permissions(2).contains("ai:request:audit"));
+        assertFalse(permissions(2).contains("ai:config:query"));
+        jdbc.update("DELETE FROM sys_role_menu WHERE role_id=2 AND menu_id=997");
+        assertTrue(routes(22).isEmpty());
+    }
 }

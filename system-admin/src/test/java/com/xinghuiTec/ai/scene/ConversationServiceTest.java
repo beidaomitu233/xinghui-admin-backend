@@ -48,6 +48,20 @@ class ConversationServiceTest {
                 UUID.randomUUID().toString(), null);
     }
 
+    @Test void invokerCanListOnlyOwnConversationsWithoutTechnicalLogPermission() throws Exception {
+        var accepted = service.start(start("my own conversation"), f.actor, false);
+        finished(accepted);
+        var invoker = new TrustedActor(f.actor.subjectId(), f.actor.tenantId(), Set.of("ai:scene:invoke"), null);
+        var page = service.page(invoker, false, "OWN", null, null, null, 1, 20);
+        assertEquals("1", page.total());
+        assertEquals(accepted.conversationId(), page.records().get(0).conversationId());
+        var other = new TrustedActor("999", f.actor.tenantId(), Set.of("ai:scene:invoke"), null);
+        assertEquals("0", service.page(other, false, "OWN", null, null, null, 1, 20).total());
+        var forbidden = assertThrows(ConversationFailure.class,
+                () -> service.page(invoker, true, "AUDIT", null, null, null, 1, 20));
+        assertEquals(403, forbidden.status());
+    }
+
     private ConversationDtos.Detail finished(ConversationDtos.Accepted accepted) throws Exception {
         Instant until = Instant.now().plusSeconds(5);
         while (!f.runtime.status(Long.parseLong(accepted.requestId()), f.actor).status().terminal()) {

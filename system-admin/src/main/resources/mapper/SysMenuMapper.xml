@@ -42,7 +42,7 @@
             JOIN sys_role active_role ON active_role.role_id=granted_action.role_id AND active_role.status=1 AND active_role.is_deleted=0
             JOIN sys_menu action_menu ON action_menu.menu_id=granted_action.menu_id AND action_menu.status='0' AND action_menu.is_deleted=0
             WHERE granted_action.role_id=#{roleId}
-              AND action_menu.perms IN ('ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
+              AND action_menu.perms IN ('ai:scene:invoke','ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
           )
     </select>
 
@@ -71,7 +71,7 @@
             <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
                 #{roleId}
             </foreach>
-              AND action_menu.perms IN ('ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
+              AND action_menu.perms IN ('ai:scene:invoke','ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
           )
     </select>
 
@@ -114,7 +114,7 @@
             JOIN sys_role active_role ON active_role.role_id=granted_action.role_id AND active_role.status=1 AND active_role.is_deleted=0
             JOIN sys_menu action_menu ON action_menu.menu_id=granted_action.menu_id AND action_menu.status='0' AND action_menu.is_deleted=0
             WHERE members.user_id=#{userId}
-              AND action_menu.perms IN ('ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
+              AND action_menu.perms IN ('ai:scene:invoke','ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
           )
         ORDER BY parent_id, order_num
     </select>
