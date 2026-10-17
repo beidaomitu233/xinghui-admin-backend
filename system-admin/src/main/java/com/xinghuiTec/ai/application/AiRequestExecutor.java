@@ -18,7 +18,11 @@ import java.util.concurrent.atomic.AtomicReference;
 @Service
 public class AiRequestExecutor {
     public record Work(Invocation invocation, AiApplicationPolicy policy, List<AiMessage> messages,
-                       List<ResourceVersionRef> resources, Set<String> suppliedInputs, boolean draftTest) {
+                       List<ResourceVersionRef> resources, Set<String> suppliedInputs, boolean draftTest,Runnable sceneAccessCheck) {
+        public Work(Invocation invocation,AiApplicationPolicy policy,List<AiMessage> messages,
+                    List<ResourceVersionRef> resources,Set<String> suppliedInputs,boolean draftTest) {
+            this(invocation,policy,messages,resources,suppliedInputs,draftTest,null);
+        }
         public Work {
             messages = List.copyOf(messages); resources = List.copyOf(resources); suppliedInputs = Set.copyOf(suppliedInputs);
         }
@@ -92,7 +96,7 @@ public class AiRequestExecutor {
 
     private void run(Work work, long id, AiRequestStore.Owner owner, RequestControl control) {
         var provider = providers.getIfUnique();
-        if (provider == null || templates.getIfUnique() == null) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
+        if (provider == null || (work.sceneAccessCheck()==null && templates.getIfUnique() == null)) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         AiApplicationPolicy policy = work.policy();
         List<Boolean> eligible = policy.models().stream().map(binding -> {
             try { return !targets(provider, binding, Set.of(), policy.requirements(), control).isEmpty(); }
@@ -188,6 +192,7 @@ public class AiRequestExecutor {
     }
 
     private void validateTemplate(Work work, InvocationControl control) {
+        if(work.sceneAccessCheck()!=null){control.check();work.sceneAccessCheck().run();return;}
         var template = templates.getIfUnique();
         if (template == null) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         var validation = template.validateBinding(work.policy().template(), work.suppliedInputs(), work.invocation(), control);

@@ -17,7 +17,9 @@ import java.util.*;
 public class AiRequestLogService {
     public enum Scope { OWN, AUDIT }
     public record Filters(Scope scope, String appId, String requestId, String businessId, String modelRef,
-                          AiRequestStatus status, String tenantRef, String subjectRef, Instant from, Instant to) {}
+                          AiRequestStatus status, String tenantRef, String subjectRef, Instant from, Instant to,String sceneKey,String requestKind) {
+        public Filters(Scope scope,String appId,String requestId,String businessId,String modelRef,AiRequestStatus status,String tenantRef,String subjectRef,Instant from,Instant to){this(scope,appId,requestId,businessId,modelRef,status,tenantRef,subjectRef,from,to,null,null);}
+    }
     public record Row(AiRequestStore.Request request, String appName, String tenantRef, String subjectRef, long elapsedMs) {}
     public record Page(List<Row> records, long total, int pageNum, int pageSize) {}
     public record Attempt(String attemptId, int number, String configVersion, String modelRef, String keyRef,
@@ -53,7 +55,7 @@ public class AiRequestLogService {
         if (filters == null) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
         if (present(filters.requestId()) && !Long.toString(requestId).equals(filters.requestId())) throw new AiRuntimeException(ErrorCode.NOT_FOUND);
         Filters point = new Filters(filters.scope(), filters.appId(), Long.toString(requestId), filters.businessId(), filters.modelRef(),
-                filters.status(), filters.tenantRef(), filters.subjectRef(), filters.from(), filters.to());
+                filters.status(), filters.tenantRef(), filters.subjectRef(), filters.from(), filters.to(),filters.sceneKey(),filters.requestKind());
         Where where = where(actor, platform, point, "query");
         if (where.empty()) throw new AiRuntimeException(ErrorCode.NOT_FOUND);
         var args = new ArrayList<>(where.args()); args.add(requestId);
@@ -76,11 +78,13 @@ public class AiRequestLogService {
         if (where.empty()) return new Statistics(0, 0, 0, 0, null, null, 0, 0);
         long total = count(where);
         Long business = jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_request r" + where.sql() + " AND r.request_kind='BUSINESS'", Long.class, where.args().toArray());
+        var attemptArgs=new ArrayList<>(where.args());String attemptExtra="";
+        if(present(filters.modelRef())){attemptExtra=" AND a.model_ref=?";attemptArgs.add(filters.modelRef());}
         return jdbc.queryForObject("SELECT COUNT(*),SUM(a.input_tokens),SUM(a.output_tokens),"
                         + "SUM(CASE WHEN a.input_tokens IS NULL THEN 1 ELSE 0 END),SUM(CASE WHEN a.output_tokens IS NULL THEN 1 ELSE 0 END)"
-                        + " FROM sys_ai_request_attempt a JOIN sys_ai_request r ON r.request_id=a.request_id" + where.sql(),
+                        + " FROM sys_ai_request_attempt a JOIN sys_ai_request r ON r.request_id=a.request_id" + where.sql()+attemptExtra,
                 (rs, index) -> new Statistics(total, business == null ? 0 : business, total - (business == null ? 0 : business),
-                        rs.getLong(1), rs.getObject(2, Long.class), rs.getObject(3, Long.class), rs.getLong(4), rs.getLong(5)), where.args().toArray());
+                        rs.getLong(1), rs.getObject(2, Long.class), rs.getObject(3, Long.class), rs.getLong(4), rs.getLong(5)), attemptArgs.toArray());
     }
 
     /** JSON export preserves string IDs and cannot execute spreadsheet formula text. */
@@ -112,6 +116,8 @@ public class AiRequestLogService {
             equal(sql, args, "r.subject_ref", filter.subjectRef(), 128);
         }
         if (present(filter.appId())) { sql.append(" AND r.app_id=?"); args.add(AiApplicationService.positiveId(filter.appId())); }
+        equal(sql,args,"r.scene_key",filter.sceneKey(),128);
+        if(present(filter.requestKind())){if(!Set.of("BUSINESS","TEST").contains(filter.requestKind()))throw new AiRuntimeException(ErrorCode.INVALID_INPUT);equal(sql,args,"r.request_kind",filter.requestKind(),16);}
         if (present(filter.requestId())) { sql.append(" AND r.request_id=?"); args.add(AiApplicationService.positiveId(filter.requestId())); }
         equal(sql, args, "r.business_id", filter.businessId(), 128);
         if (filter.status() != null) { sql.append(" AND r.status=?"); args.add(filter.status().name()); }
@@ -126,7 +132,7 @@ public class AiRequestLogService {
             if (from.isAfter(to) || java.time.Duration.between(from, to).compareTo(java.time.Duration.ofDays(31)) > 0) {
                 throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             }
-            sql.append(" AND r.create_time>=? AND r.create_time<=?"); args.add(Timestamp.from(from)); args.add(Timestamp.from(to));
+            sql.append(" AND r.create_time>=? AND r.create_time<?"); args.add(Timestamp.from(from)); args.add(Timestamp.from(to));
         }
         boolean empty = filter.scope() == Scope.OWN && !restrictApplications(sql, args, actor);
         return new Where(sql.toString(), List.copyOf(args), empty);
@@ -150,7 +156,7 @@ public class AiRequestLogService {
         sql.append(" AND (");
         boolean both = !versionsAllowed.isEmpty() && !testAppsAllowed.isEmpty();
         if (!versionsAllowed.isEmpty()) {
-            sql.append("(r.request_kind='BUSINESS' AND r.app_version_id IN (").append(placeholders(versionsAllowed.size())).append("))");
+            sql.append("(r.app_version_id IN (").append(placeholders(versionsAllowed.size())).append("))");
             args.addAll(versionsAllowed);
         }
         if (both) sql.append(" OR ");
@@ -163,6 +169,34 @@ public class AiRequestLogService {
     }
 
     private String select() { return "SELECT r.*,a.name AS app_name FROM sys_ai_request r JOIN sys_ai_application a ON a.app_id=r.app_id"; }
+
+    /** Same authorization and predicate builder as list/detail/export; no aggregation-only bypass. */
+    public com.xinghuiTec.ai.scene.SceneDtos.Calls monitorCalls(TrustedActor actor,boolean platform,Filters filter) {
+        Where where=where(actor,platform,filter,"list");
+        if(where.empty())return new com.xinghuiTec.ai.scene.SceneDtos.Calls(0,0,0,0,0,0,0,null,null,0,0);
+        var requestArgs=new ArrayList<>(where.args());String extra="";
+        var requests=jdbc.queryForMap("SELECT COUNT(*) requests,SUM(CASE WHEN r.request_kind='BUSINESS' THEN 1 ELSE 0 END) business,"
+                +"SUM(CASE WHEN r.request_kind='TEST' THEN 1 ELSE 0 END) tests,SUM(CASE WHEN r.status='SUCCEEDED' THEN 1 ELSE 0 END) succeeded,"
+                +"SUM(CASE WHEN r.status IN ('FAILED','TIMED_OUT','INCOMPLETE') THEN 1 ELSE 0 END) failed FROM sys_ai_request r"+where.sql()+extra,requestArgs.toArray());
+        var attemptArgs=new ArrayList<>(requestArgs);String attemptExtra=extra;
+        if(present(filter.modelRef())){attemptExtra+=" AND a.model_ref=?";attemptArgs.add(filter.modelRef());}
+        var attempts=jdbc.queryForMap("SELECT COUNT(*) attempts,SUM(CASE WHEN a.status IN ('FAILED','TIMED_OUT','INCOMPLETE') THEN 1 ELSE 0 END) failed,"
+                +"SUM(a.input_tokens) input_tokens,SUM(a.output_tokens) output_tokens,SUM(CASE WHEN a.input_tokens IS NULL THEN 1 ELSE 0 END) unknown_input,"
+                +"SUM(CASE WHEN a.output_tokens IS NULL THEN 1 ELSE 0 END) unknown_output FROM sys_ai_request r JOIN sys_ai_request_attempt a ON a.request_id=r.request_id"
+                +where.sql()+attemptExtra,attemptArgs.toArray());
+        return new com.xinghuiTec.ai.scene.SceneDtos.Calls(number(requests,"requests"),number(requests,"business"),number(requests,"tests"),number(requests,"succeeded"),number(requests,"failed"),
+                number(attempts,"attempts"),number(attempts,"failed"),nullable(attempts,"input_tokens"),nullable(attempts,"output_tokens"),number(attempts,"unknown_input"),number(attempts,"unknown_output"));
+    }
+    public record KeyObservation(String keyRef,String keyVersion,long attempts,long failed) {}
+    public List<KeyObservation> keyObservations(TrustedActor actor,boolean platform,Filters filter) {
+        Where where=where(actor,platform,filter,"list");if(where.empty())return List.of();var args=new ArrayList<>(where.args());String extra="";
+        if(present(filter.modelRef())){extra+=" AND a.model_ref=?";args.add(filter.modelRef());}
+        return List.copyOf(jdbc.query("SELECT a.key_ref,a.key_version,COUNT(*) attempts,SUM(CASE WHEN a.status IN ('FAILED','TIMED_OUT','INCOMPLETE') THEN 1 ELSE 0 END) failed"
+                +" FROM sys_ai_request r JOIN sys_ai_request_attempt a ON a.request_id=r.request_id"+where.sql()+extra+" GROUP BY a.key_ref,a.key_version LIMIT 10001",
+                (rs,n)->new KeyObservation(rs.getString(1),rs.getString(2),rs.getLong(3),rs.getLong(4)),args.toArray()));
+    }
+    private static long number(Map<String,Object> row,String key){Long value=nullable(row,key);return value==null?0:value;}
+    private static Long nullable(Map<String,Object> row,String key){Object value=row.get(key);return value instanceof Number n?n.longValue():null;}
     private long count(Where where) {
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_request r" + where.sql(), Long.class, where.args().toArray());
         return count == null ? 0 : count;
@@ -174,11 +208,12 @@ public class AiRequestLogService {
                 version == null ? null : version.toString(), rs.getObject("draft_revision", Integer.class), AiRequestStore.Kind.valueOf(rs.getString("request_kind")),
                 rs.getString("business_type"), rs.getString("business_id"), AiRequestStatus.valueOf(rs.getString("status")), AiRequestStore.Stage.valueOf(rs.getString("stage")),
                 rs.getString("error_code"), rs.getBoolean("output_started"), rs.getInt("attempt_count"), rs.getObject("input_tokens", Long.class),
-                rs.getObject("output_tokens", Long.class), rs.getBoolean("usage_known"), instant(rs, "deadline"), created, finished);
+                rs.getObject("output_tokens", Long.class), rs.getBoolean("usage_known"), instant(rs, "deadline"), created, finished,optionalColumn(rs,"scene_key"),optionalColumn(rs,"scene_version_id"));
         return new Row(request, rs.getString("app_name"), rs.getString("tenant_ref"), rs.getString("subject_ref"),
                 Math.max(0, java.time.Duration.between(created, finished == null ? Instant.now() : finished).toMillis()));
     }
     private static Instant instant(ResultSet rs, String name) throws SQLException { Timestamp timestamp = rs.getTimestamp(name); return timestamp == null ? null : timestamp.toInstant(); }
+    private static String optionalColumn(ResultSet rs,String name)throws SQLException{var metadata=rs.getMetaData();for(int i=1;i<=metadata.getColumnCount();i++)if(name.equalsIgnoreCase(metadata.getColumnLabel(i)))return rs.getString(i);return null;}
     private static boolean present(String value) { return value != null && !value.isBlank(); }
     private static String placeholders(int count) { return String.join(",", Collections.nCopies(count, "?")); }
     private static void equal(StringBuilder sql, List<Object> args, String column, String value, int max) {

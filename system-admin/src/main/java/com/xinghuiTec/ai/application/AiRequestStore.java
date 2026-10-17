@@ -43,13 +43,18 @@ public class AiRequestStore {
     /** inputFingerprint is a keyed digest of canonical validated input, not the input itself. */
     public record Admission(long appId, Long appVersionId, Integer draftRevision, Kind kind,
                             Owner owner, String businessType, String businessId,
-                            String idempotencyKey, String inputFingerprint, Instant deadline) {
+                            String idempotencyKey, String inputFingerprint, Instant deadline,String sceneKey,String sceneVersionId) {
+        public Admission(long appId,Long appVersionId,Integer draftRevision,Kind kind,Owner owner,String businessType,String businessId,
+                         String idempotencyKey,String inputFingerprint,Instant deadline) {
+            this(appId,appVersionId,draftRevision,kind,owner,businessType,businessId,idempotencyKey,inputFingerprint,deadline,null,null);
+        }
         public Admission {
             if (appId <= 0 || kind == null || owner == null || deadline == null) {
                 throw new IllegalArgumentException("Invalid admission");
             }
             if ((kind == Kind.BUSINESS && (appVersionId == null || appVersionId <= 0 || draftRevision != null))
-                    || (kind == Kind.TEST && (appVersionId != null || draftRevision == null || draftRevision <= 0))) {
+                    || (kind == Kind.TEST && sceneKey==null && (appVersionId != null || draftRevision == null || draftRevision <= 0))
+                    || (sceneKey!=null && (appVersionId==null || appVersionId<=0 || draftRevision!=null || sceneVersionId==null))) {
                 throw new IllegalArgumentException("Invalid version binding");
             }
             requireText(businessType, 64);
@@ -66,7 +71,14 @@ public class AiRequestStore {
                           Kind kind, String businessType, String businessId, AiRequestStatus status,
                           Stage stage, String errorCode, boolean outputStarted, int attemptCount,
                           Long inputTokens, Long outputTokens, boolean usageKnown,
-                          Instant deadline, Instant createdAt, Instant finishedAt) {}
+                          Instant deadline, Instant createdAt, Instant finishedAt,String sceneKey,String sceneVersionId) {
+        public Request(String requestId,String appId,String appVersionId,Integer draftRevision,Kind kind,String businessType,String businessId,
+                       AiRequestStatus status,Stage stage,String errorCode,boolean outputStarted,int attemptCount,Long inputTokens,Long outputTokens,
+                       boolean usageKnown,Instant deadline,Instant createdAt,Instant finishedAt) {
+            this(requestId,appId,appVersionId,draftRevision,kind,businessType,businessId,status,stage,errorCode,outputStarted,attemptCount,inputTokens,outputTokens,
+                    usageKnown,deadline,createdAt,finishedAt,null,null);
+        }
+    }
     public record Accepted(Request request, boolean created) {}
 
     /** Same owner+app+key returns one request, including after a new version is published. */
@@ -80,13 +92,14 @@ public class AiRequestStore {
         var keys = new GeneratedKeyHolder();
         try {
             jdbc.update(connection -> {
+                boolean scene=admission.sceneKey()!=null;
                 PreparedStatement statement = connection.prepareStatement("""
                         INSERT INTO sys_ai_request
                         (app_id,app_version_id,draft_revision,request_kind,owner_scope,subject_ref,tenant_ref,
                          business_type,business_id,idempotency_scope,input_fingerprint,status,stage,
-                         deadline,create_time,update_time)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,'QUEUED','ACCEPTED',?,?,?)
-                        """, Statement.RETURN_GENERATED_KEYS);
+                         deadline,create_time,update_time
+                        """+(scene?",scene_key,scene_version_id)":")")
+                        +" VALUES (?,?,?,?,?,?,?,?,?,?,?,'QUEUED','ACCEPTED',?,?,?"+(scene?",?,?)":")"), Statement.RETURN_GENERATED_KEYS);
                 statement.setLong(1, admission.appId());
                 statement.setObject(2, admission.appVersionId());
                 statement.setObject(3, admission.draftRevision());
@@ -101,6 +114,7 @@ public class AiRequestStore {
                 statement.setTimestamp(12, Timestamp.from(admission.deadline()));
                 statement.setTimestamp(13, Timestamp.from(now));
                 statement.setTimestamp(14, Timestamp.from(now));
+                if(scene){statement.setString(15,admission.sceneKey());statement.setLong(16,Long.parseLong(admission.sceneVersionId()));}
                 return statement;
             }, keys);
         } catch (DuplicateKeyException duplicate) {
@@ -129,6 +143,18 @@ public class AiRequestStore {
         return read(requestId, owner, false);
     }
 
+    /** Read-only replay lookup in the existing admission ledger; never admits or schedules work. */
+    public Request sceneReplay(long appId,String sceneKey,Kind kind,Owner owner,String nonce,String fingerprint) {
+        String scope=digest(owner.scope(),Long.toString(appId),kind.name(),nonce);
+        var rows=jdbc.query("SELECT input_fingerprint,request_id FROM sys_ai_request WHERE idempotency_scope=?"
+                        +" AND owner_scope=? AND subject_ref=? AND tenant_ref=? AND app_id=? AND scene_key=? AND request_kind=? FOR UPDATE",
+                (rs,n)->new Object[]{rs.getString(1),rs.getLong(2)},scope,owner.scope(),owner.subjectRef(),owner.tenantRef(),appId,sceneKey,kind.name());
+        if(rows.isEmpty())return null;
+        if(!MessageDigest.isEqual(fingerprint.getBytes(StandardCharsets.US_ASCII),((String)rows.get(0)[0]).getBytes(StandardCharsets.US_ASCII)))
+            throw new IllegalArgumentException("IDEMPOTENCY_CONFLICT");
+        return read((Long)rows.get(0)[1],owner,true);
+    }
+
     Request currentOwned(long requestId, Owner owner) { return read(requestId, owner, true); }
 
     private Request read(long requestId, Owner owner, boolean currentRead) {
@@ -144,10 +170,15 @@ public class AiRequestStore {
                             rs.getString("error_code"), rs.getBoolean("output_started"), rs.getInt("attempt_count"),
                             rs.getObject("input_tokens", Long.class), rs.getObject("output_tokens", Long.class),
                             rs.getBoolean("usage_known"), rs.getTimestamp("deadline").toInstant(),
-                            rs.getTimestamp("create_time").toInstant(), finished == null ? null : finished.toInstant());
+                            rs.getTimestamp("create_time").toInstant(), finished == null ? null : finished.toInstant(),optionalColumn(rs,"scene_key"),optionalColumn(rs,"scene_version_id"));
                 }, requestId, owner.scope(), owner.subjectRef(), owner.tenantRef());
         if (rows.size() != 1) throw new IllegalArgumentException("REQUEST_NOT_FOUND");
         return rows.get(0);
+    }
+
+    private static String optionalColumn(java.sql.ResultSet rs,String name)throws java.sql.SQLException {
+        var metadata=rs.getMetaData();for(int i=1;i<=metadata.getColumnCount();i++)if(name.equalsIgnoreCase(metadata.getColumnLabel(i)))return rs.getString(i);
+        return null;
     }
 
     public boolean start(long requestId, Instant now) {

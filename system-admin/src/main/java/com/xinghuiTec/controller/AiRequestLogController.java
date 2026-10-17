@@ -25,12 +25,12 @@ public class AiRequestLogController {
         this.logs = logs; this.identity = identity; this.platform = platform;
     }
     public record Query(String scope, String appId, String requestId, String businessId, String modelRef, String status,
-                        String tenantRef, String subjectRef, String from, String to, Integer pageNum, Integer pageSize) {
+                        String tenantRef, String subjectRef, String from, String to, Integer pageNum, Integer pageSize,String sceneKey,String requestKind) {
         public AiRequestLogService.Filters filters() {
             try {
                 return new AiRequestLogService.Filters(scope == null ? AiRequestLogService.Scope.OWN : AiRequestLogService.Scope.valueOf(scope),
                         appId, requestId, businessId, modelRef, blank(status) ? null : AiRequestStatus.valueOf(status), tenantRef, subjectRef,
-                        blank(from) ? null : Instant.parse(from), blank(to) ? null : Instant.parse(to));
+                        blank(from) ? null : Instant.parse(from), blank(to) ? null : Instant.parse(to),sceneKey,requestKind);
             } catch (RuntimeException invalid) { throw new AiRuntimeException(ErrorCode.INVALID_INPUT); }
         }
         private static boolean blank(String value) { return value == null || value.isBlank(); }
@@ -65,6 +65,6 @@ public class AiRequestLogController {
     }
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Result<Void>> denied() { return AiHttpFailures.response(403, "FORBIDDEN"); }
-    @ExceptionHandler({IllegalArgumentException.class, org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
+    @ExceptionHandler({IllegalArgumentException.class, org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,org.springframework.validation.BindException.class})
     public ResponseEntity<Result<Void>> invalid() { return AiHttpFailures.response(400, "INVALID_INPUT"); }
 }

@@ -41,7 +41,13 @@ public record AiApplicationPolicy(ModelMode modelMode, List<ModelBinding> models
 
     /** Incomplete drafts are allowed, but these prerequisites are mandatory before testing/publishing. */
     public void requireComplete() {
-        if (models.isEmpty() || template == null || (allowedSubjects.isEmpty() && allowedAuthorities.isEmpty())
+        requireModelComplete();
+        if (template == null) throw new IllegalArgumentException("Incomplete application configuration");
+    }
+
+    /** Native scenes carry C's compiled snapshot rather than inventing a template ID. */
+    public void requireModelComplete() {
+        if (models.isEmpty() || (allowedSubjects.isEmpty() && allowedAuthorities.isEmpty())
                 || (modelMode == ModelMode.FIXED && !modelFallback && models.size() != 1)) {
             throw new IllegalArgumentException("Incomplete application configuration");
         }

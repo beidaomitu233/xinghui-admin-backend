@@ -149,6 +149,8 @@ public class AiApplicationAdminController {
         };
         return AiHttpFailures.response(status, error.code().name());
     }
+    @ExceptionHandler(com.xinghuiTec.ai.scene.SceneFailure.class)
+    public ResponseEntity<Result<Void>> sceneManaged(com.xinghuiTec.ai.scene.SceneFailure error){return AiHttpFailures.response(error.status(),error.getMessage());}
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Result<Void>> denied() {

@@ -67,6 +67,15 @@ LowcodeResourceDeadlineTest
 OpenRouterJsonObjectTest
 OpenRouterRetryBoundaryTest
 OpenRouterTransportTest
+SceneDataServiceTest
+SceneHttpBoundaryTest
+SceneLegacyCompatibilityTest
+SceneLogMvcTest
+SceneLogPermissionMigrationTest
+SceneManagementTest
+SceneMonitorTest
+SceneRuntimeTest
+SceneTestReplayTest
 TemplateDataServiceTest
 TemplateOptionsSecurityTest
 TemplateResponsePolicyTest
