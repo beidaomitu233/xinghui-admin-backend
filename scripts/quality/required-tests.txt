@@ -89,3 +89,4 @@ TemplateDataServiceTest
 TemplateOptionsSecurityTest
 TemplateResponsePolicyTest
 TemplateRulesTest
+AiSettingsKeyRotationTest
