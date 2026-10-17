@@ -20,6 +20,9 @@ public class AiConfigurationTests {
     private final AiConfigurationService configs;
     private final OpenRouterTransport transport;
     private final TransactionTemplate transactions;
+    private org.springframework.beans.factory.ObjectProvider<AiConfigurationTestObserver> completionObservers;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void completionObservers(org.springframework.beans.factory.ObjectProvider<AiConfigurationTestObserver> observers){this.completionObservers=observers;}
     private final ScheduledExecutorService leases=Executors.newSingleThreadScheduledExecutor(r->{
         var thread=new Thread(r,"ai-test-lease");thread.setDaemon(true);return thread;
     });
@@ -107,6 +110,7 @@ public class AiConfigurationTests {
             stopHeartbeat(run);
             configs.jdbc.update("UPDATE sys_ai_configuration_test SET status=?,update_time=CURRENT_TIMESTAMP WHERE test_id=? AND status IN ('QUEUED','RUNNING')",finalState,run);
             configs.jdbc.update("UPDATE sys_ai_configuration SET running_test_id=NULL WHERE config_id=? AND running_test_id=?",configId,run);
+            if(completionObservers!=null){var observer=completionObservers.getIfUnique();if(observer!=null)observer.completed(configId,run);}
         }
     }
     public TestRun get(long configId,long run) {

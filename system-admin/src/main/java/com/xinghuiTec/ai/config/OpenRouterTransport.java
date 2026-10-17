@@ -94,6 +94,10 @@ public class OpenRouterTransport {
             outbound.addAll(messages.stream().map(m->Map.of("role",m.role().name().toLowerCase(Locale.ROOT),"content",m.content())).toList());
             body.put("model",modelCode); body.put("messages",outbound);
             body.put("stream",requirements.streaming()); body.put("max_tokens",maxTokens);
+            // These two catalog-verified models support optional reasoning; ordinary chat should reserve output for text.
+            // https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+            if(requirements.outputFormat()==OutputFormat.TEXT && Set.of("poolside/laguna-s-2.1:free","nvidia/nemotron-3.5-lightning:free").contains(modelCode))
+                body.put("reasoning",Map.of("enabled",false));
             // Prevent routing to a different model; application-level fallback belongs to B.
             body.put("provider",state.jsonObject?Map.of("allow_fallbacks",false,"require_parameters",true):Map.of("allow_fallbacks",false));
             if(state.jsonObject) body.put("response_format",Map.of("type","json_object"));

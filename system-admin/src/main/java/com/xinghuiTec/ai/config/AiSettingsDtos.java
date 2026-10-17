@@ -19,7 +19,7 @@ public final class AiSettingsDtos {
     public enum ConnectionStatus { NOT_TESTED, QUEUED, RUNNING, SUCCEEDED, PARTIAL, FAILED, CANCELLED, INTERRUPTED }
     public record Connection(String testId,ConnectionStatus status,String message,boolean active,Instant checkedAt) {}
     public record View(String configId,int revision,String name,String provider,String endpointUrl,
-                       boolean keyConfigured,String maskedKey,List<Model> models,boolean active,Connection connection) {
+                       boolean keyConfigured,String maskedKey,List<Model> models,boolean active,Connection connection,boolean pendingChanges) {
         public View {models=List.copyOf(models);}
     }
     public record Page(List<View> records,String total,int pageNum,int pageSize) {
