@@ -45,6 +45,10 @@ public class AiConfigurationService {
         this.legacy=legacy; this.legacyCredentials=legacyCredentials;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ObjectProvider<AiSettingsRotation> rotations;
+    public void settingsRotations(ObjectProvider<AiSettingsRotation> rotations) { this.rotations=rotations; }
+
     record Head(long id, String name, String environment, String provider, String status, int revision,
                 Long draft, Long active, Long latestTest, Long runningTest, Long legacyId, LocalDateTime updated) {}
     Head head(long id, boolean lock) {
@@ -152,14 +156,23 @@ public class AiConfigurationService {
             return get(config);
         });
     }
-    public View save(long configId,DraftChange change) {
+    public View save(long configId,DraftChange change) { return save(configId,change,false); }
+    View saveSettings(long configId,DraftChange change) {
+        try { return save(configId,change,true); }
+        catch(AiConfigurationException conflict) {
+            if("在线应用引用该模型，请先迁移应用或使用紧急停用".equals(conflict.getMessage()))
+                throw fail(409,"当前修改会影响正在使用的提示词配置，请保留原模型后重试");
+            throw conflict;
+        }
+    }
+    private View save(long configId,DraftChange change,boolean settings) {
         Supplier<View> operation=()->transactions.execute(tx->{
             var h=head(configId,true); checkRevision(h,change.revision()); validate(change);
             if(h.runningTest()!=null) throw fail(409,"请先取消或等待当前测试结束");
             var previous=snapshot(configId,h.draft());
             if(!h.provider().equals(change.providerCode())||!previous.endpointUrl().equals(change.endpointUrl())||!previous.protocol().equals(change.protocol()))
                 throw fail(409,"变更提供商、协议或地址请复制为新配置");
-            saveSnapshot(configId,change,previous);
+            saveSnapshot(configId,change,previous,settings);
             return get(configId);
         });
         var refs=references.getIfAvailable();
@@ -181,7 +194,8 @@ public class AiConfigurationService {
             if(m.jsonObject()&&!OpenRouterCapabilities.supportsJson(m.modelCode())) throw fail(400,"该模型没有经核对的JSON对象能力，请保留文本模式");
         }
     }
-    private void saveSnapshot(long configId,DraftChange d,Snapshot previous) {
+    private void saveSnapshot(long configId,DraftChange d,Snapshot previous) { saveSnapshot(configId,d,previous,false); }
+    private void saveSnapshot(long configId,DraftChange d,Snapshot previous,boolean settings) {
         var models=new ArrayList<ModelSpec>(); var keys=new ArrayList<KeySpec>();
         var oldModels=previous==null?List.<ModelSpec>of():previous.models();
         var oldKeys=previous==null?List.<KeySpec>of():previous.keys();
@@ -229,7 +243,13 @@ public class AiConfigurationService {
             } else throw fail(400,"Key来源无效");
         }
         var h=head(configId,false);
-        if(h.active()!=null) protectReferences(configId,h.active(),models,keys);
+        if(h.active()!=null) {
+            var active=snapshot(configId,h.active());
+            var candidate=new Snapshot("pending",d.providerCode(),d.endpointUrl(),d.protocol(),d.timeoutSeconds(),models,keys);
+            if(settings && pureKeyRotation(active,candidate))
+                rotate(active,candidate,models.stream().map(ModelSpec::modelRef).collect(java.util.stream.Collectors.toSet()),null,false);
+            else protectReferences(configId,h.active(),models,keys);
+        }
         long version=insert("INSERT INTO sys_ai_configuration_version(config_id,snapshot_json) VALUES(?,?)",configId,"{}");
         var snap=new Snapshot(str(version),d.providerCode(),d.endpointUrl(),d.protocol(),d.timeoutSeconds(),List.copyOf(models),List.copyOf(keys));
         jdbc.update("UPDATE sys_ai_configuration_version SET snapshot_json=? WHERE version_id=?",encode(snap),version);
@@ -258,7 +278,33 @@ public class AiConfigurationService {
         return versions(configId).stream().filter(Version::activated).flatMap(v->v.snapshot().models().stream()
                 .flatMap(m->refs.modelReferences(new ModelVersionRef(m.modelRef(),v.configVersion())).stream())).distinct().toList();
     }
-    public View activate(long configId,Activate change) {
+    boolean pureKeyRotation(Snapshot previous,Snapshot next) {
+        if(!previous.providerCode().equals(next.providerCode()) || !previous.endpointUrl().equals(next.endpointUrl())
+                || !previous.protocol().equals(next.protocol()) || previous.timeoutSeconds()!=next.timeoutSeconds()
+                || !previous.models().equals(next.models()) || previous.keys().size()!=next.keys().size()) return false;
+        boolean changed=false;
+        for(int i=0;i<previous.keys().size();i++) {
+            var old=previous.keys().get(i); var key=next.keys().get(i);
+            if(!old.keyRef().equals(key.keyRef()) || !old.label().equals(key.label())) return false;
+            if(!old.equals(key)) {
+                if(!"DB".equals(key.mode()) || old.keyVersion().equals(key.keyVersion())) return false;
+                changed=true;
+            }
+        }
+        return changed;
+    }
+    private String rotate(Snapshot previous,Snapshot next,Set<String> proven,String actor,boolean apply) {
+        var refs=references.getIfAvailable();
+        if(refs==null) throw fail(503,"场景维护服务暂不可用");
+        var used=previous.models().stream().flatMap(m->refs.modelReferences(new ModelVersionRef(m.modelRef(),previous.configVersion())).stream()).distinct().toList();
+        var service=rotations==null?null:rotations.getIfUnique();
+        if(service==null && used.isEmpty()) return "[]";
+        if(service==null) throw fail(503,"场景维护服务暂不可用");
+        return service.rotate(previous,next,proven,used,actor,apply);
+    }
+    public View activate(long configId,Activate change) { return activate(configId,change,false,null,null); }
+    View activateSettings(long configId,Activate change,String actor,long testId) { return activate(configId,change,true,actor,testId); }
+    private View activate(long configId,Activate change,boolean settings,String actor,Long testId) {
         return guarded(()->transactions.execute(tx->{
             var h=head(configId,true); checkRevision(h,change.revision());
             long version=id(change.configVersion());
@@ -269,7 +315,16 @@ public class AiConfigurationService {
             for(var model:s.models()) for(var key:s.keys()) if(validProof(s,model,key)) accepted.add(new AdmittedPair(model.modelRef(),key.keyRef(),key.keyVersion(),proof(s,model,key)));
             if(accepted.isEmpty()) throw fail(409,"没有当前版本验证通过的搭配");
             if(accepted.size()!=s.models().size()*s.keys().size()&&!change.onlyAvailable()) throw fail(409,"部分搭配未通过，请明确选择仅启用可用部分");
-            if(h.active()!=null) {
+            boolean rotation=settings && h.active()!=null && pureKeyRotation(snapshot(configId,h.active()),s);
+            if(rotation) {
+                var old=snapshot(configId,h.active());
+                // A working unchanged key must not hide a failed replacement key for a used model.
+                var changed=s.keys().stream().filter(k->old.keys().stream().noneMatch(k::equals)).toList();
+                var proven=s.models().stream().filter(m->changed.stream().allMatch(k->accepted.stream().anyMatch(p->p.modelRef().equals(m.modelRef())&&p.keyRef().equals(k.keyRef())&&p.keyVersion().equals(k.keyVersion())))).map(ModelSpec::modelRef).collect(java.util.stream.Collectors.toSet());
+                String receipt=rotate(old,s,proven,actor,true);
+                jdbc.update("UPDATE sys_ai_settings_test_intent SET rotation_from_version=?,rotation_receipt_json=? WHERE test_id=? AND config_id=?",h.active(),receipt,testId,configId);
+            }
+            if(h.active()!=null && !rotation) {
                 var refs=references.getIfAvailable();
                 for(var prior:pairs(h.active())) if(accepted.stream().noneMatch(p->p.modelRef().equals(prior.modelRef())&&p.keyRef().equals(prior.keyRef())&&p.keyVersion().equals(prior.keyVersion()))
                         &&!refs.modelReferences(new ModelVersionRef(prior.modelRef(),str(h.active()))).isEmpty())

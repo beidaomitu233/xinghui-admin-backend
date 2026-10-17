@@ -44,6 +44,13 @@ class AiSettingsServiceTest {
         try (var c = Objects.requireNonNull(fixture.jdbc.getDataSource()).getConnection()) {
             ScriptUtils.executeSqlScript(c, new ByteArrayResource(table.getBytes(StandardCharsets.UTF_8)));
         }
+        String receipt;
+        try(var in=getClass().getResourceAsStream("/db/migration/V20261018_243__settings_key_rotation_receipt.sql")) {
+            receipt=new String(Objects.requireNonNull(in).readAllBytes(),StandardCharsets.UTF_8);
+        }
+        try(var c=Objects.requireNonNull(fixture.jdbc.getDataSource()).getConnection()) {
+            ScriptUtils.executeSqlScript(c,new ByteArrayResource(receipt.getBytes(StandardCharsets.UTF_8)));
+        }
         settings = new AiSettingsService(fixture.service, fixture.tests,
                 new TransactionTemplate(new DataSourceTransactionManager(fixture.jdbc.getDataSource())));
         var beans = new StaticListableBeanFactory();
@@ -113,7 +120,7 @@ class AiSettingsServiceTest {
         while (Instant.now().isBefore(limit)) {
             var result = settings.testResult(config, test);
             String intent = fixture.jdbc.queryForObject("SELECT activation_status FROM sys_ai_settings_test_intent WHERE test_id=?", String.class, test);
-            if (!"PENDING".equals(intent)) return result;
+            if (!"PENDING".equals(intent)) return settings.testResult(config, test);
             Thread.sleep(5);
         }
         throw new AssertionError("controlled settings test did not finish");

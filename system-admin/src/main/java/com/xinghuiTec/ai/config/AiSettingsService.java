@@ -111,7 +111,7 @@ public class AiSettingsService implements AiConfigurationTestObserver {
             });
             return get(configId);
         }
-        configs.save(configId, change(input, original.draft()));
+        configs.saveSettings(configId, change(input, original.draft()));
         return get(configId);
     }
 
@@ -152,11 +152,11 @@ public class AiSettingsService implements AiConfigurationTestObserver {
         if (input.activateOnSuccess() && !actor.authorities().contains("ai:config:enable"))
             throw fail(403, "无权启用配置");
         var head = configs.head(configId, false);
-        var run = tests.start(configId,
+        var run = tests.startSettings(configId,
                 new AiConfigurationDtos.TestStart(head.revision(), AiConfigurationService.str(head.draft()), true));
         configs.jdbc.update(
-                "INSERT INTO sys_ai_settings_test_intent(test_id,config_id,config_version,expected_revision,activate_on_success) VALUES(?,?,?,?,?)",
-                run.id(), configId, run.configVersion(), head.revision(), input.activateOnSuccess());
+                "INSERT INTO sys_ai_settings_test_intent(test_id,config_id,config_version,expected_revision,activate_on_success,initiated_by) VALUES(?,?,?,?,?,?)",
+                run.id(), configId, run.configVersion(), head.revision(), input.activateOnSuccess(), actor.subjectId());
         // An extremely short test may have completed before its intent was inserted.
         completed(configId, Long.parseLong(run.id()));
         return testResult(configId, Long.parseLong(run.id()));
@@ -185,8 +185,8 @@ public class AiSettingsService implements AiConfigurationTestObserver {
                             ((Number) intent.get("expected_revision")).intValue());
                     if (!"ACTIVE".equals(current.status())
                             || !Objects.equals(current.active(), Long.parseLong(run.configVersion())))
-                        configs.activate(configId, new AiConfigurationDtos.Activate(
-                                ((Number) intent.get("expected_revision")).intValue(), run.configVersion(), true));
+                        configs.activateSettings(configId, new AiConfigurationDtos.Activate(
+                                ((Number) intent.get("expected_revision")).intValue(), run.configVersion(), true), (String) intent.get("initiated_by"), testId);
                     chosen = "APPLIED";
                 } else if (activate) {
                     chosen = "NO_SUCCESS";
@@ -235,6 +235,10 @@ public class AiSettingsService implements AiConfigurationTestObserver {
             case CANCELLED -> "连接测试已取消";
             default -> "连接测试已中断，可重新测试";
         };
+        var activation = configs.jdbc.query("SELECT activation_status FROM sys_ai_settings_test_intent WHERE test_id=? AND config_id=?",
+                (rs,n)->rs.getString(1),testId,configId);
+        if(!active && activation.contains("BLOCKED"))
+            message="新Key尚未应用，正在使用的模型验证未全通过或提示词配置已变化，原连接保持不变";
         return new TestRun(run.id(), Long.toString(configId), status, message, active, run.pairs().stream()
                 .map(p -> new ModelResult(p.modelCode(),
                         "SUCCESS".equals(p.status())

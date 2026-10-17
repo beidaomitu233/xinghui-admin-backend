@@ -45,7 +45,9 @@ public class AiConfigurationTests {
         configs.jdbc.update("UPDATE sys_ai_configuration SET running_test_id=NULL WHERE running_test_id IN (SELECT test_id FROM sys_ai_configuration_test WHERE status='INTERRUPTED')");
     }
     @PreDestroy public void close() { workers.shutdownNow(); leases.shutdownNow(); }
-    public TestRun start(long configId,TestStart request) {
+    public TestRun start(long configId,TestStart request) { return start(configId,request,false); }
+    TestRun startSettings(long configId,TestStart request) { return start(configId,request,true); }
+    private TestRun start(long configId,TestStart request,boolean settings) {
         if(!request.confirmedCosts()) throw AiConfigurationService.fail(400,"请先确认测试搭配数及可能费用");
         long run=transactions.execute(tx->{
             var h=configs.head(configId,true); AiConfigurationService.checkRevision(h,request.revision());
@@ -53,7 +55,12 @@ public class AiConfigurationTests {
             var s=configs.snapshot(configId,h.draft());
             if(s.models().isEmpty()||s.keys().isEmpty()) throw AiConfigurationService.fail(409,"请先配置模型和Key");
             long test=configs.insert("INSERT INTO sys_ai_configuration_test(config_id,version_id,status) VALUES(?,?,'QUEUED')",configId,h.draft());
-            for(var m:s.models()) for(var k:s.keys()) configs.insert("INSERT INTO sys_ai_configuration_test_pair(test_id,model_ref,key_ref,key_version,proof_hash) VALUES(?,?,?,?,?)",test,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()),AiConfigurationService.id(k.keyVersion()),configs.proof(s,m,k));
+            var old=h.active()==null?null:configs.snapshot(configId,h.active());
+            boolean rotation=settings && old!=null && configs.pureKeyRotation(old,s);
+            for(var m:s.models()) for(var k:s.keys()) {
+                if(rotation && old.keys().contains(k)) continue;
+                configs.insert("INSERT INTO sys_ai_configuration_test_pair(test_id,model_ref,key_ref,key_version,proof_hash) VALUES(?,?,?,?,?)",test,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()),AiConfigurationService.id(k.keyVersion()),configs.proof(s,m,k));
+            }
             configs.jdbc.update("UPDATE sys_ai_configuration SET latest_test_id=?,running_test_id=? WHERE config_id=?",test,test,configId);
             return test;
         });
@@ -84,6 +91,7 @@ public class AiConfigurationTests {
             long version=configs.jdbc.queryForObject("SELECT version_id FROM sys_ai_configuration_test WHERE test_id=?",Long.class,run);
             var s=configs.snapshot(configId,version);
             for(var m:s.models()) for(var k:s.keys()) {
+                if(configs.jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_configuration_test_pair WHERE test_id=? AND model_ref=? AND key_ref=?",Integer.class,run,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()))==0) continue;
                 if(cancelled(run)) { finalState="CANCELLED"; return; }
                 configs.jdbc.update("UPDATE sys_ai_configuration_test_pair SET status='RUNNING' WHERE test_id=? AND model_ref=? AND key_ref=?",run,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()));
                 ExecutionOutcome result;
