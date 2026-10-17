@@ -31,4 +31,6 @@ catalog无业务query权限时objects为空，但仍可编辑不取数的普通�
 
 `compileEdited(version, legacyInvocation, EditorInput, control)` 只在显式合法保存时调用；生成独立CompiledScene，不修改旧共享模板。批准字段只能收窄，保留原精确资源版本/应用/主体范围。返回CompiledScene.legacyScopes必须和执行快照一同持久化；后续编辑旧映射场景仍走此方法，不能改调普通compile而丢掉旧约束。C render/authorize按当前启停、成功测试证据、配置哈希、批准人、字段/主体/applications重新校验。移除所有数据对象时不再附加无关资源范围。
 
-旧执行仍通过原AiTemplateRuntime精确版本运行，直到用户明确保存新快照；旧AI02场景不合并。特殊默认值/额外变量/不支持资源映射等返回READ_ONLY及原配置，禁止静默丢弃后自动转换。scene接管后的旧template写守卫待B提交唯一AiSceneOwnership接口后接入，不将其称为已完成。
+旧执行仍通过原AiTemplateRuntime精确版本运行，直到用户明确保存新快照；旧AI02场景不合并。特殊默认值/额外变量/不支持资源映射等返回READ_ONLY及原配置，禁止静默丢弃后自动转换。
+
+旧template的save、publish、enabled与持久test已接入AiSceneOwnership.ownsTemplate检查，和实际变更共用AiApplicationReferences.withReferenceGuard；已接管时由C生成固定ServiceException并映射HTTP409/业务码201/message=SCENE_MANAGED，避免依赖B异常类型。Spring生产构造器要求ownership Bean可用，缺失时依赖失败关闭写入；原显式非Spring构造器保留前scene兼容。B接口/Bean需一同集成，其查询必须是当前读，不能在旧RR快照中误判未接管。只读预览和旧不可变版本读取保留，不开放旁路覆盖scene配置。

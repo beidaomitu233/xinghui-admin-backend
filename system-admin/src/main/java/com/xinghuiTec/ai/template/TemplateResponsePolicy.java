@@ -42,7 +42,7 @@ public class TemplateResponsePolicy implements ResponseBodyAdvice<Object> {
     }
     @ExceptionHandler(ServiceException.class)
     public ResponseEntity<Result<Void>> service(ServiceException exception) {
-        if (Integer.valueOf(ResultCodeEnum.FAIL.getCode()).equals(exception.getCode())) return failure(409, ResultCodeEnum.FAIL, "VERSION_CONFLICT");
+        if (Integer.valueOf(ResultCodeEnum.FAIL.getCode()).equals(exception.getCode())) return failure(409, ResultCodeEnum.FAIL, "SCENE_MANAGED".equals(exception.getMessage())?"SCENE_MANAGED":"VERSION_CONFLICT");
         if (Integer.valueOf(ResultCodeEnum.DATA_ERROR.getCode()).equals(exception.getCode())) return failure(404, ResultCodeEnum.DATA_ERROR, "NOT_FOUND");
         if (Integer.valueOf(ResultCodeEnum.SERVICE_ERROR.getCode()).equals(exception.getCode())) return failure(503, ResultCodeEnum.SERVICE_ERROR, "DEPENDENCY_UNAVAILABLE");
         return failure(422, ResultCodeEnum.PARAM_ERROR, "INVALID_INPUT");

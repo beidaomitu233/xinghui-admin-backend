@@ -46,9 +46,16 @@ public class TemplateDataService implements AiTemplateRuntime, AiTemplatePreview
     private final ObjectMapper mapper;
     private final LowcodeResourceReader reader;
     private final ObjectProvider<AiApplicationReferences> references;
+    private final ObjectProvider<AiSceneOwnership> sceneOwnership;
+    /** Existing non-Spring callers retain the pre-scene constructor; Spring always uses the guarded constructor. */
     public TemplateDataService(JdbcTemplate jdbc, ObjectMapper mapper, LowcodeResourceReader reader,
                                ObjectProvider<AiApplicationReferences> references) {
-        this.jdbc = jdbc; this.mapper = mapper; this.reader = reader; this.references = references;
+        this(jdbc,mapper,reader,references,null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public TemplateDataService(JdbcTemplate jdbc, ObjectMapper mapper, LowcodeResourceReader reader,
+                               ObjectProvider<AiApplicationReferences> references,ObjectProvider<AiSceneOwnership> sceneOwnership) {
+        this.jdbc = jdbc; this.mapper = mapper; this.reader = reader; this.references = references;this.sceneOwnership=sceneOwnership;
     }
     private String table(boolean resource) { return resource ? "sys_ai_data_resource" : "sys_ai_prompt_template"; }
     private String foreign(boolean resource) { return resource ? "resource_id" : "template_id"; }
@@ -137,7 +144,7 @@ public class TemplateDataService implements AiTemplateRuntime, AiTemplatePreview
     }
     @Transactional
     public Map<String, Object> saveTemplate(long id, Draft<TemplateDefinition> draft) {
-        TemplateRules.validate(draft.definition()); save(false, id, draft.revision(), draft.definition().name(), draft.definition()); return get(false, id);
+        return guarded(()->{requireTemplateWritable(id);TemplateRules.validate(draft.definition()); save(false, id, draft.revision(), draft.definition().name(), draft.definition()); return get(false, id);});
     }
     @Transactional
     public Map<String, Object> saveResource(long id, Draft<ResourceDefinition> draft) {
@@ -191,6 +198,9 @@ public class TemplateDataService implements AiTemplateRuntime, AiTemplatePreview
     }
     @Transactional
     public TestResult testTemplate(long id, Test request, boolean persist) {
+        return persist?guarded(()->{requireTemplateWritable(id);return testTemplateNow(id,request,true);}):testTemplateNow(id,request,false);
+    }
+    private TestResult testTemplateNow(long id, Test request, boolean persist) {
         var row = checked(false, id, request.revision()); var d = decode(row.get("draft_json"), TemplateDefinition.class);
         var actor = reader.currentActor();
         var invocation = new Invocation(new TrustedActor(actor.subjectId(), actor.tenantId(), actor.authorities(), null), request.appId(), "draft:" + request.revision(), new BusinessRef("lowcode.record", request.businessRef()), "template-test");
@@ -206,6 +216,7 @@ public class TemplateDataService implements AiTemplateRuntime, AiTemplatePreview
     @Transactional
     public Map<String, Object> publish(long id, int revision) {
         return guarded(() -> {
+            requireTemplateWritable(id);
             var actor = reader.currentActor(); var row = checked(false, id, revision);
             var d = decode(row.get("draft_json"), TemplateDefinition.class); TemplateRules.validate(d); String hash = hash(d);
             if (!hash.equals(row.get("tested_hash"))) throw invalid("须先成功测试当前模板");
@@ -218,6 +229,7 @@ public class TemplateDataService implements AiTemplateRuntime, AiTemplatePreview
     @Transactional
     public Map<String, Object> enabled(boolean resource, long id, Enabled request) {
         return guarded(() -> {
+            if(!resource)requireTemplateWritable(id);
             var row = checked(resource, id, request.revision());
             var affected = versions(resource, id).stream().flatMap(v -> references(resource, id, Long.parseLong(v.get("id").toString())).stream()).distinct().toList();
             if (request.enabled()) {
@@ -238,6 +250,12 @@ public class TemplateDataService implements AiTemplateRuntime, AiTemplatePreview
         var value = references.getIfAvailable(); if (value == null) throw new com.xinghuiTec.exception.ServiceException("DEPENDENCY_UNAVAILABLE", com.xinghuiTec.emues.ResultCodeEnum.SERVICE_ERROR.getCode()); return value;
     }
     private <T> T guarded(Supplier<T> action) { return ref().withReferenceGuard(action); }
+    private void requireTemplateWritable(long id) {
+        if(sceneOwnership==null)return; // Compatibility for explicit pre-scene non-Spring construction only.
+        var ownership=sceneOwnership.getIfAvailable();
+        if(ownership==null)throw new com.xinghuiTec.exception.ServiceException("DEPENDENCY_UNAVAILABLE",com.xinghuiTec.emues.ResultCodeEnum.SERVICE_ERROR.getCode());
+        if(ownership.ownsTemplate(Long.toString(id)))throw new com.xinghuiTec.exception.ServiceException("SCENE_MANAGED",com.xinghuiTec.emues.ResultCodeEnum.FAIL.getCode());
+    }
     private void publishVersion(boolean resource, long id, Object config, String hash, String actor) {
         Integer number = jdbc.queryForObject("SELECT COALESCE(MAX(version_no),0)+1 FROM " + table(resource) + "_version WHERE " + foreign(resource) + "=?", Integer.class, id);
         if (resource) insert("INSERT INTO sys_ai_data_resource_version(resource_id,version_no,config_json,config_hash,approver,test_check_id) VALUES (?,?,?,?,?,?)", id, number, json(config), hash, actor, head(true, id, true).get("tested_check_id"));

@@ -147,6 +147,44 @@ public class SceneDataServiceTest {
         assertEquals(AiSceneLegacyTemplates.Compatibility.READ_ONLY,view.compatibility());assertNull(view.editor());assertTrue(view.reasons().contains("SPECIAL_VARIABLE_SCHEMA"));
         assertTrue(view.originalDefinition().values().containsKey("variables"));assertFalse(view.toString().contains("原默认值"));
     }
+    @Test void secondLegacySaveCannotAddSummaryAndScopeRemainsPinned() throws Exception {
+        legacyFixture(false);var bridge=new LegacySceneTemplates(jdbc,json,service);var ref=new TemplateVersionRef("31","41");
+        var once=bridge.compileEdited(ref,legacyInvocation(),editor("第一版","subject"),control());
+        var twice=bridge.compileEdited(ref,legacyInvocation(),new EditorInput("第二版","",once.editor().selections()),control());
+        assertEquals(once.legacyScopes(),twice.legacyScopes());
+        assertThrows(AiRuntimeException.class,()->bridge.compileEdited(ref,legacyInvocation(),editor("第三版","subject","summary"),control()));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_prompt_template_version WHERE template_id=31",Integer.class));
+    }
+    @Test void legacyApplicationAllowlistIsNotReplacedBySceneIdentity() throws Exception {
+        legacyFixture(false);var bridge=new LegacySceneTemplates(jdbc,json,service);var ref=new TemplateVersionRef("31","41");var base=legacyInvocation();
+        var wrong=new Invocation(base.actor(),"202","302",base.businessRef(),base.requestId());
+        var view=bridge.inspect(ref,wrong,control());assertEquals(AiSceneLegacyTemplates.Compatibility.READ_ONLY,view.compatibility());assertTrue(view.reasons().contains("RESOURCE_SCOPE_DENIED"));
+        assertThrows(AiRuntimeException.class,()->bridge.compileEdited(ref,wrong,editor("概括","subject"),control()));
+    }
+    @Test void sceneManagedLegacyWritesShareReferenceGuardAndReturnExplicitConflict() throws Exception {
+        var d=legacyFixture(false);var factory=new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+        var inside=new java.util.concurrent.atomic.AtomicBoolean();var checks=new java.util.concurrent.atomic.AtomicInteger();
+        factory.registerSingleton("references",new AiApplicationReferences(){
+            public List<ApplicationReference> modelReferences(ModelVersionRef r){return List.of();}
+            public List<ApplicationReference> templateReferences(TemplateVersionRef r){return List.of();}
+            public List<ApplicationReference> resourceReferences(ResourceVersionRef r){return List.of();}
+            public <T>T withReferenceGuard(java.util.function.Supplier<T> action){inside.set(true);try{return action.get();}finally{inside.set(false);}}
+        });
+        factory.registerSingleton("ownership",new AiSceneOwnership(){
+            public boolean ownsTemplate(String id){assertTrue(inside.get());checks.incrementAndGet();return id.equals("31");}
+            public boolean ownsApplication(String id){return false;}
+            public void requireTemplateWritable(String id){throw new UnsupportedOperationException();}
+            public void requireApplicationWritable(String id){throw new UnsupportedOperationException();}
+        });
+        var identity=new LowcodeIdentity(true);var manager=new DataSourceTransactionManager(jdbc.getDataSource());
+        var reader=new com.xinghuiTec.ai.template.LowcodeResourceReader(new LowcodeService(jdbc,new LowcodeSchema(json),identity),identity,jdbc,manager);
+        try {
+            var templates=new com.xinghuiTec.ai.template.TemplateDataService(jdbc,json,reader,factory.getBeanProvider(AiApplicationReferences.class),factory.getBeanProvider(AiSceneOwnership.class));
+            var actions=List.<Runnable>of(()->templates.saveTemplate(31,new com.xinghuiTec.ai.template.TemplateDataService.Draft<>(1,d)),()->templates.publish(31,1),()->templates.enabled(false,31,new com.xinghuiTec.ai.template.TemplateDataService.Enabled(1,false)),()->templates.testTemplate(31,new com.xinghuiTec.ai.template.TemplateDataService.Test(1,"201","1:11",Map.of()),true));
+            for(var action:actions){var e=assertThrows(com.xinghuiTec.exception.ServiceException.class,action::run);assertEquals("SCENE_MANAGED",e.getMessage());var response=new com.xinghuiTec.ai.template.TemplateResponsePolicy().service(e);assertEquals(409,response.getStatusCode().value());assertEquals("SCENE_MANAGED",response.getBody().getMessage());}
+            assertEquals(4,checks.get());assertEquals(1,jdbc.queryForObject("SELECT revision FROM sys_ai_prompt_template WHERE id=31",Integer.class));
+        } finally {reader.close();}
+    }
     public static String extract(String raw,String path) throws Exception {var n=new ObjectMapper().readTree(raw).get(path.substring(2));return n==null?null:n.toString();}
     public static String unquote(String raw) throws Exception {return raw==null?null:new ObjectMapper().readTree(raw).asText();}
     public static String type(String raw) throws Exception {return raw!=null&&new ObjectMapper().readTree(raw).isTextual()?"STRING":"NULL";}
