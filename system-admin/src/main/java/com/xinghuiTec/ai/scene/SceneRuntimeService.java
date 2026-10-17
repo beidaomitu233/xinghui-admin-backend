@@ -32,17 +32,27 @@ public class SceneRuntimeService {
     public SceneDtos.Request test(String key,SceneDtos.TestInput input,TrustedActor actor){
         require(input!=null && input.confirmedCosts(),400,"COST_CONFIRMATION_REQUIRED");return submit(key,input.expectedRevision(),input.modelIndex(),input.submission(),actor);
     }
-    private record Selected(SceneStore.Head head,SceneStore.Version version,AiRuntimeService.Submission input) {}
+    private record Selected(SceneStore.Head head,SceneStore.Version version,AiRuntimeService.Submission input,AiRequestStore.Request replay) {
+        Selected(SceneStore.Head head,SceneStore.Version version,AiRuntimeService.Submission input){this(head,version,input,null);}
+    }
     private SceneDtos.Request submit(String key,Integer expected,Integer model,SceneDtos.Submission input,TrustedActor actor){
         caller(actor);
         Selected selected=references.withReferenceGuard(()->{
             var head=scenes.head(key,true);require(head.currentVersion()!=null,409,"SCENE_UNCONFIGURED");require(head.enabled(),409,"SCENE_DISABLED");
             require("MAPPED".equals(head.compatibilityStatus()),409,"AMBIGUOUS_LEGACY_MAPPING");
+            if(expected!=null && head.appId()!=null){
+                require(input!=null && input.inputs()!=null,400,"INVALID_INPUT");SceneStore.mutationId(input.idempotencyKey());
+                var ref=input.businessRef()==null?new BusinessRef("ai.scene",key):new BusinessRef(input.businessRef().type(),input.businessRef().id());
+                var replay=runtime.replaySceneTest(Long.parseLong(head.appId()),key,model==null?-1:model,
+                        new AiRuntimeService.Submission(ref,input.inputs(),input.idempotencyKey()),actor);
+                if(replay!=null)return new Selected(head,scenes.version(replay.sceneVersionId()),null,replay);
+            }
             if(expected!=null)expected(head,expected);
             var version=scenes.version(head.currentVersion());var policy=execution.policy(version.appVersion());
             require(expected==null?policy.permits(actor):policy.permitsSubject(actor),403,"FORBIDDEN");
             return new Selected(head,version,normalize(head,version,input));
         });
+        if(selected.replay()!=null)return project(selected.replay());
         AiRequestStore.Request accepted;
         if(selected.version.compiled()==null){
             require(expected==null,409,"LEGACY_EDITOR_UNAVAILABLE");

@@ -92,7 +92,7 @@ GENERAL 无数据对象时，预览/试运行/业务提交省略 businessRef（�
 
 `Request` 返回 requestId、sceneKey、sceneVersionId、kind（BUSINESS/TEST）、businessRef、status/stage/errorCode、outputStarted/attemptCount、nullable token 用量与时间。不包含 appId。原 `/ai/applications` 和 `/ai/requests` 兼容入口保留原响应，不改变旧 ID 含义；scene 管理接管的旧写接口返回 SCENE_MANAGED，不能绕过新 CAS。
 
-主动试运行的 expectedRevision 必须对应已保存版本，modelIndex 从0计；固定该版本直到结束，不因后续自动保存失效，不是保存/启用前置。preview 同样固定当前已保存版本，只返回有权脱敏预览及安全摘要。
+新试运行的 expectedRevision 必须匹配当前已保存版本，modelIndex 从0计；固定该版本直到结束，不因后续自动保存失效，不是保存/启用前置。受理响应丢失后，原用户用相同 sceneKey、幂等键、modelIndex、引用及输入重试，先复核当前访问权并返回原 requestId/sceneVersionId，即使随后自动保存了新版；不重新读取业务正文或调用模型。同键异体409；新键旧 revision 仍409。preview 同样固定当前已保存版本，只返回有权脱敏预览及安全摘要。
 
 ## 真实监控
 

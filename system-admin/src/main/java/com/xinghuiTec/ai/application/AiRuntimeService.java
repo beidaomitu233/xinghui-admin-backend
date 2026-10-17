@@ -125,6 +125,19 @@ public class AiRuntimeService {
         return admit(loaded, input, actor);
     }
 
+    /** Replay precedes the facade's current revision check, with input-free current access revalidation. */
+    public AiRequestStore.Request replaySceneTest(long appId,String sceneKey,int modelIndex,Submission input,TrustedActor actor) {
+        if(actor.servicePrincipalRef()!=null || !actor.authorities().contains("ai:scene:invoke"))throw new AiRuntimeException(ErrorCode.FORBIDDEN);
+        var owner=owner(actor);AiRequestStore.Request replay;
+        try{replay=transaction.execute(tx->requests.sceneTestReplay(appId,sceneKey,owner,input.idempotencyKey(),
+                fingerprint(Long.toString(appId),true,null,modelIndex,input,owner)));}
+        catch(IllegalArgumentException conflict){if("IDEMPOTENCY_CONFLICT".equals(conflict.getMessage()))throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);throw conflict;}
+        if(replay==null)return null;
+        var authorized=status(AiApplicationService.positiveId(replay.requestId()),actor);
+        authorizeEvents(authorized,actor);
+        return authorized;
+    }
+
     private AiRequestStore.Request admit(Loaded loaded, Submission input, TrustedActor actor) {
         if (closing) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         if(loaded.scene()==null)loaded.policy().requireComplete();else{
@@ -286,13 +299,16 @@ public class AiRuntimeService {
     }
 
     private String fingerprint(Loaded loaded, Submission input, AiRequestStore.Owner owner) {
+        return fingerprint(loaded.app().appId(),loaded.test(),loaded.scene()==null?loaded.app().draftRevision():null,loaded.modelIndex(),input,owner);
+    }
+    private String fingerprint(String appId,boolean test,Integer draftRevision,int modelIndex,Submission input,AiRequestStore.Owner owner) {
         try {
             var values = new TreeMap<String, Object>();
             values.put("businessType", input.businessRef().type()); values.put("businessId", input.businessRef().id());
             values.put("inputs", input.inputs());
-            values.put("appId", loaded.app().appId()); values.put("ownerScope", owner.scope());
+            values.put("appId", appId); values.put("ownerScope", owner.scope());
             values.put("idempotencyKey", input.idempotencyKey());
-            if (loaded.test()) { if(loaded.scene()==null)values.put("draftRevision", loaded.app().draftRevision()); values.put("modelIndex", loaded.modelIndex()); }
+            if (test) { if(draftRevision!=null)values.put("draftRevision", draftRevision); values.put("modelIndex", modelIndex); }
             return cipher.fingerprint("ai:request-input:v1", mapper.writeValueAsBytes(values));
         } catch (ServiceException unavailableMaster) { throw new AiRuntimeException(ErrorCode.CREDENTIAL_UNAVAILABLE); }
         catch (JsonProcessingException unavailable) { throw new AiRuntimeException(ErrorCode.INTERNAL_FAILURE); }

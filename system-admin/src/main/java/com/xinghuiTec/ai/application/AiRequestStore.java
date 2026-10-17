@@ -143,6 +143,18 @@ public class AiRequestStore {
         return read(requestId, owner, false);
     }
 
+    /** Read-only replay lookup in the existing admission ledger; never admits or schedules work. */
+    public Request sceneTestReplay(long appId,String sceneKey,Owner owner,String nonce,String fingerprint) {
+        String scope=digest(owner.scope(),Long.toString(appId),Kind.TEST.name(),nonce);
+        var rows=jdbc.query("SELECT input_fingerprint,request_id FROM sys_ai_request WHERE idempotency_scope=?"
+                        +" AND owner_scope=? AND subject_ref=? AND tenant_ref=? AND app_id=? AND scene_key=? AND request_kind='TEST' FOR UPDATE",
+                (rs,n)->new Object[]{rs.getString(1),rs.getLong(2)},scope,owner.scope(),owner.subjectRef(),owner.tenantRef(),appId,sceneKey);
+        if(rows.isEmpty())return null;
+        if(!MessageDigest.isEqual(fingerprint.getBytes(StandardCharsets.US_ASCII),((String)rows.get(0)[0]).getBytes(StandardCharsets.US_ASCII)))
+            throw new IllegalArgumentException("IDEMPOTENCY_CONFLICT");
+        return read((Long)rows.get(0)[1],owner,true);
+    }
+
     Request currentOwned(long requestId, Owner owner) { return read(requestId, owner, true); }
 
     private Request read(long requestId, Owner owner, boolean currentRead) {
