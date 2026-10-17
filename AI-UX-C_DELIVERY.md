@@ -16,6 +16,10 @@
 
 下一阶段C1实现目录/编译器和定向测试，C2实现授权读取与旧资源回归，C3在合同稳定后更新公开文档。每阶段单独记录commit、实际测试及未验证项。当前仅接缝，完整功能未实现，不能标验收通过。
 
+### C0窄授权增量
+
+新增 `authorize(CompiledScene, SceneContext, InvocationControl): void`，用于每attempt/SSE重连当前授权复查，不需要user_request，不生成/返回渲染正文，不调用模型。C实现负责实际主体/tenant/绑定form-record、原schema与固定字段范围；B不得为授权而伪造输入再render。样本DTO的toString改为脱敏，避免候选标签进入普通日志。该小提交仍只包含共享接口和交付记录，C1实现另交。
+
 ### C0实际验证
 
 JDK17 `javac --release 17 -encoding UTF-8` 编译全部8个共享契约源文件通过（无外部classpath）。私有轻量契约检查5组通过：选择集合深层防改、正文toString脱敏、JSON类型/null保留、有界分页/ID溢出拒绝、诊断不可变。首次编译发现record访问器与keyword辅助方法同名，已限定辅助方法调用后重新编译通过。未运行Maven/完整产品测试、DB迁移、真实读取、页面或模型；没有生产Bean，不能将这些检查算作功能验收。

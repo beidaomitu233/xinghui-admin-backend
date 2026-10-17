@@ -36,6 +36,9 @@ public interface AiSceneDataRuntime {
      */
     RenderedScene render(CompiledScene compiled, SceneContext context, AiInputs inputs, InvocationControl control);
 
+    /** Recheck current identity, business scope and pinned field schema without inputs or returning any content. */
+    void authorize(CompiledScene compiled, SceneContext context, InvocationControl control);
+
     record OptionQuery(String keyword, int pageNum, int pageSize) {
         public OptionQuery { keyword = AiSceneDataRuntime.keyword(keyword); page(pageNum, pageSize); }
     }
@@ -73,6 +76,7 @@ public interface AiSceneDataRuntime {
     /** label is bounded and derived only from authorized, allowed fields; never whole record JSON. */
     record SampleOption(String recordId, String label, int schemaVersion, int revision) {
         public SampleOption { decimal(recordId); }
+        @Override public String toString() { return "SceneSampleOption[REDACTED]"; }
     }
 
     record Selection(String objectKey, String formId, List<String> fields) {
