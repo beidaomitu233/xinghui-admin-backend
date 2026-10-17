@@ -212,8 +212,8 @@ public class SceneDataService implements AiSceneDataRuntime {
             messages.add(new AiMessage(MessageRole.USER,substitute(compiled.editor().prompt(),replacements)));
             if(!compiled.editor().outputInstructions().isBlank())messages.add(new AiMessage(MessageRole.USER,substitute(compiled.editor().outputInstructions(),replacements)));
             if(!required&&!request.isBlank())messages.add(new AiMessage(MessageRole.USER,request));messages.add(new AiMessage(MessageRole.USER,"授权数据（JSON）："+json.writeValueAsString(preview.values())));
-            if(messages.stream().mapToLong(m->m.content().getBytes(StandardCharsets.UTF_8).length).sum()>262144)throw error(ErrorCode.OUTPUT_LIMIT);
-            return new RenderedScene(messages,List.of(),preview.notices());
+            if(messages.stream().mapToLong(m->m.content().getBytes(StandardCharsets.UTF_8).length).sum()>65536)throw error(ErrorCode.OUTPUT_LIMIT);
+            return new RenderedScene(messages,List.of(),preview.notices(),preview);
         }catch(com.fasterxml.jackson.core.JsonProcessingException invalid){throw error(ErrorCode.INVALID_INPUT);}
     }
 

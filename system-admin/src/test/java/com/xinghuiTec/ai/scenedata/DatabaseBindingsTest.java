@@ -93,6 +93,70 @@ class DatabaseBindingsTest {
         var malformed=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/system/ai/scene-data/bindings/preview").contentType("application/json").content("{\"bindings\":[],\"actor\":{\"subjectId\":\"2\"}}")).andReturn().getResponse();assertEquals(400,malformed.getStatus());
         var oversized=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/system/ai/scene-data/database/records").contentType("application/json").content(" ".repeat(131073))).andReturn().getResponse();assertEquals(413,oversized.getStatus());
     }
+    @Test void renderedPreviewUsesOnePinnedReadAndLegacyConstructorRemainsCompatible() throws Exception {
+        var count = new java.util.concurrent.atomic.AtomicInteger();
+        var identity = new LowcodeIdentity(true);
+        var schemas = new LowcodeSchema(json);
+        var lowcode = new LowcodeService(jdbc, schemas, identity);
+        service.database(new DatabaseBindingReader(jdbc, json, lowcode, schemas, new PlatformAccessService(true)) {
+            @Override public BindingPreview read(List<BindingSnapshot> snapshots, BusinessRef business,
+                    TrustedActor caller, InvocationControl invocation) {
+                count.incrementAndGet();
+                return super.read(snapshots, business, caller, invocation);
+            }
+        });
+        var input = new EditorInput("{{客户}}", "", List.of(), List.of(row("客户", "db.customers", "7", List.of())));
+        var compiled = service.compile(input, actor, control());
+        assertEquals(0, count.get());
+        jdbc.execute("ALTER TABLE customers ADD newly_added VARCHAR(100)");
+        jdbc.update("UPDATE customers SET newly_added='不属于已保存快照' WHERE id=7");
+        var context = new SceneContext("scene.check", "1", actor, new BusinessRef("ai.scene", "scene.check"), "r");
+        var rendered = service.render(compiled, context, new AiInputs(Map.of()), control());
+        assertEquals(1, count.get());
+        assertNotNull(rendered.bindingPreview());
+        var values = rendered.bindingPreview().values();
+        assertFalse(((Map<?,?>) values.get("客户")).containsKey("newly_added"));
+        assertEquals(1, rendered.bindingPreview().reads().get(0).rowCount());
+        String dataMessage = rendered.messages().get(rendered.messages().size()-1).content();
+        assertEquals(json.readTree(json.writeValueAsBytes(values)), json.readTree(dataMessage.substring(dataMessage.indexOf('{'))));
+        assertFalse(rendered.messages().stream().anyMatch(m -> m.content().contains("不属于已保存快照")));
+        assertNull(new RenderedScene(List.of(), List.of(), List.of()).bindingPreview());
+        assertNull(json.readValue("{\"messages\":[],\"dataUses\":[],\"notices\":[]}", RenderedScene.class).bindingPreview());
+    }
+    @Test void modelMessagesAllowExactly64KiBRejectNextByteAndSelectorPreviewRemainsLarger() throws Exception {
+        jdbc.execute("CREATE TABLE capacity_rows(id BIGINT PRIMARY KEY,chunk VARCHAR(8192))");
+        for (int i=1; i<=4; i++) jdbc.update("INSERT INTO capacity_rows VALUES(?,'')", i);
+        var binding = binding("payload", "db.capacity_rows", ReadMode.TABLE, List.of("chunk"), null, List.of(), 4, null);
+        var context = new SceneContext("scene.capacity", "1", actor, new BusinessRef("ai.scene", "scene.capacity"), "r");
+        String prompt = "{{payload}}";
+        var compiled = service.compile(new EditorInput(prompt, "", List.of(), List.of(binding)), actor, control());
+        long base = messageBytes(service.render(compiled, context, new AiInputs(Map.of()), control()));
+        if ((65536-base)%2 != 0) {
+            prompt += " ";
+            compiled = service.compile(new EditorInput(prompt, "", List.of(), List.of(binding)), actor, control());
+            base = messageBytes(service.render(compiled, context, new AiInputs(Map.of()), control()));
+        }
+        int remaining = (int) ((65536-base)/2);
+        assertTrue(remaining > 0 && remaining <= 4*8192);
+        for (int i=1; i<=4; i++) {
+            int chars = Math.min(8192, remaining);
+            jdbc.update("UPDATE capacity_rows SET chunk=? WHERE id=?", "x".repeat(chars), i);
+            remaining -= chars;
+        }
+        assertEquals(0, remaining);
+        assertEquals(65536, messageBytes(service.render(compiled, context, new AiInputs(Map.of()), control())));
+        var oneByteOver = service.compile(new EditorInput(prompt+"x", "", List.of(), List.of(binding)), actor, control());
+        assertEquals(ErrorCode.OUTPUT_LIMIT, assertThrows(AiRuntimeException.class,
+                () -> service.render(oneByteOver, context, new AiInputs(Map.of()), control())).code());
+        for (int i=5; i<=8; i++) jdbc.update("INSERT INTO capacity_rows VALUES(?,?)", i, "x".repeat(8192));
+        var wider = binding("payload", "db.capacity_rows", ReadMode.TABLE, List.of("chunk"), null, List.of(), 8, null);
+        var preview = preview(wider);
+        assertTrue(json.writeValueAsBytes(preview.values()).length > 65536);
+        assertEquals(8, preview.reads().get(0).rowCount());
+    }
+    private long messageBytes(RenderedScene rendered) {
+        return rendered.messages().stream().mapToLong(m -> m.content().getBytes(java.nio.charset.StandardCharsets.UTF_8).length).sum();
+    }
     @Test void nineteenDigitCandidateKeySurvivesHttpAndFixedRowRoundTrip() throws Exception {
         String id = "9007199254740993123";
         jdbc.execute("CREATE TABLE exact_keys(id BIGINT PRIMARY KEY,amount DECIMAL(24,4),name VARCHAR(20),tenant_id VARCHAR(20),is_deleted INT)");

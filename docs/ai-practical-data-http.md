@@ -23,7 +23,7 @@
 | POST `/database/records` | DatabaseRecordQuery | DatabaseRecords；records含key/label/values/businessRef，另含truncated |
 | POST `/bindings/preview` | BindingPreviewRequest | BindingPreview；values为别名→实际JSON值，reads为别名/来源/条数/截断，notices安全提示 |
 
-统一Result包装，ID字符串、数字/null/数组类型保留。GET tables分页1–100000、size1–100；每绑定最多200行、最多16绑定、64字段及16个AND过滤；查询limit+1判断截断，不扫完整总数。整体只读事务/等待最多10秒且受调用deadline与取消约束；预览与渲染结果最多256KiB，普通长文本字段读取8193字符并按8192截断/提示，结构化JSON无法安全解析或超限明确拒绝，不回退未经秘密键过滤的原文。标识符先匹配当前schema元数据再引用，过滤值参数化，拒绝SQL/URL/Bean/函数表达式。
+统一Result包装，ID字符串、数字/null/数组类型保留。GET tables分页1–100000、size1–100；每绑定最多200行、最多16绑定、64字段及16个AND过滤；查询limit+1判断截断，不扫完整总数。整体只读事务/等待最多10秒且受调用deadline与取消约束；选择器独立数据预览最多256KiB，场景渲染及模型总消息最多64KiB，普通长文本字段读取8193字符并按8192截断/提示，结构化JSON无法安全解析或超限明确拒绝，不回退未经秘密键过滤的原文。标识符先匹配当前schema元数据再引用，过滤值参数化，拒绝SQL/URL/Bean/函数表达式。
 
 sourceKey的db.前缀后为实际数据库表名，表备注作为label优先显示；lowcode.后为有权表单ID，所有实际可读schema字段可选，不再限subject/summary。选择器不要求用户输入sourceKey或SQL。
 
@@ -58,3 +58,9 @@ CHILDREN的parentVariable必须是前面同组ROW绑定，查询从该主记录�
 已知资讯/字典表叠加对应业务query/list；未知业务表限平台+数据库读取动作。实际存在的tenant_id/tenantId与is_deleted/deleted/del_flag附加范围条件，过滤不替代这些条件。字段按实际名字及备注排除密码、密钥、凭据等秘密；JSON/名称以_json结尾的结构化列递归剔除秘密键，普通文本保持字符串类型。二进制/不可安全解释的对象列不进入上下文。
 
 低代码使用记录原schema与实际类型；旧记录尚未具有新字段时，该值为null并返回FIELD_NOT_IN_RECORD_SCHEMA提示，不冒充该记录已按最新schema填写。输入、普通业务值可预览，响应no-store/private且对象toString脱敏。authorize仅复核元数据、权限与行存在/租户范围，不解析正文或伪造用户输入。
+
+## 固定快照场景预览
+
+RenderedScene增加可空bindingPreview（BindingPreview），保留原3参数构造器，旧v1结果可为null。v2 render将同一次db.read(compiled.bindings,...)的实际投影、ReadReceipt与notices附在该字段，消息渲染使用同一个读取结果。场景预览应直接取rendered.bindingPreview.values/reads，不再把原Definition传previewBindings重新编译/取数；避免fields=[]在后来新增列后扩大范围及两次读取不一致。
+
+独立选择器previewBindings按待保存定义编译，仍允许256KiB数据结果；已保存场景渲染与实际模型的全部消息保持64KiB上限（UTF-8字节），边界超出返回OUTPUT_LIMIT。对话历史由运行服务在同一64KiB预算内分配，不提高底层预算。

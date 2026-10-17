@@ -202,7 +202,8 @@ public interface AiSceneDataRuntime {
 
     record Notice(String code, String reference) {}
 
-    record RenderedScene(List<AiMessage> messages, List<DataUse> dataUses, List<Notice> notices) {
+    record RenderedScene(List<AiMessage> messages, List<DataUse> dataUses, List<Notice> notices, BindingPreview bindingPreview) {
+        public RenderedScene(List<AiMessage> messages,List<DataUse> dataUses,List<Notice> notices){this(messages,dataUses,notices,null);}
         public RenderedScene { messages = List.copyOf(messages); dataUses = List.copyOf(dataUses); notices = List.copyOf(notices); }
         @Override public String toString() { return "RenderedScene[REDACTED]"; }
     }
