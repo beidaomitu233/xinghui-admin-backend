@@ -152,7 +152,7 @@ class AiRequestLogServiceTest {
         jdbc.update("UPDATE sys_ai_request SET create_time=? WHERE request_id=?", Timestamp.from(Instant.now().minus(Duration.ofDays(400))), ownBusiness);
         assertEquals(1, logs.page(own, false, ownFilter, 1, 20).total());
         assertEquals(Long.toString(ownBusiness), logs.detail(own, false, ownFilter, ownBusiness).request().request().requestId());
-        var query = new AiRequestLogController.Query("UNKNOWN", null, null, null, null, null, null, null, null, null, null, null);
+        var query = new AiRequestLogController.Query("UNKNOWN", null, null, null, null, null, null, null, null, null, null, null,null,null);
         assertEquals(ErrorCode.INVALID_INPUT, assertThrows(AiRuntimeException.class, query::filters).code());
     }
 
