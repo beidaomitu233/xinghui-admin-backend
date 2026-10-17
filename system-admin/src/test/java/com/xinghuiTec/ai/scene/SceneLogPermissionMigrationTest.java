@@ -53,9 +53,10 @@ class SceneLogPermissionMigrationTest {
     }
     @Test void derivedMonitorNavigationNeverGrantsLogReadingAndExplicitActionRevocationTakesEffect()throws Exception{
         apply225();apply227();
-        assertTrue(permissions(8).contains("ai:monitor:enter"));assertFalse(permissions(8).contains("ai:request:list"));assertTrue(monitorRoute());
+        assertFalse(permissions(8).contains("ai:monitor:enter"));assertFalse(permissions(8).contains("ai:request:list"));assertFalse(monitorRoute());
+        try(var session=sessions.openSession()){assertTrue(session.getMapper(SysMenuMapper.class).selectMenuByUserId(80L).stream().anyMatch(m->m.getMenuId()==106L));}
         jdbc.update("INSERT INTO sys_role_menu VALUES(8,?)",LIST_ACTION);assertTrue(permissions(8).contains("ai:request:list"));
-        jdbc.update("DELETE FROM sys_role_menu WHERE role_id=8 AND menu_id=?",LIST_ACTION);assertFalse(permissions(8).contains("ai:request:list"));assertTrue(monitorRoute());
+        jdbc.update("DELETE FROM sys_role_menu WHERE role_id=8 AND menu_id=?",LIST_ACTION);assertFalse(permissions(8).contains("ai:request:list"));assertFalse(monitorRoute());
         jdbc.update("DELETE FROM sys_role_menu WHERE role_id=8");assertFalse(permissions(8).contains("ai:monitor:enter"));assertFalse(monitorRoute());
     }
     @Test void inactiveFormerPageCannotBecomeANewDataAccessGrantSource()throws Exception{

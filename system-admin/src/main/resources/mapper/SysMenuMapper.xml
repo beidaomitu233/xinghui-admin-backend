@@ -42,7 +42,7 @@
             JOIN sys_role active_role ON active_role.role_id=granted_action.role_id AND active_role.status=1 AND active_role.is_deleted=0
             JOIN sys_menu action_menu ON action_menu.menu_id=granted_action.menu_id AND action_menu.status='0' AND action_menu.is_deleted=0
             WHERE granted_action.role_id=#{roleId}
-              AND action_menu.perms IN ('ai:scene:invoke','ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
+              AND action_menu.perms IN ('ai:scene:invoke','ai:request:list')
           )
     </select>
 
@@ -71,7 +71,7 @@
             <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
                 #{roleId}
             </foreach>
-              AND action_menu.perms IN ('ai:scene:invoke','ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
+              AND action_menu.perms IN ('ai:scene:invoke','ai:request:list')
           )
     </select>
 
@@ -114,7 +114,21 @@
             JOIN sys_role active_role ON active_role.role_id=granted_action.role_id AND active_role.status=1 AND active_role.is_deleted=0
             JOIN sys_menu action_menu ON action_menu.menu_id=granted_action.menu_id AND action_menu.status='0' AND action_menu.is_deleted=0
             WHERE members.user_id=#{userId}
-              AND action_menu.perms IN ('ai:scene:invoke','ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
+              AND action_menu.perms IN ('ai:scene:invoke','ai:request:list')
+          )
+        UNION
+        <!-- Configuration actions yield only the configuration page and AI directory.
+             A child-only role never inherits call logs, audit, or other configuration actions. -->
+        SELECT nav.* FROM sys_menu nav
+        WHERE nav.menu_id IN (106,202610160180000001)
+          AND nav.status='0' AND nav.is_deleted=0
+          AND EXISTS (
+            SELECT 1 FROM sys_role_menu granted_action
+            JOIN sys_user_role members ON members.role_id=granted_action.role_id
+            JOIN sys_role active_role ON active_role.role_id=granted_action.role_id AND active_role.status=1 AND active_role.is_deleted=0
+            JOIN sys_menu action_menu ON action_menu.menu_id=granted_action.menu_id AND action_menu.status='0' AND action_menu.is_deleted=0
+            WHERE members.user_id=#{userId}
+              AND action_menu.perms IN ('ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable','ai:config:archive','ai:model:list','ai:model:query','ai:model:add','ai:model:edit','ai:model:test')
           )
         ORDER BY parent_id, order_num
     </select>
