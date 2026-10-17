@@ -155,6 +155,21 @@ public class SceneDataServiceTest {
         assertThrows(AiRuntimeException.class,()->bridge.compileEdited(ref,legacyInvocation(),editor("第三版","subject","summary"),control()));
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_prompt_template_version WHERE template_id=31",Integer.class));
     }
+    @Test void legacyScopeSurvivesSerializationAndRemoveThenReaddAcrossSaves() throws Exception {
+        legacyFixture(false);var bridge=new LegacySceneTemplates(jdbc,json,service);var ref=new TemplateVersionRef("31","41");
+        var first=bridge.compileEdited(ref,legacyInvocation(),editor("第一版 {{record_subject}}","subject"),control());
+        var persisted=json.readValue(json.writeValueAsString(first),CompiledScene.class);
+        assertEquals(first.legacyScopes(),persisted.legacyScopes());
+        var removed=bridge.compileEdited(ref,legacyInvocation(),new EditorInput("只使用 {{user_request}}","",List.of()),control());
+        assertTrue(removed.legacyScopes().isEmpty());
+        assertThrows(AiRuntimeException.class,()->bridge.compileEdited(ref,legacyInvocation(),editor("扩展 {{record_summary}}","summary"),control()));
+        var restored=bridge.compileEdited(ref,legacyInvocation(),persisted.editor(),control());
+        assertEquals(first.legacyScopes(),restored.legacyScopes());
+        jdbc.update("UPDATE sys_ai_data_resource SET enabled=0 WHERE id=21");
+        assertThrows(AiRuntimeException.class,()->bridge.compileEdited(ref,legacyInvocation(),persisted.editor(),control()));
+        assertEquals(ErrorCode.RESOURCE_UNAVAILABLE,assertThrows(AiRuntimeException.class,()->service.authorize(restored,context("11"),control())).code());
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_prompt_template_version WHERE template_id=31",Integer.class));
+    }
     @Test void legacyApplicationAllowlistIsNotReplacedBySceneIdentity() throws Exception {
         legacyFixture(false);var bridge=new LegacySceneTemplates(jdbc,json,service);var ref=new TemplateVersionRef("31","41");var base=legacyInvocation();
         var wrong=new Invocation(base.actor(),"202","302",base.businessRef(),base.requestId());
