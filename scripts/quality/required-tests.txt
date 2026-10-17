@@ -73,6 +73,7 @@ SceneLegacyCompatibilityTest
 SceneManagementTest
 SceneMonitorTest
 SceneRuntimeTest
+SceneTestReplayTest
 TemplateDataServiceTest
 TemplateOptionsSecurityTest
 TemplateResponsePolicyTest
