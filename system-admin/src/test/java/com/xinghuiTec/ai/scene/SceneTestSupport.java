@@ -38,6 +38,7 @@ final class SceneTestSupport implements AutoCloseable {
     final AiApplicationStore applications;
     final AiApplicationService versions;
     final AiRequestStore requests;
+    final AiRequestLifecycle lifecycle;
     final JdbcAiApplicationReferences references;
     final Provider provider=new Provider();
     final AiRequestLogService logs;
@@ -54,7 +55,9 @@ final class SceneTestSupport implements AutoCloseable {
         jdbc.update("INSERT INTO sys_lowcode_form(id,form_key,name,status,draft_schema,published_version,creator) VALUES(1,'fixture','Fixture form','enabled',?,1,'101')",schema);
         jdbc.update("INSERT INTO sys_lowcode_form_version(form_id,schema_version,schema_json,creator) VALUES(1,1,?,'101')",schema);
         jdbc.update("INSERT INTO sys_lowcode_record(id,form_id,schema_version,tenant_id,creator,data_json) VALUES(11,1,1,'tenant_a','101',?)","{\"subject\":\"visible subject\",\"summary\":null,\"internal_note\":\"must-never-enter-model\"}");
-        var identity=new LowcodeIdentity(true);var schemas=new LowcodeSchema(mapper);data=new SceneDataService(jdbc,new LowcodeService(jdbc,schemas,identity),identity,schemas,mapper,manager);
+        var identity=new LowcodeIdentity(true);var schemas=new LowcodeSchema(mapper);var lowcode=new LowcodeService(jdbc,schemas,identity);
+        data=new SceneDataService(jdbc,lowcode,identity,schemas,mapper,manager);
+        data.database(new com.xinghuiTec.ai.scenedata.DatabaseBindingReader(jdbc,mapper,lowcode,schemas,new com.xinghuiTec.security.PlatformAccessService(false)));
         beans.addBean("provider",provider);beans.addBean("data",data);beans.addBean("references",new JdbcAiApplicationReferences(jdbc,manager));
         var legacy=new LegacySceneTemplates(jdbc,mapper,data);beans.addBean("legacy",legacy);
         references=new JdbcAiApplicationReferences(jdbc,manager);scenes=new SceneStore(jdbc,mapper);execution=new SceneExecutionStore(jdbc,mapper);
@@ -62,7 +65,7 @@ final class SceneTestSupport implements AutoCloseable {
         management=new SceneManagementService(scenes,execution,references,beans.getBeanProvider(AiSceneDataRuntime.class),beans.getBeanProvider(AiProviderRuntime.class),cipher,mapper);management.legacyTemplates(beans.getBeanProvider(AiSceneLegacyTemplates.class));
         applications=new AiApplicationStore(jdbc,mapper);versions=new AiApplicationService(jdbc,mapper,applications,references,beans.getBeanProvider(AiProviderRuntime.class),beans.getBeanProvider(AiTemplateRuntime.class));
         var owner=new JdbcSceneOwnership(jdbc);applications.sceneOwnership(owner);versions.sceneOwnership(owner);
-        requests=new AiRequestStore(jdbc);var journal=new AiRequestJournal(jdbc,requests,manager);var events=new Events();var lifecycle=new AiRequestLifecycle(requests,events,manager);
+        requests=new AiRequestStore(jdbc);var journal=new AiRequestJournal(jdbc,requests,manager);var events=new Events();lifecycle=new AiRequestLifecycle(requests,events,manager);
         var worker=new AiRequestExecutor(requests,applications,journal,lifecycle,new AiSharedModelCursor(jdbc),events,beans.getBeanProvider(AiProviderRuntime.class),beans.getBeanProvider(AiTemplateRuntime.class),jdbc,manager);
         runtime=new AiRuntimeService(applications,versions,requests,journal,lifecycle,worker,beans.getBeanProvider(AiTemplateRuntime.class),jdbc,mapper,manager,cipher);
         runtime.sceneAccess(new SceneRequestAccessService(scenes,beans.getBeanProvider(AiSceneDataRuntime.class)));
@@ -79,10 +82,11 @@ final class SceneTestSupport implements AutoCloseable {
     static final class Provider implements AiProviderRuntime {
         final AtomicInteger calls=new AtomicInteger();final List<ExecutionRequest> observed=new CopyOnWriteArrayList<>();
         volatile boolean unavailable;volatile CountDownLatch entered=new CountDownLatch(0),release=new CountDownLatch(0);
+        volatile ExecutionStatus resultStatus=ExecutionStatus.SUCCEEDED;volatile ErrorCode resultError;volatile String resultText="controlled fixture result";
         public List<AvailableModel> availableModels(Requirements requirements){return List.of();}
         public Validation validateBindings(List<ModelBinding> bindings,Requirements requirements){return new Validation(unavailable?List.of(new Violation("models",ErrorCode.MODEL_UNAVAILABLE)):List.of());}
         public List<Target> resolveTargets(ModelBinding binding,Set<KeyRef> excluded,InvocationControl control){return unavailable?List.of():List.of(new Target(binding.model(),new KeyRef("19","3"),"SIMULATED","fixture-model","Key fixture",new Capabilities(Set.of(OutputFormat.TEXT),true,false)));}
-        public ExecutionOutcome execute(ExecutionRequest request,StreamObserver observer,InvocationControl control){calls.incrementAndGet();observed.add(request);entered.countDown();try{while(!release.await(10,TimeUnit.MILLISECONDS))control.check();}catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new AiRuntimeException(ErrorCode.CANCELLED);}observer.onDelta("controlled fixture result");return new ExecutionOutcome(ExecutionStatus.SUCCEEDED,null,false,true,new Usage(5L,3L,8L),null,1);}
+        public ExecutionOutcome execute(ExecutionRequest request,StreamObserver observer,InvocationControl control){calls.incrementAndGet();observed.add(request);entered.countDown();try{while(!release.await(10,TimeUnit.MILLISECONDS))control.check();}catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new AiRuntimeException(ErrorCode.CANCELLED);}if(resultText!=null)observer.onDelta(resultText);return new ExecutionOutcome(resultStatus,resultError,false,resultText!=null,new Usage(5L,3L,8L),null,1);}
     }
     static final class Events implements AiRuntimeEvents {
         final Map<String,List<Event>> rows=new ConcurrentHashMap<>();

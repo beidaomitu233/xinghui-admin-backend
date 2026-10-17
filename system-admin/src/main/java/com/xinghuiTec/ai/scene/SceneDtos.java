@@ -30,8 +30,9 @@ public final class SceneDtos {
         public DataObject { fields=List.copyOf(fields); }
     }
     public record Definition(String name,String purpose,String promptText,String outputRequirement,
-                             List<DataObject> dataObjects,ModelPolicy modelPolicy) {
-        public Definition { dataObjects=List.copyOf(dataObjects); }
+                             List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings) {
+        public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,List.of());}
+        public Definition { dataObjects=dataObjects==null?List.of():List.copyOf(dataObjects);dataBindings=dataBindings==null?List.of():List.copyOf(dataBindings); }
         @Override public String toString() { return "SceneDefinition[REDACTED]"; }
     }
     /** Creates a stable unconfigured identity. Enabled is intent only until a valid executable save. */
@@ -75,7 +76,8 @@ public final class SceneDtos {
     }
     public record KeyOption(KeyRef key,String maskedLabel) {}
     public record BusinessRef(String type,String id) {}
-    public record Submission(BusinessRef businessRef,Map<String,Object> inputs,String idempotencyKey) {
+    public record Submission(BusinessRef businessRef,Map<String,Object> inputs,String idempotencyKey,String conversationId,Integer expectedConversationRevision) {
+        public Submission(BusinessRef businessRef,Map<String,Object> inputs,String idempotencyKey){this(businessRef,inputs,idempotencyKey,null,null);}
         @Override public String toString() { return "SceneSubmission[REDACTED]"; }
     }
     public record PreviewInput(int expectedRevision,BusinessRef businessRef,Map<String,Object> inputs) {
@@ -86,18 +88,25 @@ public final class SceneDtos {
     }
     /** Business callers receive no prompt, model key material, internal application or template IDs. */
     public record Entry(String sceneKey,String name,Kind kind,String formId,String currentVersionId,
-                        int revision,Availability availability) {}
+                        int revision,Availability availability,boolean contextRequired,String contextSourceKey,String contextSourceLabel,boolean canStartFromMonitor) {
+        public Entry(String sceneKey,String name,Kind kind,String formId,String currentVersionId,int revision,Availability availability){this(sceneKey,name,kind,formId,currentVersionId,revision,availability,kind==Kind.RECORD_SUMMARY,null,null,kind!=Kind.RECORD_SUMMARY);}
+    }
     public record Request(String requestId,String sceneKey,String sceneVersionId,String kind,BusinessRef businessRef,
                           String status,String stage,String errorCode,boolean outputStarted,int attemptCount,
                           Long inputTokens,Long outputTokens,boolean usageKnown,Instant deadline,
-                          Instant createdAt,Instant finishedAt) {}
+                          Instant createdAt,Instant finishedAt,String conversationId,String userMessageId,String assistantMessageId) {
+        public Request(String requestId,String sceneKey,String sceneVersionId,String kind,BusinessRef businessRef,String status,String stage,String errorCode,boolean outputStarted,int attemptCount,Long inputTokens,Long outputTokens,boolean usageKnown,Instant deadline,Instant createdAt,Instant finishedAt){this(requestId,sceneKey,sceneVersionId,kind,businessRef,status,stage,errorCode,outputStarted,attemptCount,inputTokens,outputTokens,usageKnown,deadline,createdAt,finishedAt,null,null,null);}
+    }
     public record Message(String role,String content) {
         @Override public String toString() { return "SceneMessage[REDACTED]"; }
     }
     public record Preview(String sceneKey,String sceneVersionId,List<Message> originalMessages,List<Message> renderedMessages,
-                          Map<String,String> inputSummary,Map<String,String> resourceSummary,List<String> notices) {
+                          Map<String,String> inputSummary,Map<String,String> resourceSummary,List<String> notices,
+                          Map<String,Object> dataValues,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.ReadReceipt> reads) {
+        public Preview(String sceneKey,String sceneVersionId,List<Message> originalMessages,List<Message> renderedMessages,Map<String,String> inputSummary,Map<String,String> resourceSummary,List<String> notices){this(sceneKey,sceneVersionId,originalMessages,renderedMessages,inputSummary,resourceSummary,notices,Map.of(),List.of());}
         public Preview {originalMessages=List.copyOf(originalMessages);renderedMessages=List.copyOf(renderedMessages);
-            inputSummary=Map.copyOf(inputSummary);resourceSummary=Map.copyOf(resourceSummary);notices=List.copyOf(notices);}
+            inputSummary=Map.copyOf(inputSummary);resourceSummary=Map.copyOf(resourceSummary);notices=List.copyOf(notices);
+            dataValues=dataValues==null?Map.of():new com.xinghuiTec.ai.contract.AiInputs(dataValues).values();reads=reads==null?List.of():List.copyOf(reads);}
         @Override public String toString() { return "ScenePreview[REDACTED]"; }
     }
     public record Window(Instant from,Instant to) {}

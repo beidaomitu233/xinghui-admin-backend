@@ -16,7 +16,7 @@ final class AiApplicationInputRules {
 
     static void validate(AiApplicationPolicy policy, BusinessRef business, Map<String, Object> inputs) {
         if (business == null || !business.type().matches("[a-z][a-z0-9_.-]{0,63}")
-                || !business.id().matches("[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}")
+                || !("database.record".equals(business.type())?business.id().matches("db1\\.[A-Za-z0-9_-]{1,2044}"):business.id().matches("[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}"))
                 || inputs == null || inputs.size() > 32) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
         if (policy.formId() != null) {
             String[] ids = business.id().split(":", -1);
