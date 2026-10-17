@@ -43,7 +43,14 @@ public class AiRuntimeService {
         public ErrorCode code() { return code; }
     }
     private record Loaded(AiApplicationStore.View app, AiApplicationPolicy policy, String version,
-                          List<ResourceVersionRef> resources, boolean test, int modelIndex) {}
+                          List<ResourceVersionRef> resources, boolean test, int modelIndex,AiSceneRequestAccess.Execution scene) {
+        Loaded(AiApplicationStore.View app,AiApplicationPolicy policy,String version,List<ResourceVersionRef> resources,boolean test,int modelIndex) {
+            this(app,policy,version,resources,test,modelIndex,null);
+        }
+    }
+    private AiSceneRequestAccess sceneAccess;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void sceneAccess(AiSceneRequestAccess access){this.sceneAccess=access;}
 
     private final AiApplicationStore applications;
     private final AiApplicationService versions;
@@ -80,9 +87,28 @@ public class AiRuntimeService {
             var app = applications.current(appId);
             if (app.publishedVersionId() == null) throw new AiRuntimeException(ErrorCode.MODEL_UNAVAILABLE);
             var version = versions.version(appId, AiApplicationService.positiveId(app.publishedVersionId()), true);
-            return new Loaded(app, version.snapshot().policy(), version.appVersionId(), version.snapshot().resources(), false, -1);
+            var nativeScene=sceneAccess==null?null:sceneAccess.execution(version.appVersionId());
+            return new Loaded(app, version.snapshot().policy(), version.appVersionId(), version.snapshot().resources(), false, -1,nativeScene);
         });
         return admit(loaded, input, actor);
+    }
+
+    /** Scene service selects a real immutable execution version; the existing request pipeline owns all I/O. */
+    public AiRequestStore.Request submitScene(long appId,long versionId,boolean test,int modelIndex,Submission input,TrustedActor actor) {
+        Loaded loaded=transaction.execute(status->{
+            var app=applications.current(appId);var version=versions.version(appId,versionId,true);
+            var nativeScene=sceneAccess==null?null:sceneAccess.execution(version.appVersionId());
+            if(nativeScene==null)throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
+            var policy=version.snapshot().policy();policy.requireModelComplete();
+            if(test){
+                if(modelIndex<0 || modelIndex>=policy.models().size())throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
+                policy=new AiApplicationPolicy(AiApplicationPolicy.ModelMode.FIXED,List.of(policy.models().get(modelIndex)),false,null,
+                        policy.inputNames(),policy.requirements(),policy.scope(),policy.allowedSubjects(),policy.allowedAuthorities(),policy.formId(),
+                        policy.timeoutSeconds(),policy.maxAttempts(),policy.maxConcurrent(),policy.maxTokens());
+            }
+            return new Loaded(app,policy,version.appVersionId(),List.of(),test,modelIndex,nativeScene);
+        });
+        return admit(loaded,input,actor);
     }
 
     public AiRequestStore.Request test(long appId, int revision, int modelIndex, Submission input, TrustedActor actor) {
@@ -99,9 +125,25 @@ public class AiRuntimeService {
         return admit(loaded, input, actor);
     }
 
+    /** Replay precedes the facade's current revision check, with input-free current access revalidation. */
+    public AiRequestStore.Request replayScene(long appId,String sceneKey,boolean test,int modelIndex,Submission input,TrustedActor actor) {
+        if(actor.servicePrincipalRef()!=null || !actor.authorities().contains("ai:scene:invoke"))throw new AiRuntimeException(ErrorCode.FORBIDDEN);
+        var owner=owner(actor);AiRequestStore.Request replay;
+        try{replay=transaction.execute(tx->requests.sceneReplay(appId,sceneKey,test?AiRequestStore.Kind.TEST:AiRequestStore.Kind.BUSINESS,owner,input.idempotencyKey(),
+                fingerprint(Long.toString(appId),test,null,modelIndex,input,owner)));}
+        catch(IllegalArgumentException conflict){if("IDEMPOTENCY_CONFLICT".equals(conflict.getMessage()))throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);throw conflict;}
+        if(replay==null)return null;
+        var authorized=status(AiApplicationService.positiveId(replay.requestId()),actor);
+        authorizeEvents(authorized,actor);
+        return authorized;
+    }
+
     private AiRequestStore.Request admit(Loaded loaded, Submission input, TrustedActor actor) {
         if (closing) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
-        loaded.policy().requireComplete();
+        if(loaded.scene()==null)loaded.policy().requireComplete();else{
+            loaded.policy().requireModelComplete();
+            if(actor.servicePrincipalRef()!=null || !actor.authorities().contains("ai:scene:invoke"))throw new AiRuntimeException(ErrorCode.FORBIDDEN);
+        }
         if (!(loaded.test() ? loaded.policy().permitsSubject(actor) : loaded.policy().permits(actor))) {
             throw new AiRuntimeException(ErrorCode.FORBIDDEN);
         }
@@ -109,10 +151,10 @@ public class AiRuntimeService {
         Instant now = Instant.now();
         var owner = owner(actor);
         var admission = new AiRequestStore.Admission(AiApplicationService.positiveId(loaded.app().appId()),
-                loaded.test() ? null : AiApplicationService.positiveId(loaded.version()),
-                loaded.test() ? loaded.app().draftRevision() : null, loaded.test() ? AiRequestStore.Kind.TEST : AiRequestStore.Kind.BUSINESS,
+                loaded.test() && loaded.scene()==null ? null : AiApplicationService.positiveId(loaded.version()),
+                loaded.test() && loaded.scene()==null ? loaded.app().draftRevision() : null, loaded.test() ? AiRequestStore.Kind.TEST : AiRequestStore.Kind.BUSINESS,
                 owner, input.businessRef().type(), input.businessRef().id(), input.idempotencyKey(), fingerprint(loaded, input, owner),
-                now.plusSeconds(loaded.policy().timeoutSeconds()));
+                now.plusSeconds(loaded.policy().timeoutSeconds()),loaded.scene()==null?null:loaded.scene().sceneKey(),loaded.scene()==null?null:loaded.scene().sceneVersionId());
         AiRequestStore.Accepted accepted;
         try { accepted = transaction.execute(status -> requests.accept(admission, now)); }
         catch (IllegalArgumentException conflict) {
@@ -129,10 +171,21 @@ public class AiRuntimeService {
             if (!loaded.policy().inputNames().containsAll(input.inputs().keySet())) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             lifecycle.accepted(id, owner); // Verifies a genuinely volatile, available buffer before any model attempt.
             if (!loaded.test() && !loaded.app().enabled()) throw new AiRuntimeException(ErrorCode.MODEL_UNAVAILABLE);
-            var template = templates.getIfUnique();
-            if (template == null) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
             requests.stage(id, AiRequestStore.Stage.DATA, Instant.now());
             journal.stage(id, AiRequestStore.Stage.DATA, AiRequestJournal.Outcome.STARTED, null, null, null, null);
+            if(loaded.scene()!=null){
+                var rendered=sceneAccess.render(loaded.scene(),invocation,new AiInputs(input.inputs()),control);control.check();
+                if(rendered==null || rendered.messages().isEmpty())throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
+                int bytes=0;for(AiMessage message:rendered.messages())bytes=Math.addExact(bytes,message.content().getBytes(StandardCharsets.UTF_8).length);
+                if(bytes>65536)throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
+                journal.stage(id,AiRequestStore.Stage.RENDER,AiRequestJournal.Outcome.SUCCEEDED,null,null,null,null);
+                var work=new AiRequestExecutor.Work(invocation,loaded.policy(),rendered.messages(),List.of(),input.inputs().keySet(),loaded.test(),
+                        ()->sceneAccess.authorize(loaded.scene(),invocation,control));
+                pool.execute(()->{try{worker.execute(work);}finally{dispatched.remove(id);}});
+                return accepted.request();
+            }
+            var template = templates.getIfUnique();
+            if (template == null) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
             var rendered = template.renderPublished(new AiTemplateRuntime.RenderRequest(loaded.policy().template(),
                     new AiInputs(input.inputs()), invocation), control);
             control.check();
@@ -189,7 +242,7 @@ public class AiRuntimeService {
 
     public AiApplicationPolicy policy(AiRequestStore.Request request) {
         long appId = AiApplicationService.positiveId(request.appId());
-        if (request.kind() == AiRequestStore.Kind.TEST) return applications.get(appId).draft();
+        if (request.kind() == AiRequestStore.Kind.TEST && request.appVersionId()==null) return applications.get(appId).draft();
         return versions.version(appId, AiApplicationService.positiveId(request.appVersionId()), false).snapshot().policy();
     }
 
@@ -213,10 +266,8 @@ public class AiRuntimeService {
 
     public void authorizeEvents(AiRequestStore.Request request, TrustedActor actor) {
         var policy = policy(request);
-        if (request.kind() == AiRequestStore.Kind.TEST && applications.get(AiApplicationService.positiveId(request.appId())).draftRevision()
+        if (request.kind() == AiRequestStore.Kind.TEST && request.appVersionId()==null && applications.get(AiApplicationService.positiveId(request.appId())).draftRevision()
                 != request.draftRevision()) throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);
-        var template = templates.getIfUnique();
-        if (template == null) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         var invocation = new Invocation(actor, request.appId(), request.appVersionId() == null ? "draft:" + request.draftRevision()
                 : request.appVersionId(), new BusinessRef(request.businessType(), request.businessId()), request.requestId());
         InvocationControl readControl = new InvocationControl() {
@@ -224,6 +275,10 @@ public class AiRuntimeService {
             @Override public Instant deadline() { return deadline; }
             @Override public boolean cancelled() { return false; }
         };
+        var nativeScene=request.appVersionId()==null || sceneAccess==null?null:sceneAccess.execution(request.appVersionId());
+        if(nativeScene!=null){sceneAccess.authorize(nativeScene,invocation,readControl);return;}
+        var template = templates.getIfUnique();
+        if (template == null) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         var validation = template.validateBinding(policy.template(), policy.inputNames(), invocation, readControl);
         if (!validation.valid()) throw new AiRuntimeException(validation.violations().get(0).code());
     }
@@ -244,13 +299,16 @@ public class AiRuntimeService {
     }
 
     private String fingerprint(Loaded loaded, Submission input, AiRequestStore.Owner owner) {
+        return fingerprint(loaded.app().appId(),loaded.test(),loaded.scene()==null?loaded.app().draftRevision():null,loaded.modelIndex(),input,owner);
+    }
+    private String fingerprint(String appId,boolean test,Integer draftRevision,int modelIndex,Submission input,AiRequestStore.Owner owner) {
         try {
             var values = new TreeMap<String, Object>();
             values.put("businessType", input.businessRef().type()); values.put("businessId", input.businessRef().id());
             values.put("inputs", input.inputs());
-            values.put("appId", loaded.app().appId()); values.put("ownerScope", owner.scope());
+            values.put("appId", appId); values.put("ownerScope", owner.scope());
             values.put("idempotencyKey", input.idempotencyKey());
-            if (loaded.test()) { values.put("draftRevision", loaded.app().draftRevision()); values.put("modelIndex", loaded.modelIndex()); }
+            if (test) { if(draftRevision!=null)values.put("draftRevision", draftRevision); values.put("modelIndex", modelIndex); }
             return cipher.fingerprint("ai:request-input:v1", mapper.writeValueAsBytes(values));
         } catch (ServiceException unavailableMaster) { throw new AiRuntimeException(ErrorCode.CREDENTIAL_UNAVAILABLE); }
         catch (JsonProcessingException unavailable) { throw new AiRuntimeException(ErrorCode.INTERNAL_FAILURE); }

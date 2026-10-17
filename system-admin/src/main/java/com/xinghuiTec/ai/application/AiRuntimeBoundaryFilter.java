@@ -28,6 +28,8 @@ public class AiRuntimeBoundaryFilter extends OncePerRequestFilter {
 
     private boolean target(String path) {
         return path.startsWith("/ai/applications/") || path.startsWith("/ai/requests/")
+                || path.equals("/system/ai/scenes") || path.startsWith("/system/ai/scenes/")
+                || path.equals("/ai/scenes") || path.startsWith("/ai/scenes/")
                 || (path.startsWith("/system/ai/applications/") && (path.endsWith("/test-requests") || path.endsWith("/preview")));
     }
 
@@ -45,15 +47,18 @@ public class AiRuntimeBoundaryFilter extends OncePerRequestFilter {
         try {
             String path = request.getServletPath();
             if (path.isEmpty()) path = request.getRequestURI().substring(request.getContextPath().length());
-            if ("POST".equals(request.getMethod()) && (path.endsWith("/requests") || path.endsWith("/test-requests") || path.endsWith("/preview"))) {
+            boolean sceneConfig=(path.equals("/system/ai/scenes") || path.startsWith("/system/ai/scenes/"))
+                    && ("PUT".equals(request.getMethod()) || ("POST".equals(request.getMethod()) && !path.endsWith("/preview") && !path.endsWith("/test-requests")));
+            if (sceneConfig || ("POST".equals(request.getMethod()) && (path.endsWith("/requests") || path.endsWith("/test-requests") || path.endsWith("/preview")))) {
                 String type = request.getContentType(), encoding = request.getHeader("Content-Encoding");
                 if (type == null || !type.split(";", 2)[0].trim().equalsIgnoreCase("application/json")
                         || (encoding != null && !encoding.equalsIgnoreCase("identity"))) {
                     reject(response, 415, "UNSUPPORTED_CONTENT"); return;
                 }
-                if (request.getContentLengthLong() > MAX_BODY_BYTES) { reject(response, 413, "REQUEST_TOO_LARGE"); return; }
-                byte[] bytes = request.getInputStream().readNBytes(MAX_BODY_BYTES + 1);
-                if (bytes.length > MAX_BODY_BYTES) { reject(response, 413, "REQUEST_TOO_LARGE"); return; }
+                int limit=sceneConfig?131072:MAX_BODY_BYTES;
+                if (request.getContentLengthLong() > limit) { reject(response, 413, "REQUEST_TOO_LARGE"); return; }
+                byte[] bytes = request.getInputStream().readNBytes(limit + 1);
+                if (bytes.length > limit) { reject(response, 413, "REQUEST_TOO_LARGE"); return; }
                 request.setAttribute(BODY, bytes);
             }
             chain.doFilter(request, response);
