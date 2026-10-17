@@ -27,7 +27,7 @@ public class LegacySceneTemplates implements AiSceneLegacyTemplates {
             var reasons=new LinkedHashSet<String>();var scopes=new ArrayList<LegacyScope>();var selections=new ArrayList<Selection>();
             if(!enabled(rows.get(0).get("enabled")))reasons.add("TEMPLATE_DISABLED");
             if(original.resources().size()>1)reasons.add("MULTIPLE_RESOURCES");
-            var aliases=new HashMap<String,String>();
+            var aliases=new HashMap<String,String>();var aliasTextCeilings=new HashMap<String,Integer>();
             for(var binding:original.resources()) {
                 ResourceDefinition r;
                 try {r=readResource(jdbc,json,binding.resourceId(),binding.resourceVersionId());}
@@ -40,9 +40,27 @@ public class LegacySceneTemplates implements AiSceneLegacyTemplates {
                 scopes.add(new LegacyScope(new ResourceVersionRef(binding.resourceId(),binding.resourceVersionId()),legacy.appId(),legacy.appVersionId(),r.source(),r.formId(),fields));
                 selections.add(new Selection(r.source(),r.formId(),fields));
                 binding.outputs().forEach((field,var)->aliases.put(var,"record_"+field));
+                try {
+                    var metadata=scenes.fields(r.source(),r.formId(),legacy.actor(),control);
+                    for(var output:binding.outputs().entrySet()) {
+                        var field=metadata.fields().stream().filter(f->f.fieldKey().equals(output.getKey())).findFirst().orElse(null);
+                        // LowcodeSchema's registered text/textarea ceilings cover every original record schema,
+                        // unlike the latest field's configured maxLength, which may have changed over time.
+                        int ceiling=field==null?0:switch(field.type()){case "text"->2000;case "textarea"->5000;default->0;};
+                        if(ceiling==0)reasons.add("RESOURCE_VARIABLE_TYPE_POLICY_CHANGED");
+                        else aliasTextCeilings.put(output.getValue(),ceiling);
+                    }
+                }catch(AiRuntimeException unavailable){reasons.add("RESOURCE_SCHEMA_UNAVAILABLE");}
             }
             for(var v:original.variables()) {
                 if(v.hasDefault()||v.type()!=TemplateDefinition.Type.STRING)reasons.add("SPECIAL_VARIABLE_SCHEMA");
+                if(v.truncate())reasons.add("VARIABLE_TRUNCATION_UNSUPPORTED");
+                if(v.name().equals("user_request")) {
+                    boolean referenced=original.messages().stream().anyMatch(m->ScenePromptCompiler.SLOT.matcher(m.text()).results().anyMatch(slot->slot.group(1).equals("user_request")));
+                    if(v.required()!=referenced)reasons.add("INPUT_REQUIRED_POLICY_CHANGED");
+                } else if(aliasTextCeilings.containsKey(v.name()) && v.maxChars()<aliasTextCeilings.get(v.name())) {
+                    reasons.add("RESOURCE_VARIABLE_LENGTH_POLICY_CHANGED");
+                }
                 if(!v.name().equals("user_request")&&!aliases.containsKey(v.name()))reasons.add("CUSTOM_INPUT_VARIABLE");
                 if(v.name().equals("user_request")&&v.maxChars()!=2048)reasons.add("INPUT_LENGTH_POLICY_CHANGED");
             }

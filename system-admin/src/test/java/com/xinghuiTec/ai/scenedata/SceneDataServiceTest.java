@@ -170,6 +170,35 @@ public class SceneDataServiceTest {
         assertEquals(ErrorCode.RESOURCE_UNAVAILABLE,assertThrows(AiRuntimeException.class,()->service.authorize(restored,context("11"),control())).code());
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_prompt_template_version WHERE template_id=31",Integer.class));
     }
+    @Test void legacyInputTruncationAndRequiredPoliciesStayReadOnly() throws Exception {
+        legacyFixture(false);var original=(com.fasterxml.jackson.databind.node.ObjectNode)json.readTree(jdbc.queryForObject("SELECT config_json FROM sys_ai_prompt_template_version WHERE id=41",String.class));
+        for(String policy:List.of("truncate","optional","length","requiredWithoutSlot")) {
+            var changed=original.deepCopy();var input=(com.fasterxml.jackson.databind.node.ObjectNode)changed.path("variables").get(0);
+            String reason;
+            if(policy.equals("truncate")){input.put("truncate",true);reason="VARIABLE_TRUNCATION_UNSUPPORTED";}
+            else if(policy.equals("optional")){input.put("required",false);reason="INPUT_REQUIRED_POLICY_CHANGED";}
+            else if(policy.equals("length")){input.put("maxChars",1024);reason="INPUT_LENGTH_POLICY_CHANGED";}
+            else {((com.fasterxml.jackson.databind.node.ObjectNode)changed.path("messages").get(1)).put("text","固定输入要求");reason="INPUT_REQUIRED_POLICY_CHANGED";}
+            assertLegacyReadOnly(changed,reason);
+        }
+    }
+    @Test void legacyResourceVariableTruncationAndNarrowLengthStayReadOnly() throws Exception {
+        legacyFixture(false);var original=(com.fasterxml.jackson.databind.node.ObjectNode)json.readTree(jdbc.queryForObject("SELECT config_json FROM sys_ai_prompt_template_version WHERE id=41",String.class));
+        for(boolean truncate:List.of(false,true)) {
+            var changed=original.deepCopy();var variable=(com.fasterxml.jackson.databind.node.ObjectNode)changed.path("variables").get(1);
+            if(truncate)variable.put("truncate",true);else variable.put("maxChars",1000);
+            assertLegacyReadOnly(changed,truncate?"VARIABLE_TRUNCATION_UNSUPPORTED":"RESOURCE_VARIABLE_LENGTH_POLICY_CHANGED");
+        }
+    }
+    private void assertLegacyReadOnly(com.fasterxml.jackson.databind.node.ObjectNode changed,String reason) throws Exception {
+        String encoded=json.writeValueAsString(changed);jdbc.update("UPDATE sys_ai_prompt_template_version SET config_json=? WHERE id=41",encoded);
+        var bridge=new LegacySceneTemplates(jdbc,json,service);var ref=new TemplateVersionRef("31","41");
+        var view=bridge.inspect(ref,legacyInvocation(),control());
+        assertEquals(AiSceneLegacyTemplates.Compatibility.READ_ONLY,view.compatibility());assertTrue(view.reasons().contains(reason));assertNull(view.editor());
+        assertEquals(changed,json.valueToTree(view.originalDefinition().values()));
+        assertEquals(ErrorCode.CAPABILITY_UNSUPPORTED,assertThrows(AiRuntimeException.class,()->bridge.compileEdited(ref,legacyInvocation(),editor("替换 {{record_subject}}","subject"),control())).code());
+        assertEquals(encoded,jdbc.queryForObject("SELECT config_json FROM sys_ai_prompt_template_version WHERE id=41",String.class));
+    }
     @Test void legacyApplicationAllowlistIsNotReplacedBySceneIdentity() throws Exception {
         legacyFixture(false);var bridge=new LegacySceneTemplates(jdbc,json,service);var ref=new TemplateVersionRef("31","41");var base=legacyInvocation();
         var wrong=new Invocation(base.actor(),"202","302",base.businessRef(),base.requestId());
