@@ -52,6 +52,7 @@ AiConfigurationDruidHttpTest
 AiConfigurationHttpTest
 AiConfigurationMethodSecurityTest
 AiConfigurationServiceTest
+AiSettingsServiceTest
 AiConfigurationWiringTest
 AiContractTest
 AiRequestExecutorTest
@@ -70,6 +71,10 @@ OpenRouterRetryBoundaryTest
 OpenRouterTransportTest
 SceneDataServiceTest
 DatabaseBindingsTest
+ConversationMigrationTest
+ConversationMvcTest
+ConversationServiceTest
+SceneCandidateContextTest
 SceneHttpBoundaryTest
 SceneLegacyCompatibilityTest
 SceneLogMvcTest
