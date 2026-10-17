@@ -255,29 +255,29 @@ public class ConversationStore implements AiConversationRuntime {
     }
     private String where(AiRequestStore.Owner owner, boolean audit, String sceneKey, String kind, String search,
             List<Object> args) {
-        String sql = " WHERE 1=1";
+        var predicates = new ArrayList<String>();
         if (!audit) {
-            sql += " AND c.owner_scope=? AND c.subject_ref=? AND c.tenant_ref=?";
+            predicates.add("c.owner_scope=? AND c.subject_ref=? AND c.tenant_ref=?");
             args.add(owner.scope());
             args.add(owner.subjectRef());
             args.add(owner.tenantRef());
         }
         if (sceneKey != null) {
             require(sceneKey.length() <= 128, 400, "INVALID_INPUT");
-            sql += " AND c.scene_key=?";
+            predicates.add("c.scene_key=?");
             args.add(sceneKey);
         }
         if (kind != null) {
             require(Set.of("BUSINESS", "TEST").contains(kind), 400, "INVALID_INPUT");
-            sql += " AND c.request_kind=?";
+            predicates.add("c.request_kind=?");
             args.add(kind);
         }
         if (search != null && !search.isBlank()) {
             require(search.length() <= 128, 400, "INVALID_INPUT");
-            sql += " AND LOCATE(?,c.title)>0";
+            predicates.add("LOCATE(?,c.title)>0");
             args.add(search);
         }
-        return sql;
+        return predicates.isEmpty() ? "" : " WHERE " + String.join(" AND ", predicates);
     }
     private long insert(String sql, String column, Object... args) {
         var keys = new GeneratedKeyHolder();

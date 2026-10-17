@@ -92,3 +92,4 @@ TemplateRulesTest
 AiSettingsKeyRotationTest
 AiModelCatalogTest
 AiMultiChannelRuntimeTest
+ConversationDruidWallTest
