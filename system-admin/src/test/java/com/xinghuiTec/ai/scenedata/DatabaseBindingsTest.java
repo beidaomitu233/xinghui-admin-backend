@@ -39,6 +39,21 @@ class DatabaseBindingsTest {
         var fields=service.databaseFields("db.customers",actor,control());assertTrue(fields.fields().stream().anyMatch(f->f.field().equals("name")&&f.label().equals("客户名称")));assertTrue(fields.fields().stream().noneMatch(f->f.field().equals("password")));
         assertTrue(service.relations("db.orders",actor,control()).stream().anyMatch(r->r.childSourceKey().equals("db.order_lines")&&r.parentField().equals("id")&&r.childField().equals("order_id")&&r.foreignKey()));
     }
+    @Test void candidateLabelsPreferBusinessNamesAndNeverTenantFlagsOrSecretFields() {
+        jdbc.execute("CREATE TABLE arbitrary_lines(id BIGINT PRIMARY KEY,tenant_id VARCHAR(20),is_deleted VARCHAR(1),password VARCHAR(50),item_caption VARCHAR(200),amount INT,title VARCHAR(100),name VARCHAR(100))");
+        jdbc.update("INSERT INTO arbitrary_lines VALUES(1001,'000000','0','hidden','商品甲',4,NULL,NULL),(1002,'000000','0','hidden','商品乙',5,'订单标题',NULL),(1003,'000000','0','hidden','商品丙',6,'其他标题','首选名称'),(1004,'000000','0','hidden','  ',7,NULL,NULL)");
+        var records = service.records(new DatabaseRecordQuery("db.arbitrary_lines", List.of(), 10), actor, control()).records();
+        var labels = records.stream().collect(java.util.stream.Collectors.toMap(r -> r.key().get("id"), DatabaseRecord::label));
+        assertEquals("商品甲", labels.get("1001"));
+        assertEquals("订单标题", labels.get("1002"));
+        assertEquals("首选名称", labels.get("1003"));
+        assertEquals("1004", labels.get("1004"));
+        assertFalse(records.toString().contains("hidden"));
+        jdbc.update("UPDATE arbitrary_lines SET item_caption=? WHERE id=1001", "商品".repeat(60));
+        var longLabel = service.records(new DatabaseRecordQuery("db.arbitrary_lines", List.of(), 10), actor, control()).records()
+                .stream().filter(r -> r.key().get("id").equals("1001")).findFirst().orElseThrow().label();
+        assertEquals(80, longLabel.codePointCount(0, longLabel.length()));
+    }
     @Test void actualRowAndFieldPreserveOrdinaryValuesAndExcludeSecrets(){
         var field=binding("客户.名称","db.customers",ReadMode.FIELD,List.of("name"),new RowSelector(false,Map.of("id","7")),List.of(),1,null);
         var result=preview(row("客户","db.customers","7",List.of()),field);assertEquals("客户甲",result.values().get("客户.名称"));var data=(Map<?,?>)result.values().get("客户");assertFalse(data.containsKey("password"));assertFalse(data.toString().contains("never-export"));assertEquals("blue",((Map<?,?>)data.get("profile_json")).get("color"));

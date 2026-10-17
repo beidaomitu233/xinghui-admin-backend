@@ -240,12 +240,35 @@ public class DatabaseBindingReader {
         for (var row:loaded.rows()) {
             var key = new LinkedHashMap<String, Object>();
             for (String pk:meta.primaryKey())key.put(pk, candidateKey(row.get(pk)));
-            String label = row.values().stream().filter(Objects::nonNull).map(Object::toString).findFirst().orElse("记录");
-            if (label.length()>80)label = label.substring(0, 80);
+            String label = recordLabel(meta, row, key);
             records.add(new DatabaseRecord(key, label, row, reference(request.sourceKey(), key)));
         }
         bounded(records.stream().map(DatabaseRecord::values).toList());
         return new DatabaseRecords(records, loaded.truncated());
+    }
+
+    private String recordLabel(DatabaseFields meta, Map<String, Object> row, Map<String, Object> key) {
+        var candidates = meta.fields().stream().filter(field -> !meta.primaryKey().contains(field.field())
+                && !Set.of("tenantid", "isdeleted", "deleted", "delflag")
+                        .contains(field.field().replace("_", "").toLowerCase(Locale.ROOT))
+                && !secret(field.field(), field.label())).toList();
+        for (String preferred : List.of("name", "title", "subject")) {
+            for (var field : candidates) {
+                if (preferred.equalsIgnoreCase(field.field()) && row.get(field.field()) instanceof String value
+                        && !value.isBlank()) return shortLabel(value);
+            }
+        }
+        for (var field : candidates) {
+            if (row.get(field.field()) instanceof String value && !value.isBlank()) return shortLabel(value);
+        }
+        return shortLabel(key.values().stream().filter(Objects::nonNull).map(Object::toString)
+                .collect(java.util.stream.Collectors.joining(" / ")));
+    }
+
+    private String shortLabel(String value) {
+        String label = value.strip();
+        int count = label.codePointCount(0, label.length());
+        return count > 80 ? label.substring(0, label.offsetByCodePoints(0, 80)) : label;
     }
 
     private void verifyAll(List<BindingSnapshot> snapshots, TrustedActor actor, InvocationControl control) {
