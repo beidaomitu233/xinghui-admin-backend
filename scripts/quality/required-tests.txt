@@ -70,6 +70,7 @@ OpenRouterTransportTest
 SceneDataServiceTest
 SceneHttpBoundaryTest
 SceneLegacyCompatibilityTest
+SceneLogPermissionMigrationTest
 SceneManagementTest
 SceneMonitorTest
 SceneRuntimeTest
