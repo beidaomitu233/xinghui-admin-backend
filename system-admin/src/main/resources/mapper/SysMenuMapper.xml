@@ -28,11 +28,22 @@
         SELECT DISTINCT m.perms
         FROM sys_menu m
         LEFT JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
-        JOIN sys_role r ON r.role_id = rm.role_id AND r.status = 1
+        JOIN sys_role r ON r.role_id = rm.role_id AND r.status = 1 AND r.is_deleted=0
         WHERE rm.role_id = #{roleId}
           AND m.perms IS NOT NULL
           AND m.perms != ''
           AND m.status = '0'
+          AND m.is_deleted=0
+        UNION
+        SELECT nav.perms FROM sys_menu nav
+        WHERE nav.perms='ai:monitor:enter' AND nav.status='0' AND nav.is_deleted=0
+          AND EXISTS (
+            SELECT 1 FROM sys_role_menu granted_action
+            JOIN sys_role active_role ON active_role.role_id=granted_action.role_id AND active_role.status=1 AND active_role.is_deleted=0
+            JOIN sys_menu action_menu ON action_menu.menu_id=granted_action.menu_id AND action_menu.status='0' AND action_menu.is_deleted=0
+            WHERE granted_action.role_id=#{roleId}
+              AND action_menu.perms IN ('ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
+          )
     </select>
 
     <!-- 根据多个角色ID批量查询权限标识 -->
@@ -40,7 +51,7 @@
         SELECT DISTINCT m.perms
         FROM sys_menu m
         LEFT JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
-        JOIN sys_role r ON r.role_id = rm.role_id AND r.status = 1
+        JOIN sys_role r ON r.role_id = rm.role_id AND r.status = 1 AND r.is_deleted=0
         WHERE rm.role_id IN
         <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
             #{roleId}
@@ -48,6 +59,20 @@
           AND m.perms IS NOT NULL
           AND m.perms != ''
           AND m.status = '0'
+          AND m.is_deleted=0
+        UNION
+        SELECT nav.perms FROM sys_menu nav
+        WHERE nav.perms='ai:monitor:enter' AND nav.status='0' AND nav.is_deleted=0
+          AND EXISTS (
+            SELECT 1 FROM sys_role_menu granted_action
+            JOIN sys_role active_role ON active_role.role_id=granted_action.role_id AND active_role.status=1 AND active_role.is_deleted=0
+            JOIN sys_menu action_menu ON action_menu.menu_id=granted_action.menu_id AND action_menu.status='0' AND action_menu.is_deleted=0
+            WHERE granted_action.role_id IN
+            <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+                #{roleId}
+            </foreach>
+              AND action_menu.perms IN ('ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
+          )
     </select>
 
     <!-- 根据用户ID查询路由菜单 -->
@@ -56,10 +81,12 @@
         FROM sys_menu m
         LEFT JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
         LEFT JOIN sys_user_role ur ON rm.role_id = ur.role_id
-        JOIN sys_role r ON r.role_id = rm.role_id AND r.status = 1
+        JOIN sys_role r ON r.role_id = rm.role_id AND r.status = 1 AND r.is_deleted=0
         WHERE ur.user_id = #{userId}
           AND m.menu_type IN ('M', 'C')
           AND m.status = '0'
+          AND m.is_deleted=0
+          AND (m.perms IS NULL OR m.perms != 'ai:monitor:enter')
         UNION
         <!-- Both Tabs share one entry. Derive navigation only from a real list action,
              including future role assignments without an explicitly checked parent.
@@ -73,7 +100,21 @@
             JOIN sys_role active_role ON active_role.role_id=granted_action.role_id AND active_role.status=1 AND active_role.is_deleted=0
             JOIN sys_menu action_menu ON action_menu.menu_id=granted_action.menu_id AND action_menu.status='0' AND action_menu.is_deleted=0
             WHERE members.user_id=#{userId}
-              AND action_menu.perms IN ('ai:template:list','ai:data:list','ai:prompt:list')
+              AND action_menu.perms IN ('ai:template:list','ai:data:list','ai:prompt:list','ai:scene:list')
+          )
+        UNION
+        <!-- Navigation follows current source actions, including later assignments and revocations.
+             Entering this workspace never grants log reading, auditing, or configuration actions. -->
+        SELECT nav.* FROM sys_menu nav
+        WHERE nav.menu_id IN (202610160180000003,202610160180000001)
+          AND nav.status='0' AND nav.is_deleted=0
+          AND EXISTS (
+            SELECT 1 FROM sys_role_menu granted_action
+            JOIN sys_user_role members ON members.role_id=granted_action.role_id
+            JOIN sys_role active_role ON active_role.role_id=granted_action.role_id AND active_role.status=1 AND active_role.is_deleted=0
+            JOIN sys_menu action_menu ON action_menu.menu_id=granted_action.menu_id AND action_menu.status='0' AND action_menu.is_deleted=0
+            WHERE members.user_id=#{userId}
+              AND action_menu.perms IN ('ai:request:list','ai:config:list','ai:config:query','ai:config:add','ai:config:edit','ai:config:test','ai:config:enable')
           )
         ORDER BY parent_id, order_num
     </select>

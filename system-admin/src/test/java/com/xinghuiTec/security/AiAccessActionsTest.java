@@ -39,7 +39,20 @@ class AiAccessActionsTest {
         }
         int start=mapper.indexOf('>',mapper.indexOf("<select id=\"selectMenuByUserId\""))+1;
         String sql=mapper.substring(start,mapper.indexOf("</select>",start)).replaceAll("(?s)<!--.*?-->","").replace("#{userId}","?");
-        return jdbc.query(sql,(rs,n)->rs.getLong("menu_id"),user,user);
+        int parameterCount=sql.length()-sql.replace("?", "").length();
+        return jdbc.query(sql,(rs,n)->rs.getLong("menu_id"),java.util.Collections.nCopies(parameterCount,user).toArray());
+    }
+    List<String> resolvedPermissions(long role) throws Exception {
+        var environment=new org.apache.ibatis.mapping.Environment("test",
+                new org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory(),jdbc.getDataSource());
+        var configuration=new org.apache.ibatis.session.Configuration(environment);
+        try(var stream=new ClassPathResource("mapper/SysMenuMapper.xml").getInputStream()) {
+            new org.apache.ibatis.builder.xml.XMLMapperBuilder(stream,configuration,
+                    "mapper/SysMenuMapper.xml",configuration.getSqlFragments()).parse();
+        }
+        try(var session=new org.apache.ibatis.session.SqlSessionFactoryBuilder().build(configuration).openSession()) {
+            return session.getMapper(com.xinghuiTec.mapper.SysMenuMapper.class).selectPermsByRoleIds(List.of(role));
+        }
     }
     @Test void dataOnlyRoleGetsSharedRouteWithoutTemplateApiAndFutureGrantsAndRevocationWork() throws Exception {
         assertEquals(List.of(202610160180000001L,107L),routes(22));
@@ -63,5 +76,34 @@ class AiAccessActionsTest {
         for(long role:List.of(1L,2L,4L,5L)) assertFalse(permissions(role).contains("ai:request:audit"));
         assertTrue(permissions(4).contains("ai:request:list"));
         assertFalse(permissions(4).contains("ai:request:audit"));
+    }
+
+    @Test void keyConfigurationRouteFollowsSourceGrantWithoutGivingLogOrAuditPermissions() throws Exception {
+        jdbc.update("UPDATE sys_menu SET perms='ai:monitor:enter',order_num=1 WHERE menu_id=202610160180000003");
+        jdbc.update("INSERT INTO sys_menu(menu_id,parent_id,order_num,menu_type,status,perms,is_deleted,path) VALUES(999,202610160180000003,10,'F','0','ai:config:query',0,'')");
+        jdbc.update("DELETE FROM sys_role_menu WHERE role_id=2");
+        assertTrue(routes(22).isEmpty());
+        jdbc.update("INSERT INTO sys_role_menu VALUES(2,999)");
+        assertEquals(List.of(202610160180000001L,202610160180000003L),routes(22));
+        assertEquals(java.util.Set.of("ai:config:query","ai:monitor:enter"),new java.util.HashSet<>(resolvedPermissions(2)));
+        assertFalse(permissions(2).contains("ai:request:list"));
+        assertFalse(permissions(2).contains("ai:request:audit"));
+        jdbc.update("DELETE FROM sys_role_menu WHERE role_id=2 AND menu_id=999");
+        assertTrue(routes(22).isEmpty(), "revoking the only source action removes derived navigation");
+        assertFalse(resolvedPermissions(2).contains("ai:monitor:enter"));
+        jdbc.update("INSERT INTO sys_role_menu VALUES(2,999)");
+        jdbc.update("UPDATE sys_role SET status=0 WHERE role_id=2");
+        assertTrue(routes(22).isEmpty());
+        assertTrue(resolvedPermissions(2).isEmpty());
+    }
+
+    @Test void sceneListActionDerivesOnlyPromptWorkspaceAndParent() throws Exception {
+        jdbc.update("UPDATE sys_menu SET perms='ai:scene:list' WHERE menu_id=107");
+        jdbc.update("DELETE FROM sys_role_menu WHERE role_id=2");
+        jdbc.update("INSERT INTO sys_menu(menu_id,parent_id,order_num,menu_type,status,perms,is_deleted,path) VALUES(998,107,10,'F','0','ai:scene:list',0,'')");
+        jdbc.update("INSERT INTO sys_role_menu VALUES(2,998)");
+        assertEquals(List.of(202610160180000001L,107L),routes(22));
+        assertFalse(permissions(2).contains("ai:scene:edit"));
+        assertFalse(permissions(2).contains("ai:scene:invoke"));
     }
 }

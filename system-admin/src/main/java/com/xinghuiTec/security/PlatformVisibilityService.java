@@ -16,7 +16,7 @@ public class PlatformVisibilityService {
             "monitor:operlog:", "system:tenant:", "system:tenantPackage:",
             "system:dict:", "system:notificationTemplate:", "ai:model:", "ai:prompt:", "system:wechat:",
             "system:news:", "system:businessConfig:", "lowcode:form:",
-            "ai:config:", "ai:application:", "ai:template:", "ai:data:", "ai:request:", "ai:workspace:");
+            "ai:config:", "ai:application:", "ai:template:", "ai:data:", "ai:request:", "ai:workspace:", "ai:monitor:");
 
     private final PlatformAccessService platformAccess;
 
@@ -59,6 +59,11 @@ public class PlatformVisibilityService {
     private boolean isVisible(String permission) {
         if (permission == null) {
             return true;
+        }
+        // Calling an approved scene is a business permission. Scene administration remains platform-only,
+        // including future management actions accidentally assigned to a tenant role.
+        if (permission.startsWith("ai:scene:")) {
+            return "ai:scene:invoke".equals(permission);
         }
         return PLATFORM_PREFIXES.stream().noneMatch(permission::startsWith);
     }

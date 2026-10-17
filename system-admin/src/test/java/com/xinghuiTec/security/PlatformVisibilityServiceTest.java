@@ -86,6 +86,21 @@ class PlatformVisibilityServiceTest {
     }
 
     @Test
+    void tenantRetainsSceneInvocationButNeverSceneAdministrationOrMonitorNavigation() {
+        authenticate("000001");
+        var visibility = new PlatformVisibilityService(new PlatformAccessService(true));
+        var codes = List.of("ai:scene:invoke", "ai:scene:list", "ai:scene:query", "ai:scene:edit",
+                "ai:scene:futureManagement", "ai:monitor:enter", "lowcode:record:query");
+        assertEquals(List.of("ai:scene:invoke", "lowcode:record:query"),
+                visibility.visibleInfo(new UserInfoVO(new SysUser(), List.of(), codes)).getPermissions());
+        var directory = menu(202610160180000001L, null, "M");
+        directory.setChildren(List.of(menu(107L, "ai:scene:list", "C"),
+                menu(202610160180000003L, "ai:monitor:enter", "C")));
+        assertTrue(visibility.visibleMenus(List.of(directory)).isEmpty());
+        assertEquals(2, directory.getChildren().size(), "cached menu input must remain unchanged");
+    }
+
+    @Test
     void platformAndNonTenantAuthorizedUserKeepMenus() {
         var menus = List.of(menu(103L, "system:config:list", "C"));
         authenticate("000000");
