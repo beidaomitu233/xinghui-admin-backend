@@ -72,7 +72,7 @@ public class SceneRuntimeService {
         // Rendering is server-only. A management preview receives masks rather than the authorized record body.
         var context=new AiSceneDataRuntime.SceneContext(key,selected.version.id(),actor,selected.input.businessRef(),java.util.UUID.randomUUID().toString());
         var rendered=provider.render(selected.version.compiled(),context,new AiInputs(selected.input.inputs()),SceneManagementService.control(10));
-        var original=List.of(new SceneDtos.Message("SYSTEM",selected.version.definition().promptText()));
+        var original=List.of(new SceneDtos.Message("USER",selected.version.definition().promptText()));
         var messages=rendered.messages().stream().map(m->new SceneDtos.Message(m.role().name(),"[已脱敏]" )).toList();
         var inputs=new java.util.LinkedHashMap<String,String>();selected.input.inputs().keySet().forEach(name->inputs.put(name,"[已脱敏]"));
         var resources=new java.util.LinkedHashMap<String,String>();for(var use:rendered.dataUses())resources.put(use.objectKey(),"[已脱敏]");
