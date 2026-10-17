@@ -36,14 +36,28 @@ public final class SceneDtos {
     }
     /** Creates a stable unconfigured identity. Enabled is intent only until a valid executable save. */
     public record Create(String name,String purpose,Kind kind,String formId,String clientMutationId) {}
-    public record Save(int expectedRevision,String clientMutationId,Definition definition) {
+    public record Save(int expectedRevision,String clientMutationId,Definition definition,boolean confirmedLegacyConversion) {
+        public Save(int expectedRevision,String clientMutationId,Definition definition){this(expectedRevision,clientMutationId,definition,false);}
         @Override public String toString() { return "SceneSave[REDACTED]"; }
     }
     public record Enabled(int expectedRevision,String clientMutationId,boolean enabled) {}
     public record Summary(String sceneKey,String name,String purpose,Kind kind,String formId,Source source,
                           boolean enabled,int revision,String currentVersionId,Availability availability,Instant updatedAt) {}
     /** Only configuration-authorized management endpoints return Definition. */
-    public record Detail(Summary scene,Definition definition) {
+    public record LegacyMessage(String section,String text) {
+        @Override public String toString(){return "LegacyMessage[REDACTED]";}
+    }
+    public record LegacyEditor(String promptText,String outputRequirement,List<DataObject> dataObjects) {
+        public LegacyEditor {dataObjects=List.copyOf(dataObjects);}
+        @Override public String toString(){return "LegacyEditor[REDACTED]";}
+    }
+    public record LegacyDetails(String compatibility,List<String> reasons,boolean requiresConfirmation,
+                                List<String> conversionNotes,LegacyEditor editor,List<LegacyMessage> originalMessages,Map<String,Object> originalDefinition) {
+        public LegacyDetails{reasons=List.copyOf(reasons);conversionNotes=List.copyOf(conversionNotes);originalMessages=List.copyOf(originalMessages);originalDefinition=Map.copyOf(originalDefinition);}
+        @Override public String toString(){return "LegacyDetails[REDACTED]";}
+    }
+    public record Detail(Summary scene,Definition definition,LegacyDetails legacy) {
+        public Detail(Summary scene,Definition definition){this(scene,definition,null);}
         @Override public String toString() { return "SceneDetail[REDACTED]"; }
     }
     public record SaveResult(Detail detail,String clientMutationId,Instant effectiveFrom) {}

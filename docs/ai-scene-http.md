@@ -35,6 +35,10 @@
 
 新身份默认 enabled=true 表示预期启用，但 currentVersionId=null、availability=UNCONFIGURED，不能运行。第一份合法配置保存即生效；保存始终保留当前启停意图，停用后保存不会意外开启。新建后无需另走发布/激活步骤。
 
+Detail 增加 `legacy`（原生或完成显式转换后为 null）：`{compatibility:CONVERTIBLE|READ_ONLY,reasons,requiresConfirmation,conversionNotes,editor:{promptText,outputRequirement,dataObjects}|null,originalMessages:[{section,text}],originalDefinition:{...旧配置...}}`。此信息只给有 scene:query 的管理详情，配置正文仍不进入业务 Entry/日志。读取及首次加载绝不写入。READ_ONLY 无法无损转换时显示原内容与固定原因，不补空配置覆盖；CONVERTIBLE 可用 editor 作为显式转换编辑起点。
+
+Save 增加 `confirmedLegacyConversion:boolean`（可省略，默认 false）。仅旧版本第一次转换时，若 legacy.requiresConfirmation 为 true，须用户明确确认 conversionNotes 后传 true，否则409 LEGACY_CONVERSION_CONFIRMATION_REQUIRED；保存无效或事务回滚不算已转换。之后 native snapshot 的编辑不再重复确认，但固定 legacy base 和批准资源边界永久保留。
+
 完整保存样例：
 
 ```json
