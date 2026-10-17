@@ -42,6 +42,7 @@ OssServiceDeletionTest
 SysOssControllerTest
 FileRecorderImplTest
 AiAccessActionsTest
+AiDatabaseAccessMigrationTest
 AiApplicationHttpContractTest
 AiApplicationInputRulesTest
 AiApplicationPreviewTest
