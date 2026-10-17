@@ -78,11 +78,13 @@ public class AiRequestLogService {
         if (where.empty()) return new Statistics(0, 0, 0, 0, null, null, 0, 0);
         long total = count(where);
         Long business = jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_request r" + where.sql() + " AND r.request_kind='BUSINESS'", Long.class, where.args().toArray());
+        var attemptArgs=new ArrayList<>(where.args());String attemptExtra="";
+        if(present(filters.modelRef())){attemptExtra=" AND a.model_ref=?";attemptArgs.add(filters.modelRef());}
         return jdbc.queryForObject("SELECT COUNT(*),SUM(a.input_tokens),SUM(a.output_tokens),"
                         + "SUM(CASE WHEN a.input_tokens IS NULL THEN 1 ELSE 0 END),SUM(CASE WHEN a.output_tokens IS NULL THEN 1 ELSE 0 END)"
-                        + " FROM sys_ai_request_attempt a JOIN sys_ai_request r ON r.request_id=a.request_id" + where.sql(),
+                        + " FROM sys_ai_request_attempt a JOIN sys_ai_request r ON r.request_id=a.request_id" + where.sql()+attemptExtra,
                 (rs, index) -> new Statistics(total, business == null ? 0 : business, total - (business == null ? 0 : business),
-                        rs.getLong(1), rs.getObject(2, Long.class), rs.getObject(3, Long.class), rs.getLong(4), rs.getLong(5)), where.args().toArray());
+                        rs.getLong(1), rs.getObject(2, Long.class), rs.getObject(3, Long.class), rs.getLong(4), rs.getLong(5)), attemptArgs.toArray());
     }
 
     /** JSON export preserves string IDs and cannot execute spreadsheet formula text. */
@@ -130,7 +132,7 @@ public class AiRequestLogService {
             if (from.isAfter(to) || java.time.Duration.between(from, to).compareTo(java.time.Duration.ofDays(31)) > 0) {
                 throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             }
-            sql.append(" AND r.create_time>=? AND r.create_time<=?"); args.add(Timestamp.from(from)); args.add(Timestamp.from(to));
+            sql.append(" AND r.create_time>=? AND r.create_time<?"); args.add(Timestamp.from(from)); args.add(Timestamp.from(to));
         }
         boolean empty = filter.scope() == Scope.OWN && !restrictApplications(sql, args, actor);
         return new Where(sql.toString(), List.copyOf(args), empty);
@@ -154,7 +156,7 @@ public class AiRequestLogService {
         sql.append(" AND (");
         boolean both = !versionsAllowed.isEmpty() && !testAppsAllowed.isEmpty();
         if (!versionsAllowed.isEmpty()) {
-            sql.append("(r.request_kind='BUSINESS' AND r.app_version_id IN (").append(placeholders(versionsAllowed.size())).append("))");
+            sql.append("(r.app_version_id IN (").append(placeholders(versionsAllowed.size())).append("))");
             args.addAll(versionsAllowed);
         }
         if (both) sql.append(" OR ");
@@ -173,7 +175,6 @@ public class AiRequestLogService {
         Where where=where(actor,platform,filter,"list");
         if(where.empty())return new com.xinghuiTec.ai.scene.SceneDtos.Calls(0,0,0,0,0,0,0,null,null,0,0);
         var requestArgs=new ArrayList<>(where.args());String extra="";
-        if(filter.to()!=null){extra=" AND r.create_time<?";requestArgs.add(Timestamp.from(filter.to()));}
         var requests=jdbc.queryForMap("SELECT COUNT(*) requests,SUM(CASE WHEN r.request_kind='BUSINESS' THEN 1 ELSE 0 END) business,"
                 +"SUM(CASE WHEN r.request_kind='TEST' THEN 1 ELSE 0 END) tests,SUM(CASE WHEN r.status='SUCCEEDED' THEN 1 ELSE 0 END) succeeded,"
                 +"SUM(CASE WHEN r.status IN ('FAILED','TIMED_OUT','INCOMPLETE') THEN 1 ELSE 0 END) failed FROM sys_ai_request r"+where.sql()+extra,requestArgs.toArray());
@@ -189,7 +190,6 @@ public class AiRequestLogService {
     public record KeyObservation(String keyRef,String keyVersion,long attempts,long failed) {}
     public List<KeyObservation> keyObservations(TrustedActor actor,boolean platform,Filters filter) {
         Where where=where(actor,platform,filter,"list");if(where.empty())return List.of();var args=new ArrayList<>(where.args());String extra="";
-        if(filter.to()!=null){extra+=" AND r.create_time<?";args.add(Timestamp.from(filter.to()));}
         if(present(filter.modelRef())){extra+=" AND a.model_ref=?";args.add(filter.modelRef());}
         return List.copyOf(jdbc.query("SELECT a.key_ref,a.key_version,COUNT(*) attempts,SUM(CASE WHEN a.status IN ('FAILED','TIMED_OUT','INCOMPLETE') THEN 1 ELSE 0 END) failed"
                 +" FROM sys_ai_request r JOIN sys_ai_request_attempt a ON a.request_id=r.request_id"+where.sql()+extra+" GROUP BY a.key_ref,a.key_version LIMIT 10001",
