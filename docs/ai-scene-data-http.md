@@ -25,4 +25,10 @@ catalog无业务query权限时objects为空，但仍可编辑不取数的普通�
 
 预览不得直接将RenderedScene敏感消息作为HTTP响应。B应按预览合同脱敏输入和业务数据，保持no-store/private；实际模型执行才使用未掩码消息。
 
-旧V04模板转换和scene接管写守卫正在单独对齐，不阻塞本目录及新编译路径；旧AiTemplateRuntime继续保留原资源批准/主体/applications范围。
+## 旧V04模板内部接缝
+
+`AiSceneLegacyTemplates.inspect(TemplateVersionRef, Invocation, control)` 由B传入明确映射的精确旧模板/真实旧app上下文，不接受客户端随意指定的版本。返回LegacyView：name/version、CONVERTIBLE或READ_ONLY、固定reasons、requiresConfirmation、conversionNotes、可转换EditorInput、原消息/原配置和旧批准范围。完整原配置仅供有权管理详情，不能整对象直接投递日志或通用HTTP。原消息保留原分区，转换提示明确说明合并为USER及新读取保留null的语义差异；查看时不保存或发布。
+
+`compileEdited(version, legacyInvocation, EditorInput, control)` 只在显式合法保存时调用；生成独立CompiledScene，不修改旧共享模板。批准字段只能收窄，保留原精确资源版本/应用/主体范围。返回CompiledScene.legacyScopes必须和执行快照一同持久化；后续编辑旧映射场景仍走此方法，不能改调普通compile而丢掉旧约束。C render/authorize按当前启停、成功测试证据、配置哈希、批准人、字段/主体/applications重新校验。移除所有数据对象时不再附加无关资源范围。
+
+旧执行仍通过原AiTemplateRuntime精确版本运行，直到用户明确保存新快照；旧AI02场景不合并。特殊默认值/额外变量/不支持资源映射等返回READ_ONLY及原配置，禁止静默丢弃后自动转换。scene接管后的旧template写守卫待B提交唯一AiSceneOwnership接口后接入，不将其称为已完成。

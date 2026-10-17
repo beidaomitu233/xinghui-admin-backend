@@ -112,6 +112,41 @@ public class SceneDataServiceTest {
         jdbc.update("UPDATE sys_lowcode_record SET is_deleted=1 WHERE id=11");
         assertEquals(ErrorCode.RESOURCE_FORBIDDEN,assertThrows(AiRuntimeException.class,()->service.authorize(compiled,context("11"),control())).code());
     }
+    private com.xinghuiTec.ai.template.TemplateDefinition legacyFixture(boolean special) throws Exception {
+        String ddl=Files.readString(Path.of("src/main/resources/db/migration/V20261016_190__ai_template_data_v04.sql"));
+        for(String statement:ddl.split(";"))if(!statement.isBlank())jdbc.execute(statement);
+        var r=new com.xinghuiTec.ai.template.ResourceDefinition("资源","业务","维护者","lowcode.record","1",List.of("subject"),Set.of("101"),Set.of("201"),1000);
+        var canonical=canonical(json.valueToTree(r));var hash=java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(canonical)));
+        jdbc.update("INSERT INTO sys_ai_data_resource(id,name,draft_json,enabled) VALUES(21,'资源',?,1)",json.writeValueAsString(r));
+        jdbc.update("INSERT INTO sys_ai_data_resource_check(id,resource_id,config_hash,scope_hash,action,outcome,subject_id,tenant_id) VALUES(51,21,?,?,'TEST','SUCCESS','101','tenant_a')",hash,"0".repeat(64));
+        jdbc.update("INSERT INTO sys_ai_data_resource_version(id,resource_id,version_no,config_json,config_hash,approver,test_check_id) VALUES(61,21,1,?,?,'101',51)",json.writeValueAsString(r),hash);
+        var d=new com.xinghuiTec.ai.template.TemplateDefinition("原摘要","业务","维护者",
+                List.of(new com.xinghuiTec.ai.template.TemplateDefinition.Message(com.xinghuiTec.ai.template.TemplateDefinition.Section.INSTRUCTION,"固定摘要要求"),new com.xinghuiTec.ai.template.TemplateDefinition.Message(com.xinghuiTec.ai.template.TemplateDefinition.Section.INPUT,"{{user_request}}"),new com.xinghuiTec.ai.template.TemplateDefinition.Message(com.xinghuiTec.ai.template.TemplateDefinition.Section.DATA,"主题 {{record_subject}}")),
+                List.of(new com.xinghuiTec.ai.template.TemplateDefinition.Variable("user_request",com.xinghuiTec.ai.template.TemplateDefinition.Type.STRING,true,special,special?json.getNodeFactory().textNode("原默认值"):null,2048,false,false),new com.xinghuiTec.ai.template.TemplateDefinition.Variable("record_subject",com.xinghuiTec.ai.template.TemplateDefinition.Type.STRING,true,false,null,2000,true,false)),
+                List.of(new com.xinghuiTec.ai.template.TemplateDefinition.Binding("record","21","61",true,false,Map.of("formId",new com.xinghuiTec.ai.template.TemplateDefinition.Parameter(com.xinghuiTec.ai.template.TemplateDefinition.ParameterSource.BUSINESS_REF,"formId"),"recordId",new com.xinghuiTec.ai.template.TemplateDefinition.Parameter(com.xinghuiTec.ai.template.TemplateDefinition.ParameterSource.BUSINESS_REF,"recordId")),Map.of("subject","record_subject"))),8000);
+        jdbc.update("INSERT INTO sys_ai_prompt_template(id,name,draft_json,enabled) VALUES(31,'原摘要',?,1)",json.writeValueAsString(d));
+        jdbc.update("INSERT INTO sys_ai_prompt_template_version(id,template_id,version_no,config_json,config_hash,publisher) VALUES(41,31,1,?,?,'101')",json.writeValueAsString(d),"0".repeat(64));return d;
+    }
+    private JsonNode canonical(JsonNode n){if(n.isObject()){var result=json.createObjectNode();var names=new TreeSet<String>();n.fieldNames().forEachRemaining(names::add);names.forEach(k->result.set(k,canonical(n.get(k))));return result;}if(n.isArray()){var a=json.createArrayNode();n.forEach(v->a.add(canonical(v)));return a;}return n;}
+    private Invocation legacyInvocation(){return new Invocation(new TrustedActor("101","tenant_a",Set.of("ai:scene:query","ai:scene:edit","lowcode:record:query"),null),"201","301",new BusinessRef("lowcode.record","1:11"),"7");}
+    @Test void legacyInspectAndEditNeverMutateSharedTemplateOrBroadenApprovedFields() throws Exception {
+        legacyFixture(false);String before=jdbc.queryForObject("SELECT config_json FROM sys_ai_prompt_template_version WHERE id=41",String.class);
+        var bridge=new LegacySceneTemplates(jdbc,json,service);var ref=new TemplateVersionRef("31","41");var invocation=legacyInvocation();
+        var view=bridge.inspect(ref,invocation,control());assertEquals(AiSceneLegacyTemplates.Compatibility.CONVERTIBLE,view.compatibility());assertEquals(3,view.originalMessages().size());assertTrue(view.requiresConfirmation());
+        var compiled=bridge.compileEdited(ref,invocation,editor("新摘要 {{user_request}} {{record_subject}}","subject"),control());
+        assertEquals(1,compiled.legacyScopes().size());assertEquals("201",compiled.legacyScopes().get(0).applicationId());
+        assertThrows(AiRuntimeException.class,()->bridge.compileEdited(ref,invocation,editor("新摘要","subject","summary"),control()));
+        assertEquals(before,jdbc.queryForObject("SELECT config_json FROM sys_ai_prompt_template_version WHERE id=41",String.class));
+        assertDoesNotThrow(()->service.render(compiled,context("11"),new AiInputs(Map.of("user_request","简短")),control()));
+        jdbc.update("UPDATE sys_ai_data_resource SET enabled=0 WHERE id=21");
+        assertEquals(ErrorCode.RESOURCE_UNAVAILABLE,assertThrows(AiRuntimeException.class,()->service.authorize(compiled,context("11"),control())).code());
+    }
+    @Test void legacySpecialVariablesRemainReadOnlyWithOriginalDefinition() throws Exception {
+        legacyFixture(true);var bridge=new LegacySceneTemplates(jdbc,json,service);
+        var view=bridge.inspect(new TemplateVersionRef("31","41"),legacyInvocation(),control());
+        assertEquals(AiSceneLegacyTemplates.Compatibility.READ_ONLY,view.compatibility());assertNull(view.editor());assertTrue(view.reasons().contains("SPECIAL_VARIABLE_SCHEMA"));
+        assertTrue(view.originalDefinition().values().containsKey("variables"));assertFalse(view.toString().contains("原默认值"));
+    }
     public static String extract(String raw,String path) throws Exception {var n=new ObjectMapper().readTree(raw).get(path.substring(2));return n==null?null:n.toString();}
     public static String unquote(String raw) throws Exception {return raw==null?null:new ObjectMapper().readTree(raw).asText();}
     public static String type(String raw) throws Exception {return raw!=null&&new ObjectMapper().readTree(raw).isTextual()?"STRING":"NULL";}

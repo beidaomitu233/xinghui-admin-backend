@@ -97,11 +97,20 @@ public interface AiSceneDataRuntime {
     }
 
     /** Persist exactly this compiled snapshot with the scene version; do not refresh it from latest metadata. */
+    record LegacyScope(AiTypes.ResourceVersionRef resource, String applicationId, String applicationVersion,
+                       String objectKey, String formId, List<String> fields) {
+        public LegacyScope { Objects.requireNonNull(resource); decimal(applicationId); reference(applicationVersion); fields=List.copyOf(fields); }
+    }
+
     record CompiledScene(String compilerVersion, EditorInput editor, List<SelectionSnapshot> selections,
-                         List<InputVariable> inputVariables) {
+                         List<InputVariable> inputVariables, List<LegacyScope> legacyScopes) {
+        public CompiledScene(String compilerVersion, EditorInput editor, List<SelectionSnapshot> selections,List<InputVariable> inputVariables) {
+            this(compilerVersion,editor,selections,inputVariables,List.of());
+        }
         public CompiledScene {
             reference(compilerVersion); Objects.requireNonNull(editor);
             selections = List.copyOf(selections); inputVariables = List.copyOf(inputVariables);
+            legacyScopes=legacyScopes==null?List.of():List.copyOf(legacyScopes);
         }
         @Override public String toString() { return "CompiledScene[REDACTED]"; }
     }

@@ -114,6 +114,13 @@ public class SceneDataService implements AiSceneDataRuntime {
 
     private void authorizeNow(CompiledScene compiled, SceneContext context, InvocationControl control) {
         if(!COMPILER_VERSION.equals(compiled.compilerVersion()))throw error(ErrorCode.INVALID_INPUT);
+        if(!compiled.legacyScopes().isEmpty()) {
+            for(var selection:compiled.selections())if(compiled.legacyScopes().stream().noneMatch(s->s.objectKey().equals(selection.objectKey())&&s.formId().equals(selection.formId())&&s.fields().containsAll(selection.fields().stream().map(FieldOption::fieldKey).toList())))throw error(ErrorCode.RESOURCE_FORBIDDEN);
+            for(var scope:compiled.legacyScopes()) {
+                var r=LegacySceneTemplates.readResource(jdbc,json,scope.resource().resourceId(),scope.resource().resourceVersionId());
+                if(!r.source().equals(scope.objectKey())||!r.formId().equals(scope.formId())||!r.fields().containsAll(scope.fields())||!r.subjects().contains(context.actor().subjectId())||!r.applications().contains(scope.applicationId()))throw error(ErrorCode.RESOURCE_FORBIDDEN);
+            }
+        }
         for(var selection:compiled.selections()) {
             require(context.actor(),"lowcode:record:query");
             if(!"lowcode.record".equals(selection.objectKey()) || selection.fields().isEmpty()
@@ -142,7 +149,7 @@ public class SceneDataService implements AiSceneDataRuntime {
             var snap = compiled.selections().stream().filter(x -> x.objectKey().equals(s.objectKey()) && x.formId().equals(s.formId())).findFirst().orElseThrow(()->error(ErrorCode.INVALID_INPUT));
             return new FieldCatalog(snap.objectKey(),snap.formId(),snap.schemaVersion(),snap.fields());
         });
-        if (!checked.equals(compiled)) throw error(ErrorCode.INVALID_INPUT);
+        if (!new CompiledScene(checked.compilerVersion(),checked.editor(),checked.selections(),checked.inputVariables(),compiled.legacyScopes()).equals(compiled)) throw error(ErrorCode.INVALID_INPUT);
         if (!Set.of("user_request").containsAll(inputs.values().keySet())) throw error(ErrorCode.INVALID_INPUT);
         Object user = inputs.values().get("user_request");
         if (user != null && !(user instanceof String)) throw error(ErrorCode.INVALID_INPUT);
