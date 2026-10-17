@@ -91,3 +91,4 @@ TemplateResponsePolicyTest
 TemplateRulesTest
 AiSettingsKeyRotationTest
 AiModelCatalogTest
+AiMultiChannelRuntimeTest
