@@ -64,7 +64,7 @@ class AiRequestExecutorTest {
         var row = jdbc.queryForMap("SELECT * FROM sys_ai_request_attempt WHERE request_id=?", Long.parseLong(work.invocation().requestId()));
         assertEquals("gen-neutral-001", row.get("provider_request_id"));
         assertEquals("SIMULATED", row.get("provider_code")); assertEquals("test-model", row.get("model_code"));
-        assertEquals("kv1", row.get("key_version")); assertEquals(32, row.get("output_token_limit"));
+        assertEquals("kv1", row.get("key_version")); assertEquals(64, row.get("output_token_limit"));
     }
 
     @Test

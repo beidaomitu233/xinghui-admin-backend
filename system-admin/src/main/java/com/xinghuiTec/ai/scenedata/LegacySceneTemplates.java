@@ -82,6 +82,7 @@ public class LegacySceneTemplates implements AiSceneLegacyTemplates {
     }
 
     @Override public CompiledScene compileEdited(TemplateVersionRef version,Invocation legacy,EditorInput edited,InvocationControl control) {
+        if(!edited.bindings().isEmpty())throw fail(ErrorCode.RESOURCE_FORBIDDEN);
         var view=inspect(version,legacy,control);
         if(view.compatibility()!=Compatibility.CONVERTIBLE)throw fail(ErrorCode.CAPABILITY_UNSUPPORTED);
         // A user may narrow an approved legacy resource, never widen it by selecting a builtin checkbox.

@@ -66,6 +66,16 @@ public class OpenRouterTransport {
 
     ExecutionOutcome call(String modelCode,int timeoutSeconds,String key,List<AiMessage> messages,
                           Requirements requirements,int maxTokens,StreamObserver observer,InvocationControl control) {
+        return callEndpoint("openrouter",ENDPOINT,modelCode,timeoutSeconds,key,messages,requirements,maxTokens,observer,control);
+    }
+    ExecutionOutcome callForProvider(String provider,String endpoint,String modelCode,int timeoutSeconds,String key,List<AiMessage> messages,
+                          Requirements requirements,int maxTokens,StreamObserver observer,InvocationControl control) {
+        if("openrouter".equals(provider) && ENDPOINT.equals(endpoint)) return call(modelCode,timeoutSeconds,key,messages,requirements,maxTokens,observer,control);
+        AiProviderPresets.require(provider,endpoint);
+        return callEndpoint(provider,endpoint,modelCode,timeoutSeconds,key,messages,requirements,maxTokens,observer,control);
+    }
+    private ExecutionOutcome callEndpoint(String provider,String endpoint,String modelCode,int timeoutSeconds,String key,List<AiMessage> messages,
+                          Requirements requirements,int maxTokens,StreamObserver observer,InvocationControl control) {
         long start=System.nanoTime(); var state=new ParseState(key,observer,requirements.streaming(),requirements.outputFormat()==OutputFormat.JSON_OBJECT);
         var stream=new AtomicReference<InputStream>();
         var pending=new AtomicReference<CompletableFuture<?>>();
@@ -85,7 +95,7 @@ public class OpenRouterTransport {
             if(requirements.tools()||(requirements.outputFormat()==OutputFormat.JSON_OBJECT&&!OpenRouterCapabilities.supportsJson(modelCode))) throw new AiRuntimeException(ErrorCode.CAPABILITY_UNSUPPORTED);
             if(maxTokens<1||maxTokens>32768) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             if(key==null||key.isBlank()||key.length()>8192||key.chars().anyMatch(c->c<32||c==127)) throw new AiRuntimeException(ErrorCode.CREDENTIAL_UNAVAILABLE);
-            if(!proxy) for(var address:InetAddress.getAllByName("openrouter.ai")) {
+            if(!proxy) for(var address:InetAddress.getAllByName(URI.create(endpoint).getHost())) {
                 String host=address.getHostAddress(); addresses.endpointUrl("https://"+(host.contains(":")?"["+host+"]":host));
             }
             var body=new LinkedHashMap<String,Object>();
@@ -94,14 +104,19 @@ public class OpenRouterTransport {
             outbound.addAll(messages.stream().map(m->Map.of("role",m.role().name().toLowerCase(Locale.ROOT),"content",m.content())).toList());
             body.put("model",modelCode); body.put("messages",outbound);
             body.put("stream",requirements.streaming()); body.put("max_tokens",maxTokens);
+            // These two catalog-verified models support optional reasoning; ordinary chat should reserve output for text.
+            // https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+            if("openrouter".equals(provider) && requirements.outputFormat()==OutputFormat.TEXT && Set.of("poolside/laguna-s-2.1:free","nvidia/nemotron-3.5-lightning:free").contains(modelCode))
+                body.put("reasoning",Map.of("enabled",false));
             // Prevent routing to a different model; application-level fallback belongs to B.
-            body.put("provider",state.jsonObject?Map.of("allow_fallbacks",false,"require_parameters",true):Map.of("allow_fallbacks",false));
+            if("openrouter".equals(provider)) body.put("provider",state.jsonObject?Map.of("allow_fallbacks",false,"require_parameters",true):Map.of("allow_fallbacks",false));
+            if("deepseek".equals(provider)) body.put("thinking",Map.of("type","disabled"));
             if(state.jsonObject) body.put("response_format",Map.of("type","json_object"));
             String encoded=json.writeValueAsString(body);
             if(encoded.length()>262144) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             control.check();
             if(!Instant.now().isBefore(deadline)) throw new AiRuntimeException(ErrorCode.DEADLINE_EXCEEDED);
-            var request=HttpRequest.newBuilder(URI.create(ENDPOINT))
+            var request=HttpRequest.newBuilder(URI.create(endpoint))
                     .timeout(Duration.ofMillis(Math.max(1,Duration.between(Instant.now(),deadline).toMillis())))
                     .header("Authorization","Bearer "+key).header("Content-Type","application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(encoded,StandardCharsets.UTF_8)).build();

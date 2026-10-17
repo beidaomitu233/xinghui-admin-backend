@@ -7,6 +7,7 @@ import com.xinghuiTec.ai.contract.AiTypes.InvocationControl;
 import com.xinghuiTec.ai.contract.AiTypes.TrustedActor;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -16,6 +17,7 @@ import java.util.Objects;
  */
 public interface AiSceneDataRuntime {
     String COMPILER_VERSION = "scene-data-v1";
+    String BINDING_COMPILER_VERSION = "scene-data-v2";
 
     Catalog catalog(TrustedActor actor, InvocationControl control);
 
@@ -38,6 +40,78 @@ public interface AiSceneDataRuntime {
 
     /** Recheck current identity, business scope and pinned field schema without inputs or returning any content. */
     void authorize(CompiledScene compiled, SceneContext context, InvocationControl control);
+
+    /** Dynamic sources are read from this application's database, not configured SQL/URLs. */
+    default Page<DatabaseTable> tables(OptionQuery query, TrustedActor actor, InvocationControl control) { throw unsupported(); }
+    default DatabaseFields databaseFields(String sourceKey, TrustedActor actor, InvocationControl control) { throw unsupported(); }
+    default List<DatabaseRelation> relations(String sourceKey, TrustedActor actor, InvocationControl control) { throw unsupported(); }
+    default DatabaseRecords records(DatabaseRecordQuery query, TrustedActor actor, InvocationControl control) { throw unsupported(); }
+    /** Actual ordinary authorized values. Never a provider call or an automatic scene save. */
+    default BindingPreview previewBindings(BindingPreviewRequest request, TrustedActor actor, InvocationControl control) { throw unsupported(); }
+
+    enum ReadMode { FIELD, ROW, TABLE, CHILDREN }
+    enum FilterOperator { EQ, NE, GT, GE, LT, LE, CONTAINS, IS_NULL, NOT_NULL }
+    record DataFilter(String field, FilterOperator operator, Object value) {
+        public DataFilter { reference(field); Objects.requireNonNull(operator); value=new AiInputs(java.util.Collections.singletonMap("value",value)).values().get("value"); }
+        @Override public String toString(){return "DataFilter[REDACTED]";}
+    }
+    /** currentRecord uses the server invocation's businessRef; explicit keys select a fixed row. */
+    record RowSelector(boolean currentRecord, Map<String,Object> key) {
+        public RowSelector { key=key==null?Map.of():new AiInputs(key).values(); if(key.size()>8 || (currentRecord && !key.isEmpty()))throw new IllegalArgumentException("Invalid row selector"); }
+        @Override public String toString(){return "RowSelector[REDACTED]";}
+    }
+    /** The parent is another ROW binding. Actual parent value becomes a parameter in the child query. */
+    record RelationBinding(String parentVariable,String parentField,String childField) {
+        public RelationBinding { reference(parentVariable);reference(parentField);reference(childField); }
+    }
+    /** Empty fields means all readable fields. FIELD requires exactly one field. No arbitrary expressions. */
+    record DataBinding(String variable,String label,String sourceKey,ReadMode mode,List<String> fields,
+                       List<DataFilter> filters,int limit,RowSelector row,RelationBinding relation) {
+        public DataBinding {
+            reference(variable);reference(label);reference(sourceKey);Objects.requireNonNull(mode);
+            fields=fields==null?List.of():List.copyOf(fields);filters=filters==null?List.of():List.copyOf(filters);
+            if(fields.size()>64 || filters.size()>16 || limit<1 || limit>200)throw new IllegalArgumentException("Invalid binding bounds");
+        }
+        @Override public String toString(){return "DataBinding[REDACTED]";}
+    }
+    record DatabaseTable(String sourceKey,String tableName,String label,String comment,List<String> primaryKey) {
+        public DatabaseTable { primaryKey=List.copyOf(primaryKey); }
+    }
+    record DatabaseField(String field,String label,String comment,String type,boolean nullable,boolean primaryKey) {}
+    record DatabaseFields(String sourceKey,List<DatabaseField> fields,List<String> primaryKey) {
+        public DatabaseFields { fields=List.copyOf(fields);primaryKey=List.copyOf(primaryKey); }
+    }
+    record DatabaseRelation(String name,String parentSourceKey,String parentField,String childSourceKey,String childField,boolean foreignKey) {}
+    record DatabaseRecordQuery(String sourceKey,List<DataFilter> filters,int limit) {
+        public DatabaseRecordQuery { reference(sourceKey);filters=filters==null?List.of():List.copyOf(filters);if(filters.size()>16 || limit<1 || limit>200)throw new IllegalArgumentException("Invalid query bounds"); }
+        @Override public String toString(){return "DatabaseRecordQuery[REDACTED]";}
+    }
+    record DatabaseRecord(Map<String,Object> key,String label,Map<String,Object> values,BusinessRef businessRef) {
+        public DatabaseRecord { key=new AiInputs(key).values();values=new AiInputs(values).values(); }
+        @Override public String toString(){return "DatabaseRecord[REDACTED]";}
+    }
+    record DatabaseRecords(List<DatabaseRecord> records,boolean truncated) {
+        public DatabaseRecords { records=List.copyOf(records); }
+        @Override public String toString(){return "DatabaseRecords[REDACTED]";}
+    }
+    /** Query-only fields are pinned too, even when omitted from the returned projection. */
+    record QueryDependency(String sourceKey,DatabaseField field) {
+        public QueryDependency { reference(sourceKey);Objects.requireNonNull(field); }
+    }
+    record BindingSnapshot(DataBinding binding,List<DatabaseField> fields,String schemaFingerprint,List<QueryDependency> dependencies) {
+        public BindingSnapshot(DataBinding binding,List<DatabaseField> fields,String schemaFingerprint){this(binding,fields,schemaFingerprint,List.of());}
+        public BindingSnapshot { Objects.requireNonNull(binding);fields=List.copyOf(fields);reference(schemaFingerprint);dependencies=dependencies==null?List.of():List.copyOf(dependencies); }
+    }
+    record BindingPreviewRequest(List<DataBinding> bindings,BusinessRef businessRef) {
+        public BindingPreviewRequest { bindings=List.copyOf(bindings);if(bindings.size()>16)throw new IllegalArgumentException("Too many bindings"); }
+        @Override public String toString(){return "BindingPreviewRequest[REDACTED]";}
+    }
+    record ReadReceipt(String variable,String sourceKey,int rowCount,boolean truncated) {}
+    record BindingPreview(Map<String,Object> values,List<ReadReceipt> reads,List<Notice> notices) {
+        public BindingPreview { values=new AiInputs(values).values();reads=List.copyOf(reads);notices=List.copyOf(notices); }
+        @Override public String toString(){return "BindingPreview[REDACTED]";}
+    }
+    private static AiRuntimeException unsupported(){return new AiRuntimeException(AiTypes.ErrorCode.CAPABILITY_UNSUPPORTED);}
 
     record OptionQuery(String keyword, int pageNum, int pageSize) {
         public OptionQuery { keyword = AiSceneDataRuntime.keyword(keyword); page(pageNum, pageSize); }
@@ -84,10 +158,11 @@ public interface AiSceneDataRuntime {
     }
 
     /** A single editor plus optional output instructions; no resource/app/template IDs or mapping JSON. */
-    record EditorInput(String prompt, String outputInstructions, List<Selection> selections) {
+    record EditorInput(String prompt, String outputInstructions, List<Selection> selections,List<DataBinding> bindings) {
+        public EditorInput(String prompt,String outputInstructions,List<Selection> selections){this(prompt,outputInstructions,selections,List.of());}
         public EditorInput {
             Objects.requireNonNull(prompt); outputInstructions = outputInstructions == null ? "" : outputInstructions;
-            selections = List.copyOf(selections);
+            selections = List.copyOf(selections); bindings=bindings==null?List.of():List.copyOf(bindings);if(bindings.size()>16)throw new IllegalArgumentException("Too many bindings");
         }
         @Override public String toString() { return "SceneEditorInput[REDACTED]"; }
     }
@@ -103,14 +178,15 @@ public interface AiSceneDataRuntime {
     }
 
     record CompiledScene(String compilerVersion, EditorInput editor, List<SelectionSnapshot> selections,
-                         List<InputVariable> inputVariables, List<LegacyScope> legacyScopes) {
+                         List<InputVariable> inputVariables, List<LegacyScope> legacyScopes,List<BindingSnapshot> bindings) {
+        public CompiledScene(String compilerVersion,EditorInput editor,List<SelectionSnapshot> selections,List<InputVariable> inputVariables,List<LegacyScope> legacyScopes){this(compilerVersion,editor,selections,inputVariables,legacyScopes,List.of());}
         public CompiledScene(String compilerVersion, EditorInput editor, List<SelectionSnapshot> selections,List<InputVariable> inputVariables) {
             this(compilerVersion,editor,selections,inputVariables,List.of());
         }
         public CompiledScene {
             reference(compilerVersion); Objects.requireNonNull(editor);
             selections = List.copyOf(selections); inputVariables = List.copyOf(inputVariables);
-            legacyScopes=legacyScopes==null?List.of():List.copyOf(legacyScopes);
+            legacyScopes=legacyScopes==null?List.of():List.copyOf(legacyScopes);bindings=bindings==null?List.of():List.copyOf(bindings);
         }
         @Override public String toString() { return "CompiledScene[REDACTED]"; }
     }
@@ -131,7 +207,8 @@ public interface AiSceneDataRuntime {
 
     record Notice(String code, String reference) {}
 
-    record RenderedScene(List<AiMessage> messages, List<DataUse> dataUses, List<Notice> notices) {
+    record RenderedScene(List<AiMessage> messages, List<DataUse> dataUses, List<Notice> notices, BindingPreview bindingPreview) {
+        public RenderedScene(List<AiMessage> messages,List<DataUse> dataUses,List<Notice> notices){this(messages,dataUses,notices,null);}
         public RenderedScene { messages = List.copyOf(messages); dataUses = List.copyOf(dataUses); notices = List.copyOf(notices); }
         @Override public String toString() { return "RenderedScene[REDACTED]"; }
     }

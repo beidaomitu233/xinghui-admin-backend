@@ -119,7 +119,7 @@ public class AiRequestLogService {
         equal(sql,args,"r.scene_key",filter.sceneKey(),128);
         if(present(filter.requestKind())){if(!Set.of("BUSINESS","TEST").contains(filter.requestKind()))throw new AiRuntimeException(ErrorCode.INVALID_INPUT);equal(sql,args,"r.request_kind",filter.requestKind(),16);}
         if (present(filter.requestId())) { sql.append(" AND r.request_id=?"); args.add(AiApplicationService.positiveId(filter.requestId())); }
-        equal(sql, args, "r.business_id", filter.businessId(), 128);
+        equal(sql, args, "r.business_id", filter.businessId(), 2048);
         if (filter.status() != null) { sql.append(" AND r.status=?"); args.add(filter.status().name()); }
         if (present(filter.modelRef())) {
             text(filter.modelRef(), 128);

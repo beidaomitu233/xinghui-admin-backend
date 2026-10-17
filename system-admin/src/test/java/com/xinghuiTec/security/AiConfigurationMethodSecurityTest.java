@@ -22,7 +22,13 @@ class AiConfigurationMethodSecurityTest {
         context.registerBean("platformAccess",PlatformAccessService.class,()->new PlatformAccessService(true));
         context.registerBean(AiConfigurationService.class,()->mock(AiConfigurationService.class));
         context.registerBean(AiConfigurationTests.class,()->mock(AiConfigurationTests.class));
-        context.registerBean(AiConfigurationController.class); context.refresh(); return context;
+        context.registerBean(AiConfigurationController.class); context.refresh();
+        // Spring injects the completion observer before any secured request. Exclude only this
+        // verified lifecycle call; the tenant assertions still require zero service interactions.
+        var testService=context.getBean(AiConfigurationTests.class);
+        verify(testService).completionObservers(any());
+        clearInvocations(testService);
+        return context;
     }
     void actor(String tenant,String... permissions) {
         var user=new SysUser(); user.setUserId(1L); user.setTenantId(tenant);

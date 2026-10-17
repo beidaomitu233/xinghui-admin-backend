@@ -9,7 +9,7 @@ import java.util.Set;
 /** Navigation entry is an OR, never a grant of log/audit/configuration API permissions. */
 @Component("aiWorkspaceAccess")
 public class AiWorkspaceAccessService {
-    private static final Set<String> MONITOR=Set.of("ai:request:list","ai:config:list","ai:config:query","ai:config:add","ai:config:edit","ai:config:test","ai:config:enable");
+    private static final Set<String> MONITOR=Set.of("ai:scene:invoke","ai:request:list");
     private final PlatformAccessService platform;
     public AiWorkspaceAccessService(PlatformAccessService platform){this.platform=platform;}
     public boolean canEnterMonitor(){var auth=SecurityContextHolder.getContext().getAuthentication();return platform.isPlatformIdentity() && auth!=null

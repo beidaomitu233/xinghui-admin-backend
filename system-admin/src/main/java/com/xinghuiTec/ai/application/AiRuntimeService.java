@@ -24,7 +24,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Admits a durable ID, authorizes/renders through C, then dispatches one bounded asynchronous worker. */
 @Service
 public class AiRuntimeService {
-    public record Submission(BusinessRef businessRef, Map<String, Object> inputs, String idempotencyKey) {
+    public record Submission(BusinessRef businessRef, Map<String, Object> inputs, String idempotencyKey,AiConversationRuntime.Target conversation) {
+        public Submission(BusinessRef businessRef,Map<String,Object> inputs,String idempotencyKey){this(businessRef,inputs,idempotencyKey,null);}
         public Submission {
             if (businessRef == null || inputs == null || idempotencyKey == null
                     || !idempotencyKey.matches("[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}")) {
@@ -49,6 +50,9 @@ public class AiRuntimeService {
         }
     }
     private AiSceneRequestAccess sceneAccess;
+    private AiConversationRuntime conversations;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void conversations(AiConversationRuntime conversations){this.conversations=conversations;}
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     public void sceneAccess(AiSceneRequestAccess access){this.sceneAccess=access;}
 
@@ -156,7 +160,9 @@ public class AiRuntimeService {
                 owner, input.businessRef().type(), input.businessRef().id(), input.idempotencyKey(), fingerprint(loaded, input, owner),
                 now.plusSeconds(loaded.policy().timeoutSeconds()),loaded.scene()==null?null:loaded.scene().sceneKey(),loaded.scene()==null?null:loaded.scene().sceneVersionId());
         AiRequestStore.Accepted accepted;
-        try { accepted = transaction.execute(status -> requests.accept(admission, now)); }
+        try { accepted = transaction.execute(status -> {var result=requests.accept(admission,now);
+            if(result.created() && conversations!=null)conversations.admitted(result.request(),owner,input.inputs(),input.conversation());
+            return result;}); }
         catch (IllegalArgumentException conflict) {
             if ("IDEMPOTENCY_CONFLICT".equals(conflict.getMessage())) throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);
             throw conflict;
@@ -176,11 +182,12 @@ public class AiRuntimeService {
             if(loaded.scene()!=null){
                 var rendered=sceneAccess.render(loaded.scene(),invocation,new AiInputs(input.inputs()),control);control.check();
                 if(rendered==null || rendered.messages().isEmpty())throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
-                int bytes=0;for(AiMessage message:rendered.messages())bytes=Math.addExact(bytes,message.content().getBytes(StandardCharsets.UTF_8).length);
+                var messages=withConversation(accepted.request(),rendered.messages(),actor);
+                int bytes=0;for(AiMessage message:messages)bytes=Math.addExact(bytes,message.content().getBytes(StandardCharsets.UTF_8).length);
                 if(bytes>65536)throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
                 journal.stage(id,AiRequestStore.Stage.RENDER,AiRequestJournal.Outcome.SUCCEEDED,null,null,null,null);
-                var work=new AiRequestExecutor.Work(invocation,loaded.policy(),rendered.messages(),List.of(),input.inputs().keySet(),loaded.test(),
-                        ()->sceneAccess.authorize(loaded.scene(),invocation,control));
+                var work=new AiRequestExecutor.Work(invocation,loaded.policy(),messages,List.of(),input.inputs().keySet(),loaded.test(),
+                        ()->authorizeEvents(status(id,actor),actor));
                 pool.execute(()->{try{worker.execute(work);}finally{dispatched.remove(id);}});
                 return accepted.request();
             }
@@ -193,8 +200,9 @@ public class AiRuntimeService {
                     || (!loaded.test() && !new HashSet<>(rendered.resources()).equals(new HashSet<>(loaded.resources())))) {
                 throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);
             }
+            var messages=withConversation(accepted.request(),rendered.messages(),actor);
             int bytes = 0;
-            for (AiMessage message : rendered.messages()) bytes = Math.addExact(bytes, message.content().getBytes(StandardCharsets.UTF_8).length);
+            for (AiMessage message : messages) bytes = Math.addExact(bytes, message.content().getBytes(StandardCharsets.UTF_8).length);
             if (bytes > 65_536) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             journal.stage(id, AiRequestStore.Stage.RENDER, AiRequestJournal.Outcome.SUCCEEDED, null,
                     AiRequestJournal.ReferenceKind.TEMPLATE, rendered.version().templateId(), rendered.version().templateVersionId());
@@ -206,7 +214,7 @@ public class AiRuntimeService {
                         case OPTIONAL_RESOURCE_MISSING -> AiRequestJournal.Outcome.OPTIONAL_MISSING;
                         case TRUNCATED -> AiRequestJournal.Outcome.TRUNCATED;
                     }, null, AiRequestJournal.ReferenceKind.VARIABLE, notice.reference(), null);
-            var work = new AiRequestExecutor.Work(invocation, loaded.policy(), rendered.messages(), rendered.resources(), input.inputs().keySet(), loaded.test());
+            var work = new AiRequestExecutor.Work(invocation, loaded.policy(), messages, rendered.resources(), input.inputs().keySet(), loaded.test());
             pool.execute(() -> {
                 try { worker.execute(work); }
                 finally { dispatched.remove(id); }
@@ -227,6 +235,13 @@ public class AiRuntimeService {
         lifecycle.finish(id, owner, code == ErrorCode.CANCELLED ? AiRequestStatus.CANCELLED
                 : code == ErrorCode.DEADLINE_EXCEEDED ? AiRequestStatus.TIMED_OUT : AiRequestStatus.FAILED, code, null);
         journal.stage(id, AiRequestStore.Stage.FINISHED, AiRequestJournal.Outcome.FAILED, code, null, null, null);
+    }
+    private List<AiMessage> withConversation(AiRequestStore.Request request,List<AiMessage> current,TrustedActor actor){
+        if(conversations==null)return current;int bytes=current.stream().mapToInt(m->m.content().getBytes(StandardCharsets.UTF_8).length).sum();
+        var history=conversations.context(Long.parseLong(request.requestId()),Math.max(0,65536-bytes));
+        for(long prior:history.requestIds())authorizeSingle(status(prior,actor),actor);
+        var all=new ArrayList<AiMessage>();int leading=0;while(leading<current.size() && current.get(leading).role()==MessageRole.SYSTEM)all.add(current.get(leading++));
+        all.addAll(history.messages());all.addAll(current.subList(leading,current.size()));return List.copyOf(all);
     }
 
     public AiRequestStore.Request status(long id, TrustedActor actor) {
@@ -265,6 +280,10 @@ public class AiRuntimeService {
     }
 
     public void authorizeEvents(AiRequestStore.Request request, TrustedActor actor) {
+        authorizeSingle(request,actor);
+        if(conversations!=null)for(long prior:conversations.contextRequests(Long.parseLong(request.requestId())))authorizeSingle(status(prior,actor),actor);
+    }
+    private void authorizeSingle(AiRequestStore.Request request,TrustedActor actor) {
         var policy = policy(request);
         if (request.kind() == AiRequestStore.Kind.TEST && request.appVersionId()==null && applications.get(AiApplicationService.positiveId(request.appId())).draftRevision()
                 != request.draftRevision()) throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);
@@ -308,6 +327,7 @@ public class AiRuntimeService {
             values.put("inputs", input.inputs());
             values.put("appId", appId); values.put("ownerScope", owner.scope());
             values.put("idempotencyKey", input.idempotencyKey());
+            if(input.conversation()!=null)values.put("conversationId",input.conversation().conversationId());
             if (test) { if(draftRevision!=null)values.put("draftRevision", draftRevision); values.put("modelIndex", modelIndex); }
             return cipher.fingerprint("ai:request-input:v1", mapper.writeValueAsBytes(values));
         } catch (ServiceException unavailableMaster) { throw new AiRuntimeException(ErrorCode.CREDENTIAL_UNAVAILABLE); }
@@ -317,6 +337,7 @@ public class AiRuntimeService {
     @Scheduled(fixedDelay = 10_000, initialDelay = 10_000)
     public void expireInterruptedRequests() {
         requests.expire(Instant.now()); // Deadline recovery only, never re-dispatch an unknown provider request.
+        if(conversations!=null)conversations.reconcile();
     }
 
     @PreDestroy

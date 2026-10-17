@@ -16,6 +16,9 @@ public class AiRequestLifecycle {
     private final AiRequestStore store;
     private final AiRuntimeEvents events;
     private final TransactionTemplate transaction;
+    private AiConversationRuntime conversations;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void conversations(AiConversationRuntime conversations){this.conversations=conversations;}
 
     public AiRequestLifecycle(AiRequestStore store, AiRuntimeEvents events, PlatformTransactionManager manager) {
         this.store = store;
@@ -34,6 +37,7 @@ public class AiRequestLifecycle {
         return Boolean.TRUE.equals(transaction.execute(status -> {
             var current = store.currentOwned(id, owner);
             if (current.status() != AiRequestStatus.RUNNING || !store.markOutputStarted(id, Instant.now())) return false;
+            if(conversations!=null)conversations.delta(current,text);
             // A rolled-back output marker must never release a fragment. If this callback fails,
             // output_started is already durable, so the worker must end incomplete, never retry.
             afterCommit(() -> events.append(event(AiRuntimeEvents.Name.DELTA, current, text, null, null)));
@@ -55,6 +59,7 @@ public class AiRequestLifecycle {
                     usage == null ? null : usage.inputTokens(), usage == null ? null : usage.outputTokens(), now);
             if (!changed) return false;
             var finished = store.currentOwned(id, owner);
+            if(conversations!=null)conversations.finished(finished);
             var name = chosen == AiRequestStatus.SUCCEEDED ? AiRuntimeEvents.Name.COMPLETED
                     : chosen == AiRequestStatus.CANCELLED ? AiRuntimeEvents.Name.CANCELLED : AiRuntimeEvents.Name.FAILED;
             ErrorCode finalCode = chosenCode;
