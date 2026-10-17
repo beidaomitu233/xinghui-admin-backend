@@ -11,13 +11,12 @@ public class JdbcSceneOwnership implements AiSceneOwnership {
     public JdbcSceneOwnership(JdbcTemplate jdbc){this.jdbc=jdbc;}
     public boolean ownsApplication(String applicationId) {
         decimal(applicationId);
-        Integer count=jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_scene WHERE app_id=?",Integer.class,applicationId);
-        return count!=null && count>0;
+        // Locking reads observe mappings committed while an outer RR transaction waited for the reference guard.
+        return !jdbc.query("SELECT scene_key FROM sys_ai_scene WHERE app_id=? FOR UPDATE",(rs,n)->rs.getString(1),applicationId).isEmpty();
     }
     public boolean ownsTemplate(String templateId) {
         decimal(templateId);
-        Integer count=jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_scene_version WHERE legacy_template_id=?",Integer.class,templateId);
-        return count!=null && count>0;
+        return !jdbc.query("SELECT scene_version_id FROM sys_ai_scene_version WHERE legacy_template_id=? ORDER BY scene_version_id FOR UPDATE",(rs,n)->rs.getLong(1),templateId).isEmpty();
     }
     public void requireApplicationWritable(String applicationId) {if(ownsApplication(applicationId))throw new SceneFailure(409,"SCENE_MANAGED");}
     public void requireTemplateWritable(String templateId) {if(ownsTemplate(templateId))throw new SceneFailure(409,"SCENE_MANAGED");}

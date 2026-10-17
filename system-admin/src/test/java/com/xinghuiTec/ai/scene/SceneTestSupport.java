@@ -41,6 +41,7 @@ final class SceneTestSupport implements AutoCloseable {
     final JdbcAiApplicationReferences references;
     final Provider provider=new Provider();
     final AiRequestLogService logs;
+    final StaticListableBeanFactory beans=new StaticListableBeanFactory();
     final TrustedActor actor=new TrustedActor("101","tenant_a",Set.of("ai:scene:invoke","ai:scene:query","ai:scene:edit","ai:request:list","ai:request:query","ai:request:export","ai:request:audit","lowcode:record:query","lowcode:record:list"),null);
     SceneTestSupport() throws Exception {
         source=new DriverManagerDataSource("jdbc:h2:mem:scene_runtime_"+UUID.randomUUID()+";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=5000","sa","");jdbc=new JdbcTemplate(source);manager=new DataSourceTransactionManager(source);
@@ -54,7 +55,7 @@ final class SceneTestSupport implements AutoCloseable {
         jdbc.update("INSERT INTO sys_lowcode_form_version(form_id,schema_version,schema_json,creator) VALUES(1,1,?,'101')",schema);
         jdbc.update("INSERT INTO sys_lowcode_record(id,form_id,schema_version,tenant_id,creator,data_json) VALUES(11,1,1,'tenant_a','101',?)","{\"subject\":\"visible subject\",\"summary\":null,\"internal_note\":\"must-never-enter-model\"}");
         var identity=new LowcodeIdentity(true);var schemas=new LowcodeSchema(mapper);data=new SceneDataService(jdbc,new LowcodeService(jdbc,schemas,identity),identity,schemas,mapper,manager);
-        var beans=new StaticListableBeanFactory();beans.addBean("provider",provider);beans.addBean("data",data);
+        beans.addBean("provider",provider);beans.addBean("data",data);beans.addBean("references",new JdbcAiApplicationReferences(jdbc,manager));
         var legacy=new LegacySceneTemplates(jdbc,mapper,data);beans.addBean("legacy",legacy);
         references=new JdbcAiApplicationReferences(jdbc,manager);scenes=new SceneStore(jdbc,mapper);execution=new SceneExecutionStore(jdbc,mapper);
         var cipher=new SecretCipher(()->Base64.getEncoder().encodeToString(new byte[32]));

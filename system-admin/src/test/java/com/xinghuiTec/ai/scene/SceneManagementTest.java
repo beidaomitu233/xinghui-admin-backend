@@ -8,6 +8,17 @@ class SceneManagementTest {
     private SceneTestSupport fixture;
     @BeforeEach void setup()throws Exception{fixture=new SceneTestSupport();}
     @AfterEach void close(){fixture.close();}
+    @Test void lostCreateResponseReplaysOriginalIdentityWithoutLaterPromptAndDifferentBodyConflicts(){
+        String mutation=UUID.randomUUID().toString();var input=new SceneDtos.Create("Original","",SceneDtos.Kind.GENERAL,null,mutation);
+        var one=fixture.management.create(input,fixture.actor);fixture.save(one,"Later sensitive configured prompt",false);
+        var addOnly=new com.xinghuiTec.ai.contract.AiTypes.TrustedActor(fixture.actor.subjectId(),fixture.actor.tenantId(),java.util.Set.of("ai:scene:add"),null);
+        var replay=fixture.management.create(input,addOnly);assertEquals(one,replay);assertNull(replay.definition());assertEquals("Original",replay.scene().name());
+        assertEquals(1,fixture.jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_scene",Integer.class));
+        assertEquals("IDEMPOTENCY_CONFLICT",assertThrows(SceneFailure.class,()->fixture.management.create(new SceneDtos.Create("Different","",SceneDtos.Kind.GENERAL,null,mutation),fixture.actor)).getMessage());
+        var recordInput=new SceneDtos.Create("Record","",SceneDtos.Kind.RECORD_SUMMARY,"1",UUID.randomUUID().toString());
+        assertEquals(fixture.management.create(recordInput,fixture.actor),fixture.management.create(recordInput,fixture.actor));
+        assertEquals(2,fixture.jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_scene",Integer.class));
+    }
     @Test void completeSaveImmediatelySelectsRealSnapshotWithoutTestsOrProviderCallsAndPreservesDisabledIntent(){
         var created=fixture.create(false);assertNull(created.scene().currentVersionId());
         var saved=fixture.save(created,"First {{user_request}}",false);assertNotNull(saved.detail().scene().currentVersionId());
