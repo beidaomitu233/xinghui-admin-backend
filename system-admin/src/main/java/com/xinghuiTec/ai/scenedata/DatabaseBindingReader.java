@@ -211,7 +211,7 @@ public class DatabaseBindingReader {
         var records = new ArrayList<DatabaseRecord>();
         for (var row:loaded.rows()) {
             var key = new LinkedHashMap<String, Object>();
-            for (String pk:meta.primaryKey())key.put(pk, row.get(pk));
+            for (String pk:meta.primaryKey())key.put(pk, candidateKey(row.get(pk)));
             String label = row.values().stream().filter(Objects::nonNull).map(Object::toString).findFirst().orElse("记录");
             if (label.length()>80)label = label.substring(0, 80);
             records.add(new DatabaseRecord(key, label, row, reference(request.sourceKey(), key)));
@@ -260,7 +260,7 @@ public class DatabaseBindingReader {
             keys(key, t.pk());
             for (var e:key.entrySet()) {
                 where.append(" AND ").append(q(e.getKey())).append("=?");
-                args.add(scalar(e.getValue()));
+                args.add(keyParameter(t.columns().stream().filter(c -> c.name().equals(e.getKey())).findFirst().orElseThrow(), e.getValue()));
             }
         }
         for (var f:filters) {
@@ -510,6 +510,39 @@ public class DatabaseBindingReader {
         }
     }
 
+    /** Reconstitute numeric key parameters from exact candidate strings using actual JDBC metadata. */
+    private static Object keyParameter(Column column, Object value) {
+        Object checked = scalar(value);
+        String text = checked.toString();
+        try {
+            return switch (column.jdbcType()) {
+                case Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT ->
+                        new java.math.BigDecimal(text).toBigIntegerExact();
+                case Types.NUMERIC, Types.DECIMAL -> new java.math.BigDecimal(text);
+                case Types.FLOAT, Types.REAL -> Float.valueOf(text);
+                case Types.DOUBLE -> Double.valueOf(text);
+                default -> checked;
+            };
+        } catch (ArithmeticException | NumberFormatException invalid) {
+            throw failure(ErrorCode.INVALID_INPUT);
+        }
+    }
+    /** Candidate keys cross a browser boundary; values retain their original database types. */
+    private static Object candidateKey(Object value) {
+        if (value instanceof java.math.BigDecimal decimal) {
+            return decimal.toPlainString();
+        }
+        if (value instanceof Byte || value instanceof Short || value instanceof Integer
+                || value instanceof Long || value instanceof java.math.BigInteger) {
+            return value.toString();
+        }
+        if (value instanceof Float || value instanceof Double) {
+            check(Double.isFinite(((Number) value).doubleValue()));
+            return new java.math.BigDecimal(value.toString()).toPlainString();
+        }
+        check(!(value instanceof Number));
+        return value;
+    }
     private BusinessRef reference(String source, Map<String, Object> key) {
         if (source.startsWith("lowcode."))return new BusinessRef("lowcode.record", formId(source)+":"+key.get("id"));
         try {

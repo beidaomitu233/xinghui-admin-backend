@@ -93,6 +93,56 @@ class DatabaseBindingsTest {
         var malformed=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/system/ai/scene-data/bindings/preview").contentType("application/json").content("{\"bindings\":[],\"actor\":{\"subjectId\":\"2\"}}")).andReturn().getResponse();assertEquals(400,malformed.getStatus());
         var oversized=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/system/ai/scene-data/database/records").contentType("application/json").content(" ".repeat(131073))).andReturn().getResponse();assertEquals(413,oversized.getStatus());
     }
+    @Test void nineteenDigitCandidateKeySurvivesHttpAndFixedRowRoundTrip() throws Exception {
+        String id = "9007199254740993123";
+        jdbc.execute("CREATE TABLE exact_keys(id BIGINT PRIMARY KEY,amount DECIMAL(24,4),name VARCHAR(20),tenant_id VARCHAR(20),is_deleted INT)");
+        jdbc.update("INSERT INTO exact_keys VALUES(?,?,'正确记录','000000',0),(?,?,'相邻记录','000000',0)",
+                new java.math.BigInteger(id), new java.math.BigDecimal("12345678901234567890.1250"),
+                new java.math.BigInteger(id).add(java.math.BigInteger.ONE), java.math.BigDecimal.ZERO);
+        var user = new com.xinghuiTec.domain.entity.SysUser();
+        user.setUserId(1L); user.setTenantId("000000"); user.setStatus(1);
+        var login = new com.xinghuiTec.domain.entity.LoginUser(user, new ArrayList<>(actor.authorities()));
+        login.setTenantId("000000");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(login, null, login.getAuthorities()));
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+                new SceneDataController(service, new com.xinghuiTec.ai.application.AiInvocationIdentity())).build();
+        var response = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .post("/system/ai/scene-data/database/records").contentType("application/json")
+                .content("{\"sourceKey\":\"db.exact_keys\",\"filters\":[],\"limit\":20}")).andReturn().getResponse();
+        assertEquals(200, response.getStatus());
+        var candidate = json.readTree(response.getContentAsString(java.nio.charset.StandardCharsets.UTF_8))
+                .path("data").path("records").get(0);
+        assertTrue(candidate.path("key").path("id").isTextual());
+        assertEquals(id, candidate.path("key").path("id").textValue());
+        Map<String,Object> key = json.convertValue(candidate.path("key"), new com.fasterxml.jackson.core.type.TypeReference<>() {});
+        var fixed = binding("选择记录", "db.exact_keys", ReadMode.ROW, List.of("id", "name", "amount"),
+                new RowSelector(false, key), List.of(), 1, null);
+        var values = (Map<?,?>) preview(fixed).values().get("选择记录");
+        assertEquals("正确记录", values.get("name"));
+        assertEquals(id, values.get("id").toString());
+        assertTrue(values.get("id") instanceof Number);
+        assertEquals(new java.math.BigDecimal("12345678901234567890.1250"), values.get("amount"));
+        assertTrue(values.get("amount") instanceof java.math.BigDecimal);
+        var ref = json.treeToValue(candidate.path("businessRef"), BusinessRef.class);
+        var current = binding("当前记录", "db.exact_keys", ReadMode.ROW, List.of("name"),
+                new RowSelector(true, Map.of()), List.of(), 1, null);
+        assertEquals("正确记录", ((Map<?,?>) service.previewBindings(
+                new BindingPreviewRequest(List.of(current), ref), actor, control()).values().get("当前记录")).get("name"));
+    }
+    @Test void compositeNumericCandidateKeysUsePlainDecimalStringsWithoutChangingValues() {
+        jdbc.execute("CREATE TABLE composite_keys(account_id BIGINT,entry_no DECIMAL(24,4),name VARCHAR(20),PRIMARY KEY(account_id,entry_no))");
+        jdbc.update("INSERT INTO composite_keys VALUES(?,?,'复合记录')", new java.math.BigInteger("9007199254740993123"),
+                new java.math.BigDecimal("12345678901234567890.1250"));
+        var candidate = service.records(new DatabaseRecordQuery("db.composite_keys", List.of(), 10), actor, control()).records().get(0);
+        assertEquals("9007199254740993123", candidate.key().get("account_id"));
+        assertEquals("12345678901234567890.1250", candidate.key().get("entry_no"));
+        assertTrue(candidate.values().get("account_id") instanceof Number);
+        assertTrue(candidate.values().get("entry_no") instanceof java.math.BigDecimal);
+        var fixed = binding("复合主键", "db.composite_keys", ReadMode.ROW, List.of("name"),
+                new RowSelector(false, candidate.key()), List.of(), 1, null);
+        assertEquals("复合记录", ((Map<?,?>) preview(fixed).values().get("复合主键")).get("name"));
+    }
     @Test void inferredTenantColumnsAndKnownBusinessActionsRemainMandatory(){
         jdbc.execute("CREATE TABLE business_scope(id BIGINT PRIMARY KEY,tenantId VARCHAR(20),deleted INT)");jdbc.update("INSERT INTO business_scope VALUES(1,'000000',0),(2,'other',0),(3,'000000',1)");
         var binding=binding("范围","db.business_scope",ReadMode.TABLE,List.of("id"),null,List.of(),20,null);assertEquals(1,preview(binding).reads().get(0).rowCount());
