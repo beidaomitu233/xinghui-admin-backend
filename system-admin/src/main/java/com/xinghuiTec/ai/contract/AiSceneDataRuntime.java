@@ -180,7 +180,7 @@ public interface AiSceneDataRuntime {
         }
         public CompiledScene {
             reference(compilerVersion); Objects.requireNonNull(editor);
-            selections = List.copyOf(selections); bindings=bindings==null?List.of():List.copyOf(bindings);if(bindings.size()>16)throw new IllegalArgumentException("Too many bindings"); inputVariables = List.copyOf(inputVariables);
+            selections = List.copyOf(selections); inputVariables = List.copyOf(inputVariables);
             legacyScopes=legacyScopes==null?List.of():List.copyOf(legacyScopes);bindings=bindings==null?List.of():List.copyOf(bindings);
         }
         @Override public String toString() { return "CompiledScene[REDACTED]"; }
