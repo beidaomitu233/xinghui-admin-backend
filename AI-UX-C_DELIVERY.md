@@ -23,3 +23,15 @@
 ### C0实际验证
 
 JDK17 `javac --release 17 -encoding UTF-8` 编译全部8个共享契约源文件通过（无外部classpath）。私有轻量契约检查5组通过：选择集合深层防改、正文toString脱敏、JSON类型/null保留、有界分页/ID溢出拒绝、诊断不可变。首次编译发现record访问器与keyword辅助方法同名，已限定辅助方法调用后重新编译通过。未运行Maven/完整产品测试、DB迁移、真实读取、页面或模型；没有生产Bean，不能将这些检查算作功能验收。
+
+## C1/C2新场景主线（待验收）
+
+新增ScenePromptCompiler、SceneDataService、SceneDataController及SceneDataServiceTest。精确HTTP见 `docs/ai-scene-data-http.md`，四个GET均为 `/system/ai/scene-data` 下catalog/forms/fields/samples；权限与B scene动作对齐，静态配置错误统一400，分页固定records/字符串total/pageNum/pageSize。
+
+- compile仅授权schema元数据；不读记录、不触发模型/测试/资源批准。固定subject/summary及user_request变量，未知/重复字段和半成品语法拒绝。
+- render调用真实LowcodeService.record，按原schema校验字段类型/null；新增字段/internal_note不进入投影。获准字段单次插值在USER，独立JSON消息保留类型/null，SYSTEM固定且无业务正文。
+- authorize不需要输入，仅查询原记录/租户/表单/schema元数据，不选择data_json；固定快照不会随表单最新版变更。禁用/删除用户、跨租户/表单、字段类型不匹配拒绝。
+- 样本候选需query+list，按当前tenant筛选；原schema声明的subject最多80字符作标签，空值回退编号，subject/ID安全搜索，不返回整行或internal_note。
+- 有界线程池、队列、10秒读取上限与调用deadline/取消检查；SQL有只读事务时限，线程中断不承诺即时终止驱动SQL。未修改旧批准资源读取器或applications范围。
+
+实际验证：以现有已构建依赖和JDK17编译C新增代码，通过JUnit5.10.5定向执行9项，9通过、0跳过。H2使用真实LowcodeService/schema及迁移DDL，JSON搜索/投影函数仅测试别名，不能作为MySQL/Druid互通证据。覆盖目录边界、样本标签/搜索、无记录静态编译、非法变量/字段、原schema/类型/null/单次替换、跨tenant/表单/停用用户、无数据场景、截止时间及无输入授权不读取坏业务JSON。完整Maven、原生MySQL、真实HTTP方法安全、UI和模型均未运行。旧模板兼容视图与SCENE_MANAGED守卫下一增量交付，不把新主线通过当全任务完成。
