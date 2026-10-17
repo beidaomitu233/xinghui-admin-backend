@@ -25,8 +25,6 @@ import static com.xinghuiTec.ai.config.AiModelCatalogDtos.Model;
 @Component
 public class AiModelCatalogTransport {
     static final int MAX_BYTES = 4 * 1024 * 1024;
-    static final URI PUBLIC = URI.create("https://openrouter.ai/api/v1/models");
-    static final URI USER = URI.create("https://openrouter.ai/api/v1/models/user");
     private static final ObjectMapper JSON = new ObjectMapper(JsonFactory.builder()
             .streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(32)
                     .maxStringLength(262144).maxNumberLength(32).build())
@@ -88,8 +86,7 @@ public class AiModelCatalogTransport {
         final AiProviderPresets.Preset preset;
         try { preset = AiProviderPresets.require(provider); }
         catch (AiConfigurationException invalid) { throw failure(422, "PROVIDER_UNSUPPORTED"); }
-        String destination = secret == null ? ("openrouter".equals(provider) ? PUBLIC.toString() : null)
-                : ("openrouter".equals(provider) ? USER.toString() : preset.modelsEndpoint());
+        String destination = secret == null ? preset.publicModelsEndpoint() : preset.modelsEndpoint();
         if (destination == null) throw failure(400, "KEY_REQUIRED");
         URI official = URI.create(destination);
         URI endpoint = localBase == null ? official : localBase.resolve(official.getPath());
