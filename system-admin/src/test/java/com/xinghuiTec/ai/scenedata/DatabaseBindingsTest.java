@@ -93,6 +93,70 @@ class DatabaseBindingsTest {
         var malformed=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/system/ai/scene-data/bindings/preview").contentType("application/json").content("{\"bindings\":[],\"actor\":{\"subjectId\":\"2\"}}")).andReturn().getResponse();assertEquals(400,malformed.getStatus());
         var oversized=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/system/ai/scene-data/database/records").contentType("application/json").content(" ".repeat(131073))).andReturn().getResponse();assertEquals(413,oversized.getStatus());
     }
+    private CompiledScene relatedProjection() {
+        var parent = row("主记录", "db.orders", "42", List.of("amount"));
+        var children = binding("明细", "db.order_lines", ReadMode.CHILDREN, List.of("sku"), null,
+                List.of(), 10, new RelationBinding("主记录", "id", "order_id"));
+        return service.compile(new EditorInput("{{主记录}} {{明细}}", "", List.of(), List.of(parent, children)), actor, control());
+    }
+    private SceneContext dependencyContext() {
+        return new SceneContext("scene.dependencies", "1", actor, new BusinessRef("ai.scene", "scene.dependencies"), "r");
+    }
+    private void rejectedByReadAndAuthorize(CompiledScene compiled) {
+        assertThrows(AiRuntimeException.class, () -> service.authorize(compiled, dependencyContext(), control()));
+        assertThrows(AiRuntimeException.class, () -> service.render(compiled, dependencyContext(), new AiInputs(Map.of()), control()));
+    }
+    @Test void deletingUnprojectedChildJoinFieldRejectsReadAndReauthorization() throws Exception {
+        var compiled = relatedProjection();
+        var persisted = json.readValue(json.writeValueAsString(compiled), CompiledScene.class);
+        assertTrue(persisted.bindings().get(1).dependencies().stream().anyMatch(d ->
+                d.sourceKey().equals("db.order_lines") && d.field().field().equals("order_id")));
+        assertTrue(persisted.bindings().get(1).dependencies().stream().anyMatch(d ->
+                d.sourceKey().equals("db.orders") && d.field().field().equals("id")));
+        assertNotNull(service.render(persisted, dependencyContext(), new AiInputs(Map.of()), control()).bindingPreview());
+        jdbc.execute("ALTER TABLE order_lines DROP CONSTRAINT fk_order_lines");
+        jdbc.execute("ALTER TABLE order_lines DROP COLUMN order_id");
+        rejectedByReadAndAuthorize(persisted);
+    }
+    @Test void deletingUnprojectedFilterFieldRejectsReadAndReauthorization() {
+        var filtered = binding("筛选订单", "db.orders", ReadMode.TABLE, List.of("id"), null,
+                List.of(new DataFilter("status", FilterOperator.EQ, "OPEN")), 10, null);
+        var compiled = service.compile(new EditorInput("{{筛选订单}}", "", List.of(), List.of(filtered)), actor, control());
+        assertDoesNotThrow(() -> service.authorize(compiled, dependencyContext(), control()));
+        jdbc.execute("ALTER TABLE orders DROP COLUMN status");
+        rejectedByReadAndAuthorize(compiled);
+    }
+    @Test void changingUnprojectedJoinTypeRejectsReadAndReauthorization() {
+        var compiled = relatedProjection();
+        jdbc.execute("ALTER TABLE order_lines DROP CONSTRAINT fk_order_lines");
+        jdbc.execute("ALTER TABLE order_lines ALTER COLUMN order_id VARCHAR(30)");
+        rejectedByReadAndAuthorize(compiled);
+    }
+    @Test void changedPrimaryKeyAndSecretQueryDependencyCannotBypassProjectionChecks() {
+        jdbc.execute("CREATE TABLE unkeyed_source(name VARCHAR(20))");
+        var unkeyed = binding("无主键", "db.unkeyed_source", ReadMode.ROW, List.of("name"), new RowSelector(true, Map.of()), List.of(), 1, null);
+        assertThrows(AiRuntimeException.class, () -> service.compile(new EditorInput("{{无主键}}", "", List.of(), List.of(unkeyed)), actor, control()));
+        jdbc.execute("CREATE TABLE key_shape(id BIGINT PRIMARY KEY,alternate BIGINT NOT NULL,name VARCHAR(20))");
+        jdbc.update("INSERT INTO key_shape VALUES(1,101,'记录')");
+        var input = new EditorInput("{{记录}}", "", List.of(), List.of(row("记录", "db.key_shape", "1", List.of("name"))));
+        var compiled = service.compile(input, actor, control());
+        jdbc.execute("ALTER TABLE key_shape DROP PRIMARY KEY");
+        jdbc.execute("ALTER TABLE key_shape ADD PRIMARY KEY(alternate)");
+        rejectedByReadAndAuthorize(compiled);
+        var filtered = binding("筛选订单", "db.orders", ReadMode.TABLE, List.of("id"), null,
+                List.of(new DataFilter("status", FilterOperator.EQ, "OPEN")), 10, null);
+        var filtering = service.compile(new EditorInput("{{筛选订单}}", "", List.of(), List.of(filtered)), actor, control());
+        jdbc.execute("COMMENT ON COLUMN orders.status IS 'API Key'");
+        rejectedByReadAndAuthorize(filtering);
+    }
+    @Test void removingUnprojectedTenantScopeColumnCannotExpandReads() {
+        var filtered = binding("租户订单", "db.orders", ReadMode.TABLE, List.of("id"), null, List.of(), 10, null);
+        var compiled = service.compile(new EditorInput("{{租户订单}}", "", List.of(), List.of(filtered)), actor, control());
+        assertTrue(compiled.bindings().get(0).dependencies().stream().anyMatch(d -> d.field().field().equals("tenant_id")));
+        assertTrue(compiled.bindings().get(0).dependencies().stream().anyMatch(d -> d.field().field().equals("is_deleted")));
+        jdbc.execute("ALTER TABLE orders DROP COLUMN tenant_id");
+        rejectedByReadAndAuthorize(compiled);
+    }
     @Test void renderedPreviewUsesOnePinnedReadAndLegacyConstructorRemainsCompatible() throws Exception {
         var count = new java.util.concurrent.atomic.AtomicInteger();
         var identity = new LowcodeIdentity(true);

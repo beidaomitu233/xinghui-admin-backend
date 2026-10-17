@@ -64,3 +64,9 @@ CHILDREN的parentVariable必须是前面同组ROW绑定，查询从该主记录�
 RenderedScene增加可空bindingPreview（BindingPreview），保留原3参数构造器，旧v1结果可为null。v2 render将同一次db.read(compiled.bindings,...)的实际投影、ReadReceipt与notices附在该字段，消息渲染使用同一个读取结果。场景预览应直接取rendered.bindingPreview.values/reads，不再把原Definition传previewBindings重新编译/取数；避免fields=[]在后来新增列后扩大范围及两次读取不一致。
 
 独立选择器previewBindings按待保存定义编译，仍允许256KiB数据结果；已保存场景渲染与实际模型的全部消息保持64KiB上限（UTF-8字节），边界超出返回OUTPUT_LIMIT。对话历史由运行服务在同一64KiB预算内分配，不提高底层预算。
+
+## 查询依赖形状
+
+BindingSnapshot增加可选dependencies（QueryDependency.sourceKey/field），保留原3参构造器；仅用于内部快照，不新增用户配置。新编译固定投影及查询依赖（PK、过滤、租户/软删除、关联两侧）的类型、nullable与PK形状到同一稳定指纹。read/authorize在任何实际业务读取/存在性检查前共享元数据验证，删除依赖、改成秘密列或类型不兼容立即拒绝，不依靠SQL隐式转换。
+
+旧已发布v1不变。本轮尚未发布的v2过渡快照若缺少原依赖指纹，不猜测原形状，需重新合法保存；依赖列表在旧JSON缺失时可读为空，安全执行仍要求指纹一致。授权路径只读schema与行存在信息，不解析业务正文。

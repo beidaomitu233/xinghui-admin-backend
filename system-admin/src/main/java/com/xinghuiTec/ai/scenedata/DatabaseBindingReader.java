@@ -97,47 +97,75 @@ public class DatabaseBindingReader {
     public List<BindingSnapshot> compile(List<DataBinding> bindings, TrustedActor actor) {
         var result = new ArrayList<BindingSnapshot>();
         var previous = new LinkedHashMap<String, BindingSnapshot>();
-        for (var b:bindings) {
-            check(b.variable().matches("[\\p{L}_][\\p{L}\\p{N}_.]{0,63}") && !b.variable().equals("user_request") && !previous.containsKey(b.variable()));
-            var meta = fields(b.sourceKey(), actor);
-            var selected = selected(b.fields(), meta.fields());
-            check(!selected.isEmpty());
-            for (var f:b.filters()) {
-                var col = find(meta.fields(), f.field());
-                filterValue(f, col);
-            }
-            if (b.mode() == ReadMode.FIELD)check(selected.size() == 1);
-            if (b.mode() == ReadMode.FIELD || b.mode() == ReadMode.ROW) {
-                check(b.row() != null && b.relation() == null && b.filters().isEmpty());
-                if (!b.row().currentRecord())keys(b.row().key(), meta.primaryKey());
-            }
-            else check(b.row() == null);
-            if (b.mode() == ReadMode.CHILDREN) {
-                check(b.relation() != null);
-                var p = previous.get(b.relation().parentVariable());
-                check(p != null && p.binding().mode() == ReadMode.ROW);
-                var parent = fields(p.binding().sourceKey(), actor);
-                var pc = find(parent.fields(), b.relation().parentField());
-                var cc = find(meta.fields(), b.relation().childField());
-                check(typeGroup(pc.type()).equals(typeGroup(cc.type())) && !typeGroup(pc.type()).equals("complex"));
-            }
-            else check(b.relation() == null);
-            var snap = new BindingSnapshot(b, selected, fingerprint(selected));
-            result.add(snap);
-            previous.put(b.variable(), snap);
+        var metadata = new HashMap<String, DatabaseFields>();
+        for (var binding : bindings) {
+            check(binding.variable().matches("[\\p{L}_][\\p{L}\\p{N}_.]{0,63}")
+                    && !binding.variable().equals("user_request") && !previous.containsKey(binding.variable()));
+            var current = metadata.computeIfAbsent(binding.sourceKey(), source -> fields(source, actor));
+            var projection = selected(binding.fields(), current.fields());
+            check(!projection.isEmpty());
+            if (binding.mode() == ReadMode.FIELD) check(projection.size() == 1);
+            var dependencies = dependencies(binding, current, previous, actor, metadata);
+            var snapshot = new BindingSnapshot(binding, projection, fingerprint(projection, dependencies), dependencies);
+            result.add(snapshot);
+            previous.put(binding.variable(), snapshot);
         }
         return List.copyOf(result);
     }
 
+    private List<QueryDependency> dependencies(DataBinding binding, DatabaseFields source,
+            Map<String, BindingSnapshot> previous, TrustedActor actor, Map<String, DatabaseFields> metadata) {
+        var dependencies = new LinkedHashMap<String, QueryDependency>();
+        for (String pk : source.primaryKey()) {
+            dependency(dependencies, source.sourceKey(), find(source.fields(), pk));
+        }
+        for (var field : source.fields()) {
+            String name = field.field().replace("_", "").toLowerCase(Locale.ROOT);
+            if (Set.of("tenantid", "isdeleted", "deleted", "delflag").contains(name)) {
+                dependency(dependencies, source.sourceKey(), field);
+            }
+        }
+        for (var filter : binding.filters()) {
+            var field = find(source.fields(), filter.field());
+            filterValue(filter, field);
+            dependency(dependencies, source.sourceKey(), field);
+        }
+        if (binding.mode() == ReadMode.FIELD || binding.mode() == ReadMode.ROW) {
+            check(binding.row() != null && binding.relation() == null && binding.filters().isEmpty()
+                    && !source.primaryKey().isEmpty());
+            if (!binding.row().currentRecord()) keys(binding.row().key(), source.primaryKey());
+        } else {
+            check(binding.row() == null);
+        }
+        if (binding.mode() == ReadMode.CHILDREN) {
+            check(binding.relation() != null);
+            var parent = previous.get(binding.relation().parentVariable());
+            check(parent != null && parent.binding().mode() == ReadMode.ROW);
+            var parentSource = metadata.computeIfAbsent(parent.binding().sourceKey(), name -> fields(name, actor));
+            var parentField = find(parentSource.fields(), binding.relation().parentField());
+            var childField = find(source.fields(), binding.relation().childField());
+            check(typeGroup(parentField.type()).equals(typeGroup(childField.type()))
+                    && !typeGroup(parentField.type()).equals("complex"));
+            dependency(dependencies, parentSource.sourceKey(), parentField);
+            dependency(dependencies, source.sourceKey(), childField);
+        } else {
+            check(binding.relation() == null);
+        }
+        return List.copyOf(dependencies.values());
+    }
+
+    private void dependency(Map<String, QueryDependency> target, String source, DatabaseField field) {
+        target.put(source + "\u0000" + field.field(), new QueryDependency(source, field));
+    }
     public BindingPreview preview(BindingPreviewRequest request, TrustedActor actor, InvocationControl control) {
         return read(compile(request.bindings(), actor), request.businessRef(), actor, control);
     }
 
     public void authorize(List<BindingSnapshot> snapshots, BusinessRef business, TrustedActor actor, InvocationControl control) {
-        // Permissions/schema recheck only. Record reads are performed by render under the same scope.
+        // Validate all query dependencies before any row-existence check; no business body is parsed.
+        verifyAll(snapshots, actor, control);
         for (var s:snapshots) {
             control.check();
-            verify(s, actor);
             var b = s.binding();
             if (b.row() != null) {
                 var pk = fields(b.sourceKey(), actor).primaryKey();
@@ -159,13 +187,13 @@ public class DatabaseBindingReader {
     }
 
     public BindingPreview read(List<BindingSnapshot> snapshots, BusinessRef business, TrustedActor actor, InvocationControl control) {
+        verifyAll(snapshots, actor, control);
         var values = new LinkedHashMap<String, Object>();
         var rawParents = new HashMap<String, Map<String, Object>>();
         var reads = new ArrayList<ReadReceipt>();
         var notices = new ArrayList<Notice>();
         for (var s:snapshots) {
             control.check();
-            verify(s, actor);
             var b = s.binding();
             var projected = s.fields().stream().map(DatabaseField::field).toList();
             var queryFields = new LinkedHashSet<>(projected);
@@ -220,12 +248,23 @@ public class DatabaseBindingReader {
         return new DatabaseRecords(records, loaded.truncated());
     }
 
-    private void verify(BindingSnapshot snapshot, TrustedActor actor) {
-        var current = fields(snapshot.binding().sourceKey(), actor);
-        var pinned = selected(snapshot.fields().stream().map(DatabaseField::field).toList(), current.fields());
-        if (!fingerprint(pinned).equals(snapshot.schemaFingerprint()))throw failure(ErrorCode.RESOURCE_UNAVAILABLE);
+    private void verifyAll(List<BindingSnapshot> snapshots, TrustedActor actor, InvocationControl control) {
+        var previous = new LinkedHashMap<String, BindingSnapshot>();
+        var metadata = new HashMap<String, DatabaseFields>();
+        for (var snapshot : snapshots) {
+            control.check();
+            var binding = snapshot.binding();
+            check(!previous.containsKey(binding.variable()));
+            var current = metadata.computeIfAbsent(binding.sourceKey(), name -> fields(name, actor));
+            var projection = selected(snapshot.fields().stream().map(DatabaseField::field).toList(), current.fields());
+            var dependencies = dependencies(binding, current, previous, actor, metadata);
+            if (!fingerprint(projection, dependencies).equals(snapshot.schemaFingerprint())
+                    || !fingerprint(snapshot.fields(), snapshot.dependencies()).equals(snapshot.schemaFingerprint())) {
+                throw failure(ErrorCode.RESOURCE_UNAVAILABLE);
+            }
+            previous.put(binding.variable(), snapshot);
+        }
     }
-
     private List<DatabaseField> selected(List<String> requested, List<DatabaseField> fields) {
         check(fields.size() <= 512);
         var names = requested.isEmpty()?fields.stream().map(DatabaseField::field).toList():requested;
@@ -595,9 +634,13 @@ public class DatabaseBindingReader {
         return new DatabaseField(c.name(), label(c.comment(), c.name()), c.comment(), c.type(), c.nullable(), c.pk());
     }
 
-    private String fingerprint(List<DatabaseField> fields) {
+    private String fingerprint(List<DatabaseField> fields, List<QueryDependency> dependencies) {
         try {
-            var shapes = fields.stream().map(f -> List.of(f.field(), f.type(), f.nullable())).toList();
+            var projection = fields.stream().map(f -> List.of(f.field(), f.type(), f.nullable())).toList();
+            var query = dependencies.stream().map(d -> List.of(d.sourceKey(), d.field().field(), d.field().type(), d.field().nullable(), d.field().primaryKey())).toList();
+            var shapes = new LinkedHashMap<String, Object>();
+            shapes.put("projection", projection);
+            shapes.put("query", query);
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(shapes)));
         }
         catch (Exception invalid) {

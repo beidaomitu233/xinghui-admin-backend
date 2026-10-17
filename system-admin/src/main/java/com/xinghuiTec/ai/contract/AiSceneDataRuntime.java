@@ -94,8 +94,13 @@ public interface AiSceneDataRuntime {
         public DatabaseRecords { records=List.copyOf(records); }
         @Override public String toString(){return "DatabaseRecords[REDACTED]";}
     }
-    record BindingSnapshot(DataBinding binding,List<DatabaseField> fields,String schemaFingerprint) {
-        public BindingSnapshot { Objects.requireNonNull(binding);fields=List.copyOf(fields);reference(schemaFingerprint); }
+    /** Query-only fields are pinned too, even when omitted from the returned projection. */
+    record QueryDependency(String sourceKey,DatabaseField field) {
+        public QueryDependency { reference(sourceKey);Objects.requireNonNull(field); }
+    }
+    record BindingSnapshot(DataBinding binding,List<DatabaseField> fields,String schemaFingerprint,List<QueryDependency> dependencies) {
+        public BindingSnapshot(DataBinding binding,List<DatabaseField> fields,String schemaFingerprint){this(binding,fields,schemaFingerprint,List.of());}
+        public BindingSnapshot { Objects.requireNonNull(binding);fields=List.copyOf(fields);reference(schemaFingerprint);dependencies=dependencies==null?List.of():List.copyOf(dependencies); }
     }
     record BindingPreviewRequest(List<DataBinding> bindings,BusinessRef businessRef) {
         public BindingPreviewRequest { bindings=List.copyOf(bindings);if(bindings.size()>16)throw new IllegalArgumentException("Too many bindings"); }
