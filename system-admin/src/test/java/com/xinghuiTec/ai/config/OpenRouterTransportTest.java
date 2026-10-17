@@ -81,4 +81,56 @@ class OpenRouterTransportTest {
         });
         assertEquals(0,closed.getCount()); assertEquals(ErrorCode.DEPENDENCY_UNAVAILABLE,result.errorCode()); assertFalse(result.retryable());
     }
+    @Test void verifiedOptionalReasoningModelsDisableThinkingForChatAndConnectionProbeOnly() throws Exception {
+        for (String model : List.of("poolside/laguna-s-2.1:free", "nvidia/nemotron-3.5-lightning:free")) {
+            for (boolean streaming : List.of(false, true)) {
+                String payload = streaming
+                        ? "data: {\"model\":\"" + model + "\",\"choices\":[{\"delta\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+                        : "{\"model\":\"" + model + "\",\"choices\":[{\"message\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}";
+                response(200, payload);
+                var result = transport.call(model, 5, "controlled-secret", List.of(new AiMessage(MessageRole.USER, "synthetic")),
+                        new Requirements(OutputFormat.TEXT, streaming, false), 128, mock(StreamObserver.class), control);
+                assertEquals(ExecutionStatus.SUCCEEDED, result.status());
+            }
+        }
+        var requests = org.mockito.ArgumentCaptor.forClass(HttpRequest.class);
+        verify(client, times(4)).sendAsync(requests.capture(), any(HttpResponse.BodyHandler.class));
+        for (var request : requests.getAllValues()) {
+            var body = new ObjectMapper().readTree(requestBody(request));
+            assertFalse(body.path("reasoning").path("enabled").asBoolean(true));
+            assertEquals(128, body.path("max_tokens").asInt());
+            assertFalse(body.path("provider").path("allow_fallbacks").asBoolean(true));
+        }
+    }
+
+    @Test void unverifiedModelsKeepTheirExistingReasoningBehavior() throws Exception {
+        response(200, "{\"model\":\"unit/model\",\"choices\":[{\"message\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}");
+        assertEquals(ExecutionStatus.SUCCEEDED, call(false).status());
+        var request = org.mockito.ArgumentCaptor.forClass(HttpRequest.class);
+        verify(client).sendAsync(request.capture(), any(HttpResponse.BodyHandler.class));
+        assertFalse(new ObjectMapper().readTree(requestBody(request.getValue())).has("reasoning"));
+    }
+
+    @Test void disabledReasoningNeverTurnsLengthTerminationIntoSuccessfulText() {
+        String model = "nvidia/nemotron-3.5-lightning:free";
+        response(200, "{\"model\":\"" + model + "\",\"choices\":[{\"message\":{\"content\":\"\"},\"finish_reason\":\"length\"}]}");
+        var result = transport.call(model, 5, "controlled-secret", List.of(new AiMessage(MessageRole.USER, "synthetic")),
+                new Requirements(OutputFormat.TEXT, false, false), 128, mock(StreamObserver.class), control);
+        assertEquals(ErrorCode.OUTPUT_LIMIT, result.errorCode());
+        assertEquals(ExecutionStatus.FAILED, result.status());
+        assertFalse(result.retryable());
+        verify(client, times(1)).sendAsync(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+    }
+
+    private String requestBody(HttpRequest request) throws Exception {
+        var bytes = new ByteArrayOutputStream();
+        var done = new CompletableFuture<String>();
+        request.bodyPublisher().orElseThrow().subscribe(new java.util.concurrent.Flow.Subscriber<java.nio.ByteBuffer>() {
+            public void onSubscribe(java.util.concurrent.Flow.Subscription subscription) { subscription.request(Long.MAX_VALUE); }
+            public void onNext(java.nio.ByteBuffer buffer) { var chunk = new byte[buffer.remaining()]; buffer.get(chunk); bytes.writeBytes(chunk); }
+            public void onError(Throwable error) { done.completeExceptionally(error); }
+            public void onComplete() { done.complete(bytes.toString(StandardCharsets.UTF_8)); }
+        });
+        return done.get(2, java.util.concurrent.TimeUnit.SECONDS);
+    }
 }

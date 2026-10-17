@@ -14,7 +14,9 @@ public final class AiConfigurationDtos {
         public ModelInput(String modelRef,String modelCode) { this(modelRef,modelCode,false); }
     }
     public record KeyInput(String keyRef, String label, String mode, String envName,
-                           @JsonProperty(access=JsonProperty.Access.WRITE_ONLY) String apiKey) {
+                           @JsonProperty(access=JsonProperty.Access.WRITE_ONLY) String apiKey,List<String> modelCodes) {
+        public KeyInput(String keyRef,String label,String mode,String envName,String apiKey){this(keyRef,label,mode,envName,apiKey,null);}
+        public KeyInput {modelCodes=modelCodes==null?null:List.copyOf(modelCodes);}
         @Override public String toString() { return "KeyInput[REDACTED]"; }
     }
     public record DraftChange(int revision, String name, String environment, String providerCode,
@@ -25,7 +27,10 @@ public final class AiConfigurationDtos {
     public record ModelSpec(String modelRef, String modelCode, boolean jsonObject, String capabilityEvidence) {
         public ModelSpec(String modelRef,String modelCode) { this(modelRef,modelCode,false,null); }
     }
-    public record KeySpec(String keyRef, String keyVersion, String label, String mode, String envName) {}
+    public record KeySpec(String keyRef, String keyVersion, String label, String mode, String envName,List<String> modelCodes) {
+        public KeySpec(String keyRef,String keyVersion,String label,String mode,String envName){this(keyRef,keyVersion,label,mode,envName,null);}
+        public KeySpec {modelCodes=modelCodes==null?null:List.copyOf(modelCodes);}
+    }
     public record Snapshot(String configVersion, String providerCode, String endpointUrl, String protocol,
                            int timeoutSeconds, List<ModelSpec> models, List<KeySpec> keys) {}
     public record Pair(String modelRef, String keyRef, String keyVersion) {}

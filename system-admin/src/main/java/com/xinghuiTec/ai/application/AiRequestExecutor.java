@@ -116,7 +116,9 @@ public class AiRequestExecutor {
         int attempts = 0;
         int previousModel = -1;
         ErrorCode lastCode = ErrorCode.NO_USABLE_KEY;
-        for (int index : policy.attemptModelOrder(first)) {
+        var modelOrder=policy.attemptModelOrder(first);
+        for (int position=0;position<modelOrder.size();position++) {
+            int index=modelOrder.get(position);
             // A Key may serve multiple models: exclusions are per model version, never global.
             Set<KeyRef> attemptedKeys = new HashSet<>();
             while (attempts < maximum && remainingTokens > 0) {
@@ -137,9 +139,25 @@ public class AiRequestExecutor {
                 }
                 if (targets.isEmpty()) break;
                 Target target = targets.get(0);
+                int remainingTargets=targets.size();
+                for(int next=position+1;next<modelOrder.size() && remainingTargets<maximum-attempts;next++) {
+                    try { remainingTargets+=targets(provider,policy.models().get(modelOrder.get(next)),Set.of(),policy.requirements(),control).size(); }
+                    catch(AiRuntimeException unavailable) {
+                        if(unavailable.code()!=ErrorCode.MODEL_UNAVAILABLE && unavailable.code()!=ErrorCode.NO_USABLE_KEY && unavailable.code()!=ErrorCode.CAPABILITY_UNSUPPORTED) throw unavailable;
+                    }
+                }
+                int windows=Math.max(1,Math.min(maximum-attempts,remainingTargets));
+                long remainingMillis=Math.max(1,java.time.Duration.between(Instant.now(),control.deadline()).toMillis());
+                Instant attemptDeadline=Instant.now().plusMillis(Math.max(1,remainingMillis/windows));
+                if(attemptDeadline.isAfter(control.deadline())) attemptDeadline=control.deadline();
+                final Instant boundedDeadline=attemptDeadline;
+                InvocationControl attemptControl=new InvocationControl() {
+                    public Instant deadline(){return boundedDeadline;}
+                    public boolean cancelled(){return control.cancelled();}
+                };
                 var reason = attempts == 0 ? (index == first ? AiRequestJournal.SwitchReason.FIRST : AiRequestJournal.SwitchReason.FALLBACK_MODEL)
                         : previousModel == index ? AiRequestJournal.SwitchReason.NEXT_KEY : AiRequestJournal.SwitchReason.FALLBACK_MODEL;
-                int allocation = remainingTokens / (maximum - attempts);
+                int allocation = remainingTokens / windows;
                 if (allocation < 1) throw new AiRuntimeException(ErrorCode.OUTPUT_LIMIT);
                 var attempt = journal.reserve(id, owner, target, maximum, reason, allocation);
                 attemptedKeys.add(target.key());
@@ -155,7 +173,7 @@ public class AiRequestExecutor {
                             work.messages(), policy.requirements(), allocation), new StreamObserver() {
                         @Override public void onDelta(String text) { buffer.delta(text); }
                         @Override public void onUsage(Usage measured) { usage.set(measured); }
-                    }, control);
+                    }, attemptControl);
                     if (outcome == null) throw new AiRuntimeException(ErrorCode.INVALID_RESPONSE);
                     if (outcome.status() != ExecutionStatus.CANCELLED && outcome.status() != ExecutionStatus.TIMED_OUT) buffer.flush();
                     boolean started = outputTouched.get() || outcome.outputStarted();
@@ -188,7 +206,7 @@ public class AiRequestExecutor {
             }
             if (attempts >= maximum || remainingTokens <= 0) break;
         }
-        finish(id, owner, AiRequestStatus.FAILED, lastCode);
+        finish(id, owner, lastCode==ErrorCode.DEADLINE_EXCEEDED?AiRequestStatus.TIMED_OUT:AiRequestStatus.FAILED, lastCode);
     }
 
     private void validateTemplate(Work work, InvocationControl control) {
@@ -229,7 +247,7 @@ public class AiRequestExecutor {
 
     private boolean terminalError(ErrorCode code) {
         return code == ErrorCode.INVALID_INPUT || code == ErrorCode.CONTENT_REJECTED || code == ErrorCode.CANCELLED
-                || code == ErrorCode.DEADLINE_EXCEEDED || code == ErrorCode.DEPENDENCY_UNAVAILABLE;
+                || code == ErrorCode.DEPENDENCY_UNAVAILABLE;
     }
 
     private void finish(long id, AiRequestStore.Owner owner, AiRequestStatus terminal, ErrorCode code) {

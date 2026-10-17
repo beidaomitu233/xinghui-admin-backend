@@ -58,7 +58,7 @@ public class AiRequestStore {
                 throw new IllegalArgumentException("Invalid version binding");
             }
             requireText(businessType, 64);
-            requireText(businessId, 128);
+            requireText(businessId, "database.record".equals(businessType)?2048:128);
             requireText(idempotencyKey, 128);
             if (inputFingerprint == null || !inputFingerprint.matches("[0-9a-f]{64}")) {
                 throw new IllegalArgumentException("Invalid input fingerprint");

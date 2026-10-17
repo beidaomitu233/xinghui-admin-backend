@@ -42,6 +42,7 @@ OssServiceDeletionTest
 SysOssControllerTest
 FileRecorderImplTest
 AiAccessActionsTest
+AiDatabaseAccessMigrationTest
 AiApplicationHttpContractTest
 AiApplicationInputRulesTest
 AiApplicationPreviewTest
@@ -51,6 +52,7 @@ AiConfigurationDruidHttpTest
 AiConfigurationHttpTest
 AiConfigurationMethodSecurityTest
 AiConfigurationServiceTest
+AiSettingsServiceTest
 AiConfigurationWiringTest
 AiContractTest
 AiRequestExecutorTest
@@ -68,6 +70,12 @@ OpenRouterJsonObjectTest
 OpenRouterRetryBoundaryTest
 OpenRouterTransportTest
 SceneDataServiceTest
+DatabaseBindingsTest
+ConversationMigrationTest
+ConversationMvcTest
+ConversationServiceTest
+SceneCandidateContextTest
+ScenePracticalDefinitionTest
 SceneHttpBoundaryTest
 SceneLegacyCompatibilityTest
 SceneLogMvcTest
@@ -81,3 +89,7 @@ TemplateDataServiceTest
 TemplateOptionsSecurityTest
 TemplateResponsePolicyTest
 TemplateRulesTest
+AiSettingsKeyRotationTest
+AiModelCatalogTest
+AiMultiChannelRuntimeTest
+ConversationDruidWallTest

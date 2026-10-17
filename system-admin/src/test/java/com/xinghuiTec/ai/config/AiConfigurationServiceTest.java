@@ -41,6 +41,10 @@ class AiConfigurationServiceTest {
         sql=sql.substring(0,sql.indexOf("-- Existing configurations"));
         sql=sql.replaceAll("(?m)^--.*$","").replace(" COLLATE utf8mb4_bin","").replace(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4","");
         for(String statement:sql.split(";")) if(!statement.isBlank()) jdbc.execute(statement);
+        try(var migration=getClass().getResourceAsStream("/db/migration/V20261018_245__ai_key_health.sql")) {
+            String health=new String(Objects.requireNonNull(migration).readAllBytes(),java.nio.charset.StandardCharsets.UTF_8).replace(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4","");
+            for(String statement:health.replaceAll("(?m)^--.*$","").split(";")) if(!statement.isBlank())jdbc.execute(statement);
+        }
         var tx=new TransactionTemplate(new DataSourceTransactionManager(source));
         refs=mock(AiApplicationReferences.class); provider=mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(refs);

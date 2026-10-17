@@ -44,7 +44,7 @@ public class SceneDataServiceTest {
     @Test void catalogMetadataAndSamplesExposeOnlyAllowedIdentities(){
         assertEquals("lowcode.record",service.catalog(actor(),control()).objects().get(0).objectKey());
         var forms=service.forms(new OptionQuery(null,1,20),actor(),control());assertEquals("1",forms.total());assertEquals("公开表单",forms.records().get(0).name());
-        var fields=service.fields("lowcode.record","1",actor(),control());assertEquals(List.of("subject","summary"),fields.fields().stream().map(FieldOption::fieldKey).toList());
+        var fields=service.fields("lowcode.record","1",actor(),control());assertEquals(List.of("subject","summary","internal_note"),fields.fields().stream().map(FieldOption::fieldKey).toList());
         var records=service.samples(new SampleQuery("lowcode.record","1",null,1,20),actor(),control());
         assertEquals("2",records.total());assertEquals(Set.of("11","12"),new HashSet<>(records.records().stream().map(SampleOption::recordId).toList()));
         assertTrue(records.records().stream().anyMatch(r->r.label().contains("业务")));assertFalse(records.toString().contains("never-model"));
@@ -68,7 +68,8 @@ public class SceneDataServiceTest {
     }
     @Test void invalidVariablesObjectsFieldsAndIntermediateSyntaxRejected(){
         for(String text:List.of("", "{{unknown}}", "{{bad.field}}", "{{user_request}"))assertThrows(InvalidConfiguration.class,()->service.compile(editor(text),actor(),control()));
-        assertThrows(InvalidConfiguration.class,()->service.compile(editor("概括","internal_note"),actor(),control()));
+        assertThrows(InvalidConfiguration.class,()->service.compile(editor("概括","api_secret"),actor(),control()));
+        assertDoesNotThrow(()->service.compile(editor("获权备注 {{record_internal_note}}","internal_note"),actor(),control()));
         assertThrows(InvalidConfiguration.class,()->service.compile(editor("概括","subject","subject"),actor(),control()));
         assertThrows(InvalidConfiguration.class,()->service.compile(new EditorInput("概括","",List.of(new Selection("arbitrary.sql","1",List.of("subject")))),actor(),control()));
         assertThrows(InvalidConfiguration.class,()->service.compile(editor("{{record_subject}}"),actor(),control()));

@@ -34,6 +34,19 @@ public class SceneDataController {
             @RequestParam(required=false) String keyword,@RequestParam(defaultValue="1") int pageNum,@RequestParam(defaultValue="20") int pageSize) {
         return Result.ok(data.samples(new SampleQuery(objectKey,formId,keyword,pageNum,pageSize),identity.current(),control()));
     }
+    @GetMapping("/database/tables") public Result<Page<DatabaseTable>> tables(@RequestParam(name="keyword",required=false)String keyword,@RequestParam(name="pageNum",defaultValue="1")int pageNum,@RequestParam(name="pageSize",defaultValue="20")int pageSize){return Result.ok(data.tables(new OptionQuery(keyword,pageNum,pageSize),identity.current(),control()));}
+    @GetMapping("/database/fields") public Result<DatabaseFields> databaseFields(@RequestParam(name="sourceKey") String sourceKey){return Result.ok(data.databaseFields(sourceKey,identity.current(),control()));}
+    @GetMapping("/database/relations") public Result<java.util.List<DatabaseRelation>> relations(@RequestParam(name="sourceKey") String sourceKey){return Result.ok(data.relations(sourceKey,identity.current(),control()));}
+    @PostMapping("/database/records") public Result<DatabaseRecords> records(jakarta.servlet.http.HttpServletRequest request){return Result.ok(data.records(body(request,DatabaseRecordQuery.class),identity.current(),control()));}
+    @PostMapping("/bindings/preview") public Result<BindingPreview> previewBindings(jakarta.servlet.http.HttpServletRequest request){return Result.ok(data.previewBindings(body(request,BindingPreviewRequest.class),identity.current(),control()));}
+    private <T>T body(jakarta.servlet.http.HttpServletRequest request,Class<T> type){
+        if(request.getContentType()==null||!request.getContentType().split(";",2)[0].trim().equalsIgnoreCase("application/json")||(request.getHeader("Content-Encoding")!=null&&!request.getHeader("Content-Encoding").equalsIgnoreCase("identity")))throw new BodyFailure(415);
+        try{byte[] bytes=request.getInputStream().readNBytes(131073);if(bytes.length>131072)throw new BodyFailure(413);
+            return new com.fasterxml.jackson.databind.ObjectMapper().enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readValue(bytes,type);
+        }catch(java.io.IOException invalid){throw new IllegalArgumentException("Invalid body");}
+    }
+    private static final class BodyFailure extends RuntimeException{final int status;BodyFailure(int status){super("INVALID_CONTENT");this.status=status;}}
+    @ExceptionHandler(BodyFailure.class) public ResponseEntity<Result<Void>> content(BodyFailure failure){return AiHttpFailures.response(failure.status,"INVALID_CONTENT");}
     @ModelAttribute public void noCache(HttpServletResponse response) {response.setHeader("Cache-Control","no-store, private");response.setHeader("Pragma","no-cache");response.setHeader("X-Content-Type-Options","nosniff");}
     @ExceptionHandler(AiRuntimeException.class) public ResponseEntity<Result<Void>> safe(AiRuntimeException e) {
         int status=switch(e.code()) {case UNAUTHENTICATED->401;case FORBIDDEN,RESOURCE_FORBIDDEN->403;case NOT_FOUND->404;case INVALID_INPUT->400;case RESOURCE_UNAVAILABLE->409;case RESOURCE_TIMEOUT,DEADLINE_EXCEEDED->504;default->503;};

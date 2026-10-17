@@ -20,6 +20,9 @@ public class AiConfigurationTests {
     private final AiConfigurationService configs;
     private final OpenRouterTransport transport;
     private final TransactionTemplate transactions;
+    private org.springframework.beans.factory.ObjectProvider<AiConfigurationTestObserver> completionObservers;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void completionObservers(org.springframework.beans.factory.ObjectProvider<AiConfigurationTestObserver> observers){this.completionObservers=observers;}
     private final ScheduledExecutorService leases=Executors.newSingleThreadScheduledExecutor(r->{
         var thread=new Thread(r,"ai-test-lease");thread.setDaemon(true);return thread;
     });
@@ -42,7 +45,9 @@ public class AiConfigurationTests {
         configs.jdbc.update("UPDATE sys_ai_configuration SET running_test_id=NULL WHERE running_test_id IN (SELECT test_id FROM sys_ai_configuration_test WHERE status='INTERRUPTED')");
     }
     @PreDestroy public void close() { workers.shutdownNow(); leases.shutdownNow(); }
-    public TestRun start(long configId,TestStart request) {
+    public TestRun start(long configId,TestStart request) { return start(configId,request,false); }
+    TestRun startSettings(long configId,TestStart request) { return start(configId,request,true); }
+    private TestRun start(long configId,TestStart request,boolean settings) {
         if(!request.confirmedCosts()) throw AiConfigurationService.fail(400,"请先确认测试搭配数及可能费用");
         long run=transactions.execute(tx->{
             var h=configs.head(configId,true); AiConfigurationService.checkRevision(h,request.revision());
@@ -50,7 +55,15 @@ public class AiConfigurationTests {
             var s=configs.snapshot(configId,h.draft());
             if(s.models().isEmpty()||s.keys().isEmpty()) throw AiConfigurationService.fail(409,"请先配置模型和Key");
             long test=configs.insert("INSERT INTO sys_ai_configuration_test(config_id,version_id,status) VALUES(?,?,'QUEUED')",configId,h.draft());
-            for(var m:s.models()) for(var k:s.keys()) configs.insert("INSERT INTO sys_ai_configuration_test_pair(test_id,model_ref,key_ref,key_version,proof_hash) VALUES(?,?,?,?,?)",test,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()),AiConfigurationService.id(k.keyVersion()),configs.proof(s,m,k));
+            var old=h.active()==null?null:configs.snapshot(configId,h.active());
+            boolean rotation=settings && old!=null && configs.pureKeyRotation(old,s);
+            for(var m:s.models()) for(var k:s.keys()) {
+                if(!AiConfigurationService.associated(m,k)) continue;
+                if(settings && old!=null && !old.configVersion().equals(s.configVersion()) && configs.compatibleSettings(old,s) && old.models().contains(m)
+                        && old.keys().stream().anyMatch(prior->prior.keyRef().equals(k.keyRef()) && prior.keyVersion().equals(k.keyVersion()) && AiConfigurationService.associated(m,prior))
+                        && (rotation || configs.validProof(s,m,k) && configs.keyUsable(k))) continue;
+                configs.insert("INSERT INTO sys_ai_configuration_test_pair(test_id,model_ref,key_ref,key_version,proof_hash) VALUES(?,?,?,?,?)",test,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()),AiConfigurationService.id(k.keyVersion()),configs.proof(s,m,k));
+            }
             configs.jdbc.update("UPDATE sys_ai_configuration SET latest_test_id=?,running_test_id=? WHERE config_id=?",test,test,configId);
             return test;
         });
@@ -81,6 +94,7 @@ public class AiConfigurationTests {
             long version=configs.jdbc.queryForObject("SELECT version_id FROM sys_ai_configuration_test WHERE test_id=?",Long.class,run);
             var s=configs.snapshot(configId,version);
             for(var m:s.models()) for(var k:s.keys()) {
+                if(configs.jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_configuration_test_pair WHERE test_id=? AND model_ref=? AND key_ref=?",Integer.class,run,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()))==0) continue;
                 if(cancelled(run)) { finalState="CANCELLED"; return; }
                 configs.jdbc.update("UPDATE sys_ai_configuration_test_pair SET status='RUNNING' WHERE test_id=? AND model_ref=? AND key_ref=?",run,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()));
                 ExecutionOutcome result;
@@ -89,7 +103,7 @@ public class AiConfigurationTests {
                     String secret=configs.resolveSecret(k); Instant deadline=Instant.now().plusSeconds(s.timeoutSeconds());
                     actualProof=configs.proof(s,m,k,secret);
                     boolean json=OpenRouterCapabilities.jsonEnabled(m);
-                    result=transport.call(m.modelCode(),s.timeoutSeconds(),secret,List.of(new AiMessage(MessageRole.USER,json?"Return exactly one JSON object with the field ok set to true.":"Reply with exactly OK.")),new Requirements(json?OutputFormat.JSON_OBJECT:OutputFormat.TEXT,false,false),256,new StreamObserver() {
+                    result=call(s,m.modelCode(),secret,List.of(new AiMessage(MessageRole.USER,json?"Return exactly one JSON object with the field ok set to true.":"Reply with exactly OK.")),new Requirements(json?OutputFormat.JSON_OBJECT:OutputFormat.TEXT,false,false),256,new StreamObserver() {
                         public void onDelta(String text) {} public void onUsage(Usage usage) {}
                     },new InvocationControl() {
                         public Instant deadline() { return deadline; } public boolean cancelled() { return AiConfigurationTests.this.cancelled(run); }
@@ -104,10 +118,26 @@ public class AiConfigurationTests {
             }
         } catch(RuntimeException unavailable) { finalState="INTERRUPTED"; }
         finally {
+            // Restore health only after a complete non-cancelled probe; any 401 for this material wins.
+            if("COMPLETED".equals(finalState)) {
+                long checkedVersion=configs.jdbc.queryForObject("SELECT version_id FROM sys_ai_configuration_test WHERE test_id=?",Long.class,run);
+                for(var key:configs.snapshot(configId,checkedVersion).keys()) {
+                    var states=configs.jdbc.query("SELECT status,error_code FROM sys_ai_configuration_test_pair WHERE test_id=? AND key_ref=?",(rs,n)->new String[]{rs.getString(1),rs.getString(2)},run,AiConfigurationService.id(key.keyRef()));
+                    if(!states.isEmpty() && states.stream().allMatch(p->"AUTH_FAILED".equals(p[1]))) configs.keyRetested(key,true);
+                    else if(!states.isEmpty() && states.stream().allMatch(p->"SUCCESS".equals(p[0]))) configs.keyRetested(key,false);
+                }
+            }
             stopHeartbeat(run);
             configs.jdbc.update("UPDATE sys_ai_configuration_test SET status=?,update_time=CURRENT_TIMESTAMP WHERE test_id=? AND status IN ('QUEUED','RUNNING')",finalState,run);
             configs.jdbc.update("UPDATE sys_ai_configuration SET running_test_id=NULL WHERE config_id=? AND running_test_id=?",configId,run);
+            if(completionObservers!=null){var observer=completionObservers.getIfUnique();if(observer!=null)observer.completed(configId,run);}
         }
+    }
+    private ExecutionOutcome call(Snapshot snapshot,String model,String secret,List<AiMessage> messages,Requirements requirements,
+                                  int tokens,StreamObserver observer,InvocationControl control) {
+        // Preserve the original OpenRouter transport seam; both branches use the same bounded parser.
+        if("openrouter".equals(snapshot.providerCode())) return transport.call(model,snapshot.timeoutSeconds(),secret,messages,requirements,tokens,observer,control);
+        return transport.callForProvider(snapshot.providerCode(),snapshot.endpointUrl(),model,snapshot.timeoutSeconds(),secret,messages,requirements,tokens,observer,control);
     }
     public TestRun get(long configId,long run) {
         var rows=configs.jdbc.query("SELECT version_id,status FROM sys_ai_configuration_test WHERE config_id=? AND test_id=?",(rs,n)->new String[]{rs.getString(1),rs.getString(2)},configId,run);

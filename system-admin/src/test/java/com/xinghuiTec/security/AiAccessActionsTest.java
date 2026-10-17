@@ -24,6 +24,7 @@ class AiAccessActionsTest {
         jdbc.update("INSERT INTO sys_role VALUES(1,'000000','legacy',1,0),(2,'000000','data_manager',1,0),(3,'000000','admin',1,0),(4,'000001','admin',1,0),(5,'000000','legacy_prompt',1,0)");
         jdbc.update("INSERT INTO sys_user_role VALUES(11,1),(22,2),(33,3),(44,4),(55,5)");
         jdbc.update("INSERT INTO sys_menu(menu_id,parent_id,order_num,menu_type,status,perms,is_deleted,path) VALUES(202610160180000001,0,4,'M','0','',0,'/ai'),(107,202610160180000001,3,'C','0','ai:template:list',0,'/ai/templates'),(202610160180000003,202610160180000001,4,'C','0','ai:request:list',0,'/ai/requests'),(900,107,90,'F','0','ai:data:list',0,''),(901,107,91,'F','0','ai:prompt:list',0,'')");
+        jdbc.update("INSERT INTO sys_menu(menu_id,parent_id,order_num,menu_type,status,perms,is_deleted,path) VALUES(106,202610160180000001,1,'C','0','ai:config:list',0,'/ai/configurations')");
         jdbc.update("INSERT INTO sys_role_menu VALUES(1,107),(2,900),(3,107),(3,202610160180000003),(4,202610160180000003),(5,901)");
         try(var connection=source.getConnection()) {
             ScriptUtils.executeSqlScript(connection,new ClassPathResource("db/migration/V20261016_210__ai_access_actions.sql"));
@@ -84,8 +85,9 @@ class AiAccessActionsTest {
         jdbc.update("DELETE FROM sys_role_menu WHERE role_id=2");
         assertTrue(routes(22).isEmpty());
         jdbc.update("INSERT INTO sys_role_menu VALUES(2,999)");
-        assertEquals(List.of(202610160180000001L,202610160180000003L),routes(22));
-        assertEquals(java.util.Set.of("ai:config:query","ai:monitor:enter"),new java.util.HashSet<>(resolvedPermissions(2)));
+        assertEquals(List.of(202610160180000001L,106L),routes(22));
+        assertEquals(java.util.Set.of("ai:config:query"),new java.util.HashSet<>(resolvedPermissions(2)));
+        assertFalse(resolvedPermissions(2).contains("ai:monitor:enter"));
         assertFalse(permissions(2).contains("ai:request:list"));
         assertFalse(permissions(2).contains("ai:request:audit"));
         jdbc.update("DELETE FROM sys_role_menu WHERE role_id=2 AND menu_id=999");
@@ -106,4 +108,42 @@ class AiAccessActionsTest {
         assertFalse(permissions(2).contains("ai:scene:edit"));
         assertFalse(permissions(2).contains("ai:scene:invoke"));
     }
+
+    @Test void invocationDerivesConversationNavigationWithoutTechnicalLogOrConfigurationGrants() throws Exception {
+        jdbc.update("UPDATE sys_menu SET perms='ai:monitor:enter' WHERE menu_id=202610160180000003");
+        jdbc.update("DELETE FROM sys_role_menu WHERE role_id=2");
+        jdbc.update("INSERT INTO sys_menu(menu_id,parent_id,order_num,menu_type,status,perms,is_deleted,path) VALUES(997,202610160180000003,10,'F','0','ai:scene:invoke',0,'')");
+        jdbc.update("INSERT INTO sys_role_menu VALUES(2,997)");
+        assertEquals(List.of(202610160180000001L,202610160180000003L),routes(22));
+        assertEquals(java.util.Set.of("ai:scene:invoke","ai:monitor:enter"),new java.util.HashSet<>(resolvedPermissions(2)));
+        assertFalse(permissions(2).contains("ai:request:list"));
+        assertFalse(permissions(2).contains("ai:request:audit"));
+        assertFalse(permissions(2).contains("ai:config:query"));
+        jdbc.update("DELETE FROM sys_role_menu WHERE role_id=2 AND menu_id=997");
+        assertTrue(routes(22).isEmpty());
+    }
+    @Test void standaloneMigrationRestoresPageOrderWithoutChangingGrantsOrEnablingDisabledPages() throws Exception {
+        jdbc.update("UPDATE sys_menu SET visible='1',component='system/ai-config/index' WHERE menu_id=106");
+        jdbc.update("UPDATE sys_menu SET visible='0' WHERE menu_id IN (107,202610160180000003)");
+        var grants=jdbc.queryForList("SELECT role_id,menu_id FROM sys_role_menu ORDER BY role_id,menu_id");
+        try(var connection=jdbc.getDataSource().getConnection()) {
+            ScriptUtils.executeSqlScript(connection,new ClassPathResource("db/migration/V20261018_244__restore_standalone_ai_configuration.sql"));
+        }
+        assertEquals("0",jdbc.queryForObject("SELECT visible FROM sys_menu WHERE menu_id=106",String.class));
+        assertEquals("/ai/configurations",jdbc.queryForObject("SELECT path FROM sys_menu WHERE menu_id=106",String.class));
+        assertEquals("system/ai-config/index",jdbc.queryForObject("SELECT component FROM sys_menu WHERE menu_id=106",String.class));
+        assertEquals(List.of(106L,107L,202610160180000003L),jdbc.queryForList("SELECT menu_id FROM sys_menu WHERE menu_id IN (106,107,202610160180000003) ORDER BY order_num",Long.class));
+        assertEquals(grants,jdbc.queryForList("SELECT role_id,menu_id FROM sys_role_menu ORDER BY role_id,menu_id"));
+        jdbc.update("DELETE FROM sys_role_menu WHERE role_id=2");
+        jdbc.update("INSERT INTO sys_role_menu VALUES(2,106)");
+        assertEquals(List.of(202610160180000001L,106L),routes(22));
+        assertEquals(java.util.Set.of("ai:config:list"),new java.util.HashSet<>(resolvedPermissions(2)));
+        jdbc.update("UPDATE sys_menu SET status='1' WHERE menu_id=106");
+        try(var connection=jdbc.getDataSource().getConnection()) {
+            ScriptUtils.executeSqlScript(connection,new ClassPathResource("db/migration/V20261018_244__restore_standalone_ai_configuration.sql"));
+        }
+        assertTrue(routes(22).isEmpty());
+        assertTrue(resolvedPermissions(2).isEmpty());
+    }
+
 }
