@@ -40,10 +40,10 @@ public class SceneRuntimeService {
         Selected selected=references.withReferenceGuard(()->{
             var head=scenes.head(key,true);require(head.currentVersion()!=null,409,"SCENE_UNCONFIGURED");require(head.enabled(),409,"SCENE_DISABLED");
             require("MAPPED".equals(head.compatibilityStatus()),409,"AMBIGUOUS_LEGACY_MAPPING");
-            if(expected!=null && head.appId()!=null){
+            if(head.appId()!=null){
                 require(input!=null && input.inputs()!=null,400,"INVALID_INPUT");SceneStore.mutationId(input.idempotencyKey());
                 var ref=input.businessRef()==null?new BusinessRef("ai.scene",key):new BusinessRef(input.businessRef().type(),input.businessRef().id());
-                var replay=runtime.replaySceneTest(Long.parseLong(head.appId()),key,model==null?-1:model,
+                var replay=runtime.replayScene(Long.parseLong(head.appId()),key,expected!=null,model==null?-1:model,
                         new AiRuntimeService.Submission(ref,input.inputs(),input.idempotencyKey()),actor);
                 if(replay!=null)return new Selected(head,scenes.version(replay.sceneVersionId()),null,replay);
             }

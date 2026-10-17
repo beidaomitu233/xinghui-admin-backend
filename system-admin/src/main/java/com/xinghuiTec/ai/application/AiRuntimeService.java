@@ -126,11 +126,11 @@ public class AiRuntimeService {
     }
 
     /** Replay precedes the facade's current revision check, with input-free current access revalidation. */
-    public AiRequestStore.Request replaySceneTest(long appId,String sceneKey,int modelIndex,Submission input,TrustedActor actor) {
+    public AiRequestStore.Request replayScene(long appId,String sceneKey,boolean test,int modelIndex,Submission input,TrustedActor actor) {
         if(actor.servicePrincipalRef()!=null || !actor.authorities().contains("ai:scene:invoke"))throw new AiRuntimeException(ErrorCode.FORBIDDEN);
         var owner=owner(actor);AiRequestStore.Request replay;
-        try{replay=transaction.execute(tx->requests.sceneTestReplay(appId,sceneKey,owner,input.idempotencyKey(),
-                fingerprint(Long.toString(appId),true,null,modelIndex,input,owner)));}
+        try{replay=transaction.execute(tx->requests.sceneReplay(appId,sceneKey,test?AiRequestStore.Kind.TEST:AiRequestStore.Kind.BUSINESS,owner,input.idempotencyKey(),
+                fingerprint(Long.toString(appId),test,null,modelIndex,input,owner)));}
         catch(IllegalArgumentException conflict){if("IDEMPOTENCY_CONFLICT".equals(conflict.getMessage()))throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);throw conflict;}
         if(replay==null)return null;
         var authorized=status(AiApplicationService.positiveId(replay.requestId()),actor);

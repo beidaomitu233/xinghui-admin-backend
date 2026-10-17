@@ -10,6 +10,22 @@ class SceneTestReplayTest {
     private SceneTestSupport f;
     @BeforeEach void setup()throws Exception{f=new SceneTestSupport();}
     @AfterEach void close(){f.close();}
+    @Test void businessReplayUsesAdmittedSnapshotAcrossNewRecordRequirementAndCannotRetrieveTests()throws Exception{
+        var first=f.save(f.create(false),"Original {{user_request}}",false);String key=first.detail().scene().sceneKey();
+        var original=f.input(false,UUID.randomUUID().toString());
+        var accepted=f.service.submit(key,original,f.actor);assertEquals("SUCCEEDED",f.terminal(accepted.requestId()).status());
+        var testInput=f.input(false,UUID.randomUUID().toString());
+        var test=f.service.test(key,new SceneDtos.TestInput(1,0,true,testInput),f.actor);assertEquals("SUCCEEDED",f.terminal(test.requestId()).status());
+        f.save(first.detail(),"Now {{record_subject}}",true);
+        var replay=f.service.submit(key,original,f.actor);
+        assertEquals(accepted.requestId(),replay.requestId());assertEquals(accepted.sceneVersionId(),replay.sceneVersionId());assertEquals("BUSINESS",replay.kind());
+        var changed=new SceneDtos.Submission(null,Map.of("user_request","different"),original.idempotencyKey());
+        assertEquals(ErrorCode.VERSION_CONFLICT,assertThrows(AiRuntimeException.class,()->f.service.submit(key,changed,f.actor)).code());
+        assertEquals(400,assertThrows(SceneFailure.class,()->f.service.submit(key,f.input(false,UUID.randomUUID().toString()),f.actor)).status());
+        // Same nonce belonging to TEST is not a BUSINESS replay; current business input rules still apply.
+        assertEquals(400,assertThrows(SceneFailure.class,()->f.service.submit(key,testInput,f.actor)).status());
+        assertEquals(2,f.jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_request",Integer.class));assertEquals(2,f.provider.calls.get());
+    }
     @Test void facadeReplaysLostTestResponseAfterAutosaveWithoutDispatchOrNewRevisionBypass()throws Exception{
         var first=f.save(f.create(false),"Original {{user_request}}",false);String key=first.detail().scene().sceneKey();
         var original=new SceneDtos.TestInput(1,0,true,f.input(false,UUID.randomUUID().toString()));

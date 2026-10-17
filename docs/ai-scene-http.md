@@ -86,7 +86,7 @@ Save 增加 `confirmedLegacyConversion:boolean`（可省略，默认 false）。
 {"businessRef":{"type":"lowcode.record","id":"42:305"},"inputs":{"user_request":"请概括重点"},"idempotencyKey":"4a1f8cc3-b769-4ba2-a902-e80e3e79a738"}
 ```
 
-只传受控记录引用和用户输入，不传 actor/tenant/appId/模板版本/业务正文。服务端校验摘要场景与 formId 对应，C 核对真实记录、schema、字段与当前主体。受理固定当前 sceneVersion，同幂等键同输入返回原请求，即使随后保存新版；不同输入409。在途不随场景编辑换内容/重启输出。
+只传受控记录引用和用户输入，不传 actor/tenant/appId/模板版本/业务正文。服务端校验摘要场景与 formId 对应，C 核对真实记录、schema、字段与当前主体。受理固定当前 sceneVersion，同幂等键同输入返回原请求，即使随后保存新版或新增数据对象要求；重放使用原版本并复核当前访问权，不重新渲染或调用模型。不同输入409，新幂等键按当前配置验证。业务与试运行分别限定请求类型，相同幂等键不能跨类型取回请求。在途不随场景编辑换内容/重启输出。
 
 GENERAL 无数据对象时，预览/试运行/业务提交省略 businessRef（或 null），服务端生成语义引用 `{type:"ai.scene",id:"<该真实sceneKey>"}`；这是场景级调用关联而非伪造业务记录 ID，不读业务记录。客户端若提供不同引用则400。GENERAL 有数据对象或 RECORD_SUMMARY 必须由安全记录选择生成 lowcode.record 引用；不可手输或伪造别的表单。预览/试运行还要求 scene:test 与 scene:invoke 及实际数据权限，不借管理身份绕过。
 
