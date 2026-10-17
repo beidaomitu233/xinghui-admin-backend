@@ -82,7 +82,9 @@ public class AiModelCatalogTransport {
         this.timeout = timeout;
     }
 
-    List<Model> fetch(String provider, String secret) {
+    record Catalog(List<Model> models, int scannedCount, int filteredCount, Map<String, Integer> filterReasons) {}
+
+    Catalog fetch(String provider, String secret) {
         final AiProviderPresets.Preset preset;
         try { preset = AiProviderPresets.require(provider); }
         catch (AiConfigurationException invalid) { throw failure(422, "PROVIDER_UNSUPPORTED"); }
@@ -140,25 +142,42 @@ public class AiModelCatalogTransport {
         }
     }
 
-    private List<Model> parse(byte[] body, String secret, String provider) {
+    private Catalog parse(byte[] body, String secret, String provider) {
         try {
             JsonNode root = JSON.readTree(body);
             var data = root == null ? null : root.get("data");
             if (data == null || !data.isArray() || data.size() > 5000) throw failure(502, "UPSTREAM_INVALID");
             var result = new TreeMap<String, Model>();
+            var reasons = new TreeMap<String, Integer>();
             for (var item : data) {
-                String code = text(item.get("id"), 128, secret);
-                if (!code.matches("[A-Za-z0-9][A-Za-z0-9._:/-]*")) throw failure(502, "UPSTREAM_INVALID");
-                boolean deepseek = "deepseek".equals(provider);
-                String name = item.hasNonNull("name") ? text(item.get("name"), 256, secret) : code;
-                var model = new Model(code, name, positive(item.get(deepseek ? "context_window" : "context_length")),
-                        positive(deepseek ? item.get("max_output_tokens") : item.path("top_provider").get("max_completion_tokens")),
-                        tokens((deepseek ? item : item.path("architecture")).get("input_modalities"), secret),
-                        tokens((deepseek ? item : item.path("architecture")).get("output_modalities"), secret),
-                        tokens(item.get("supported_parameters"), secret));
-                if (result.putIfAbsent(code, model) != null) throw failure(502, "UPSTREAM_INVALID");
+                try {
+                    // Match the configuration/runtime code grammar; routing aliases are not executable here.
+                    String code = text(item.get("id"), 262144, secret);
+                    if (!code.matches("[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}")) {
+                        reasons.merge("UNSUPPORTED_MODEL_CODE", 1, Integer::sum);
+                        continue;
+                    }
+                    boolean deepseek = "deepseek".equals(provider);
+                    var architecture = deepseek ? item : item.path("architecture");
+                    var input = tokens(architecture.get("input_modalities"), secret);
+                    var output = tokens(architecture.get("output_modalities"), secret);
+                    if (architecture.hasNonNull("output_modalities") && !output.contains("text")) {
+                        reasons.merge("NON_TEXT_OUTPUT", 1, Integer::sum);
+                        continue;
+                    }
+                    String name = item.hasNonNull("name") ? text(item.get("name"), 256, secret) : code;
+                    var model = new Model(code, name, positive(item.get(deepseek ? "context_window" : "context_length")),
+                            positive(deepseek ? item.get("max_output_tokens") : item.path("top_provider").get("max_completion_tokens")),
+                            input, output, tokens(item.get("supported_parameters"), secret));
+                    if (result.putIfAbsent(code, model) != null)
+                        reasons.merge("DUPLICATE_MODEL_CODE", 1, Integer::sum);
+                } catch (AiModelCatalogException invalidRow) {
+                    // A new unsupported metadata shape must not discard the remaining catalog.
+                    reasons.merge("INVALID_METADATA", 1, Integer::sum);
+                }
             }
-            return List.copyOf(result.values());
+            return new Catalog(List.copyOf(result.values()), data.size(),
+                    reasons.values().stream().mapToInt(Integer::intValue).sum(), Map.copyOf(reasons));
         } catch (AiModelCatalogException safe) { throw safe; }
         catch (Exception invalid) { throw failure(502, "UPSTREAM_INVALID"); }
     }
@@ -166,10 +185,14 @@ public class AiModelCatalogTransport {
     private String text(JsonNode node, int maximum, String secret) {
         if (node == null || !node.isTextual()) throw failure(502, "UPSTREAM_INVALID");
         String value = node.textValue();
-        if (value.isBlank() || value.length() > maximum || value.chars().anyMatch(c -> Character.isISOControl(c))
-                || (secret != null && value.contains(secret))) throw failure(502, "UPSTREAM_INVALID");
+        if (value.chars().anyMatch(Character::isISOControl) || (secret != null && value.contains(secret)))
+            throw new UnsafeMetadata();
+        if (value.isBlank() || value.length() > maximum) throw failure(502, "UPSTREAM_INVALID");
         return value;
     }
+
+    /** Security violations remain fatal, unlike unsupported individual metadata shapes. */
+    private static final class UnsafeMetadata extends RuntimeException {}
 
     private List<String> tokens(JsonNode node, String secret) {
         if (node == null || node.isNull()) return List.of();

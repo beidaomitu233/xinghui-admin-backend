@@ -130,12 +130,40 @@ class AiModelCatalogTest {
     @Test void malformedDuplicateAndSecretEchoMetadataAreRejectedWithoutLeaking() {
         for (String bad : List.of("{", "{\"data\":[],\"data\":[]}", "{\"data\":[]} trailing",
                 "{\"data\":[{\"id\":\"vendor/model\",\"name\":\"" + KEY + "\"}]}",
-                "{\"data\":[{\"id\":\"http://127.0.0.1?query\",\"name\":\"unsafe\"}]}")) {
+                "{\"data\":[{\"id\":\"~route\\ncontrol\",\"name\":\"unsafe\"}]}")) {
             body = bad;
             var failure = assertThrows(AiModelCatalogException.class, () -> service.scan(request()));
             assertEquals("AI_MODEL_CATALOG:UPSTREAM_INVALID", failure.getMessage());
             assertFalse(failure.toString().contains(KEY));
         }
+    }
+
+    @Test void filtersUnsupportedAliasesAndNonTextRowsWithoutDiscardingUsableChatModels() {
+        body = """
+                {"data":[
+                  {"id":"vendor/first","name":"First","architecture":{"output_modalities":["text"]}},
+                  {"id":"~unbiased/pareto-latest","name":"Routing alias"},
+                  {"id":"~openai/future-latest","name":"Another routing alias"},
+                  {"id":"vendor/image-only","name":"Image","architecture":{"output_modalities":["image"]}},
+                  {"id":"vendor/bad-metadata","name":42},
+                  {"id":"vendor/first","name":"Duplicate"},
+                  {"id":"vendor/second","name":"Second","architecture":{"output_modalities":["text"]}}
+                ]}
+                """;
+        Page page = service.scan(request());
+        assertEquals(List.of("vendor/first", "vendor/second"), page.records().stream().map(Model::code).toList());
+        assertEquals(2, page.total());
+        assertEquals(7, page.scannedCount());
+        assertEquals(5, page.filteredCount());
+        assertEquals(Map.of("UNSUPPORTED_MODEL_CODE", 2, "NON_TEXT_OUTPUT", 1,
+                "INVALID_METADATA", 1, "DUPLICATE_MODEL_CODE", 1), page.filterReasons());
+        var rules = new com.xinghuiTec.ai.model.AiModelConfigRules();
+        for (var model : page.records()) assertEquals(model.code(), rules.modelCode(model.code()));
+        Page searched = service.scan(new Scan("123", "456", 3, "first", 1, 1));
+        assertEquals(1, searched.total());
+        assertEquals(7, searched.scannedCount());
+        assertEquals(5, searched.filteredCount());
+        assertFalse(searched.generationVerified());
     }
 
     @Test void responseLimitCancelsBeforeUnboundedBodyAllocation() {

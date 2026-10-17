@@ -91,14 +91,15 @@ public class AiModelCatalogService {
         return search == null ? "" : search.strip().toLowerCase(Locale.ROOT);
     }
 
-    private Page page(List<Model> models, String query, int pageNum, int pageSize,
+    private Page page(AiModelCatalogTransport.Catalog catalog, String query, int pageNum, int pageSize,
                       String source, String provider, String configId, String keyId, Integer revision) {
-        var filtered = models.stream().filter(model -> model.code().toLowerCase(Locale.ROOT).contains(query)
+        var filtered = catalog.models().stream().filter(model -> model.code().toLowerCase(Locale.ROOT).contains(query)
                 || model.name().toLowerCase(Locale.ROOT).contains(query)).toList();
         long offset = (long) (pageNum - 1) * pageSize;
         var records = offset >= filtered.size() ? List.<Model>of()
                 : filtered.subList((int) offset, Math.min(filtered.size(), (int) offset + pageSize));
         return new Page(List.copyOf(records), filtered.size(), pageNum, pageSize, Instant.now(),
-                source, provider, configId, keyId, revision, false);
+                source, provider, configId, keyId, revision, false,
+                catalog.scannedCount(), catalog.filteredCount(), catalog.filterReasons());
     }
 }

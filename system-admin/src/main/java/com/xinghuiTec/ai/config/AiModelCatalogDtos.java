@@ -2,6 +2,7 @@ package com.xinghuiTec.ai.config;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /** Discovery metadata only; no credential material or inference evidence. */
@@ -23,5 +24,13 @@ public final class AiModelCatalogDtos {
 
     public record Page(List<Model> records, int total, int pageNum, int pageSize,
                        Instant refreshedAt, String source, String provider, String configId, String keyId,
-                       Integer revision, boolean generationVerified) {}
+                       Integer revision, boolean generationVerified, int scannedCount,
+                       int filteredCount, Map<String, Integer> filterReasons) {
+        public Page(List<Model> records, int total, int pageNum, int pageSize, Instant refreshedAt,
+                    String source, String provider, String configId, String keyId,
+                    Integer revision, boolean generationVerified) {
+            this(records, total, pageNum, pageSize, refreshedAt, source, provider, configId, keyId,
+                    revision, generationVerified, total, 0, Map.of());
+        }
+    }
 }
