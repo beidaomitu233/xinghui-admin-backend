@@ -27,7 +27,7 @@
 
 工作区 selected 与列表使用一致读取边界，不要求前端拼接 application/template/resource 表。模型选项和 C 负责的 `/system/ai/scene-data` 目录独立按需加载；只返回真实有权候选。
 
-创建样例（数据只是占位示例，不创建真实配置）：
+用途 purpose 为可选元数据：无用途提交空串 `""`，保存时清空同样合法；null 返回400。名称和提示词正文仍必填。创建样例（数据只是占位示例，不创建真实配置）：
 
 ```json
 {"name":"记录摘要","purpose":"概括当前记录","kind":"RECORD_SUMMARY","formId":"42","clientMutationId":"6f021aaf-006d-4164-acd2-3ffcdaf54c4f"}

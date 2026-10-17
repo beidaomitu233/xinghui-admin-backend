@@ -17,6 +17,17 @@ public class AiRuntimeBodyCodec {
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
             .disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT);
+    private final ObjectMapper configurationMapper = new ObjectMapper(JsonFactory.builder()
+            .streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(16).maxStringLength(32000).maxNumberLength(32).build())
+            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
+            .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT);
+
+    public <T>T readSceneConfiguration(byte[] bytes,Class<T> type){
+        if(bytes==null || bytes.length==0 || bytes.length>131072)throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
+        try{T value=configurationMapper.readValue(bytes,type);if(value==null)throw new IllegalArgumentException();return value;}
+        catch(Exception invalid){throw new AiRuntimeException(ErrorCode.INVALID_INPUT);}
+    }
 
     public <T> T read(byte[] bytes, Class<T> type) {
         if (bytes == null || bytes.length == 0 || bytes.length > AiRuntimeBoundaryFilter.MAX_BODY_BYTES) {

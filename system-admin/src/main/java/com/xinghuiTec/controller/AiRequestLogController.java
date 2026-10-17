@@ -25,12 +25,13 @@ public class AiRequestLogController {
         this.logs = logs; this.identity = identity; this.platform = platform;
     }
     public record Query(String scope, String appId, String requestId, String businessId, String modelRef, String status,
-                        String tenantRef, String subjectRef, String from, String to, Integer pageNum, Integer pageSize) {
+                        String tenantRef, String subjectRef, String from, String to, Integer pageNum, Integer pageSize,String sceneKey,String requestKind) {
+        public Query(String scope,String appId,String requestId,String businessId,String modelRef,String status,String tenantRef,String subjectRef,String from,String to,Integer pageNum,Integer pageSize){this(scope,appId,requestId,businessId,modelRef,status,tenantRef,subjectRef,from,to,pageNum,pageSize,null,null);}
         public AiRequestLogService.Filters filters() {
             try {
                 return new AiRequestLogService.Filters(scope == null ? AiRequestLogService.Scope.OWN : AiRequestLogService.Scope.valueOf(scope),
                         appId, requestId, businessId, modelRef, blank(status) ? null : AiRequestStatus.valueOf(status), tenantRef, subjectRef,
-                        blank(from) ? null : Instant.parse(from), blank(to) ? null : Instant.parse(to));
+                        blank(from) ? null : Instant.parse(from), blank(to) ? null : Instant.parse(to),sceneKey,requestKind);
             } catch (RuntimeException invalid) { throw new AiRuntimeException(ErrorCode.INVALID_INPUT); }
         }
         private static boolean blank(String value) { return value == null || value.isBlank(); }

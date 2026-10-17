@@ -53,7 +53,7 @@ public final class SceneDtos {
     }
     public record LegacyDetails(String compatibility,List<String> reasons,boolean requiresConfirmation,
                                 List<String> conversionNotes,LegacyEditor editor,List<LegacyMessage> originalMessages,Map<String,Object> originalDefinition) {
-        public LegacyDetails{reasons=List.copyOf(reasons);conversionNotes=List.copyOf(conversionNotes);originalMessages=List.copyOf(originalMessages);originalDefinition=Map.copyOf(originalDefinition);}
+        public LegacyDetails{reasons=List.copyOf(reasons);conversionNotes=List.copyOf(conversionNotes);originalMessages=List.copyOf(originalMessages);originalDefinition=java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(originalDefinition));}
         @Override public String toString(){return "LegacyDetails[REDACTED]";}
     }
     public record Detail(Summary scene,Definition definition,LegacyDetails legacy) {

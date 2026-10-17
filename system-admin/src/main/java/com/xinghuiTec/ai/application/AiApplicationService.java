@@ -21,6 +21,9 @@ public class AiApplicationService {
     private final AiApplicationReferences references;
     private final ObjectProvider<AiProviderRuntime> providers;
     private final ObjectProvider<AiTemplateRuntime> templates;
+    private AiSceneOwnership sceneOwnership;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void sceneOwnership(AiSceneOwnership ownership){this.sceneOwnership=ownership;}
 
     public AiApplicationService(JdbcTemplate jdbc, ObjectMapper mapper, AiApplicationStore store,
                                 AiApplicationReferences references, ObjectProvider<AiProviderRuntime> providers,
@@ -44,6 +47,7 @@ public class AiApplicationService {
 
     public Version publish(long appId, int revision, List<String> successfulTests, TrustedActor actor) {
         return references.withReferenceGuard(() -> {
+            if(sceneOwnership!=null)sceneOwnership.requireApplicationWritable(Long.toString(appId));
             var app = store.current(appId);
             expected(app, revision);
             app.draft().requireComplete();
@@ -80,6 +84,7 @@ public class AiApplicationService {
 
     public AiApplicationStore.View setEnabled(long appId, int revision, boolean enabled, TrustedActor actor) {
         return references.withReferenceGuard(() -> {
+            if(sceneOwnership!=null)sceneOwnership.requireApplicationWritable(Long.toString(appId));
             var app = store.current(appId);
             expected(app, revision);
             if (enabled) {
@@ -96,6 +101,7 @@ public class AiApplicationService {
 
     public AiApplicationStore.View rollback(long appId, int revision, long versionId, TrustedActor actor) {
         return references.withReferenceGuard(() -> {
+            if(sceneOwnership!=null)sceneOwnership.requireApplicationWritable(Long.toString(appId));
             var app = store.current(appId);
             expected(app, revision);
             Version version = version(appId, versionId, true);
@@ -211,6 +217,13 @@ public class AiApplicationService {
     }
 
     private void validateVersion(AiApplicationStore.View app, Version version, TrustedActor actor) {
+        if(version.snapshot().tests().isEmpty()){
+            String source=jdbc.queryForObject("SELECT snapshot_source FROM sys_ai_application_version WHERE app_id=? AND app_version_id=?",String.class,app.appId(),version.appVersionId());
+            if(!"SCENE_SAVE".equals(source))throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);
+            var provider=providers.getIfUnique();if(provider==null)throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
+            version.snapshot().policy().requireModelComplete();var checked=provider.validateBindings(version.snapshot().policy().models(),version.snapshot().policy().requirements());
+            if(!checked.valid())throw new AiRuntimeException(checked.violations().get(0).code());return;
+        }
         List<ResourceVersionRef> current = validate(version.snapshot().policy(), testInvocation(app,
                 version.snapshot().tests().get(0).requestId(), actor, version.appVersionId()));
         if (!new HashSet<>(current).equals(new HashSet<>(version.snapshot().resources()))) {

@@ -15,6 +15,9 @@ import java.util.List;
 public class AiApplicationStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
+    private com.xinghuiTec.ai.contract.AiSceneOwnership sceneOwnership;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void sceneOwnership(com.xinghuiTec.ai.contract.AiSceneOwnership ownership){this.sceneOwnership=ownership;}
 
     public AiApplicationStore(JdbcTemplate jdbc, ObjectMapper mapper) {
         this.jdbc = jdbc;
@@ -65,6 +68,7 @@ public class AiApplicationStore {
     View current(long appId) { return read(appId, true); }
 
     public View updateDraft(long appId, int revision, Draft draft) {
+        if(sceneOwnership!=null)sceneOwnership.requireApplicationWritable(Long.toString(appId));
         if (revision < 0) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
         int changed = jdbc.update("UPDATE sys_ai_application SET name=?,purpose=?,draft_json=?,"
                         + "draft_revision=draft_revision+1,revision=revision+1,update_time=CURRENT_TIMESTAMP(3)"
