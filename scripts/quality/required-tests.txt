@@ -100,3 +100,4 @@ SqlAstCompilerTest
 SceneQueryHttpSecurityTest
 SqlTemporalDecodingTest
 ModelHubRuntimeTest
+AiModelCatalogPersistenceTest
