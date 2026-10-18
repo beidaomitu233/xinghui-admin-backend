@@ -10,6 +10,7 @@ import com.xinghuiTec.ai.contract.*;
 import com.xinghuiTec.ai.contract.AiSceneQueryRuntime.*;
 import com.xinghuiTec.ai.contract.AiTypes.*;
 import com.xinghuiTec.config.SecretCipher;
+import com.xinghuiTec.ai.query.SqlQueryException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -135,7 +136,8 @@ public class SqlAssistanceService {
         SqlQuery approved=null;List<QueryDiagnostic> diagnostics=diagnostics(row);
         if(status==SqlAssistanceDtos.Status.SUCCEEDED) {
             approved=parse((String)row.get("approved_query_json"),SqlQuery.class);
-            var checked=query().validateGeneratedSql(approved,actor,context,SceneManagementService.control(5));
+            var candidate=approved;
+            var checked=queryCall(()->query().validateGeneratedSql(candidate,actor,context,SceneManagementService.control(5)));
             require(checked.valid(),409,"SCHEMA_CHANGED");
         }
         String error=row.get("error_code")==null?request.errorCode():(String)row.get("error_code");
@@ -157,8 +159,9 @@ public class SqlAssistanceService {
             var candidate=candidate(raw.toString(),maxRows);
             String publicCandidate=json(candidate);
             require(!publicCandidate.contains(guard) && !publicCandidate.contains("You only draft one read-only SQL candidate"),422,"INVALID_SQL_GENERATION");
-            var validation=query().validateGeneratedSql(candidate,actor,context,control(request,owner(actor)));
+            var validation=queryCall(()->query().validateGeneratedSql(candidate,actor,context,control(request,owner(actor))));
             if(!validation.valid()) {fail(id,"SQL_VALIDATION_FAILED",validation.diagnostics());return;}
+            control(request,owner(actor)).check();
             jdbc.update("UPDATE sys_ai_sql_assistance SET validation_state='APPROVED',approved_query_json=?,diagnostics_json=NULL,error_code=NULL,update_time=CURRENT_TIMESTAMP WHERE request_id=? AND owner_scope=? AND validation_state='PENDING'",
                     json(candidate),id,owner(actor).scope());
         }catch(AiRuntimeException classified){fail(id,classified.code().name(),List.of());}
@@ -178,10 +181,13 @@ public class SqlAssistanceService {
         }catch(java.io.IOException invalid){throw new SceneFailure(422,"INVALID_SQL_GENERATION");}
     }
     private AuthorizedSchema schema(TrustedActor actor,QueryContext context,InvocationControl control) {
-        control.check();var result=query().authorizedSchema(actor,context,control);
+        control.check();var result=queryCall(()->query().authorizedSchema(actor,context,control));
         require(result!=null && !result.datasets().isEmpty(),422,"NO_DATASET_AVAILABLE");
         require(result.fingerprint()!=null && !result.fingerprint().isBlank() && result.fingerprint().length()<=128 && result.scopeDescription()!=null && result.scopeDescription().length()<=2000,503,"DEPENDENCY_UNAVAILABLE");
         control.check();return result;
+    }
+    private <T>T queryCall(java.util.function.Supplier<T> action) {
+        try{return action.get();}catch(SqlQueryException classified){throw new SceneFailure(classified.status(),"AI_QUERY_"+classified.issue().name());}
     }
     private AiSceneQueryRuntime query(){var service=queries.getIfUnique();require(service!=null,503,"DEPENDENCY_UNAVAILABLE");return service;}
     private void requireFingerprint(AuthorizedSchema before,AuthorizedSchema now){if(!before.fingerprint().equals(now.fingerprint()))throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);}

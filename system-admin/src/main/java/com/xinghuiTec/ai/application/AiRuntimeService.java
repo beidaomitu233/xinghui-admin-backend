@@ -302,6 +302,7 @@ public class AiRuntimeService {
         if(conversations!=null)for(long prior:conversations.contextRequests(Long.parseLong(request.requestId())))authorizeSingle(status(prior,actor),actor);
     }
     private void authorizeSingle(AiRequestStore.Request request,TrustedActor actor) {
+        if(AiRequestStore.SQL_ASSISTANCE_TYPE.equals(request.businessType())) throw new AiRuntimeException(ErrorCode.NOT_FOUND);
         var policy = policy(request);
         if (request.kind() == AiRequestStore.Kind.TEST && request.appVersionId()==null && applications.get(AiApplicationService.positiveId(request.appId())).draftRevision()
                 != request.draftRevision()) throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);
