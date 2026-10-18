@@ -87,6 +87,21 @@ class SqlAssistanceServiceTest {
         assertFalse(f.jdbc.queryForObject("SELECT snapshot_json FROM sys_ai_application_version ORDER BY app_version_id DESC LIMIT 1",String.class).contains("SCHEMA_PRIVATE_SENTINEL"));
         assertEquals(result.query(),newService().get(Long.parseLong(accepted.requestId()),actor).query());assertEquals(1,http.generations.get());
     }
+    @Test void exactNumericCandidatesSurviveGenerationPersistenceAndPublicJsonWithoutGuessingText()throws Exception {
+        for(String numbers:List.of("{\"$number\":\"1234567890123456789\"},\"next\":{\"$number\":\"1234567890123456790\"}","1234567890123456789,\"next\":1234567890123456790")) {
+            http.output="{\"sql\":\"SELECT f.subject FROM form_1 f WHERE f.subject = :term\",\"parameters\":{\"term\":"+numbers+",\"text\":\"00123\",\"flag\":true,\"empty\":null}}";
+            var result=finished(service.start(input(),actor).requestId());
+            assertEquals(SqlAssistanceDtos.Status.SUCCEEDED,result.status());
+            assertEquals(new java.math.BigDecimal("1234567890123456789"),result.query().parameters().get("term"));
+            assertEquals(new java.math.BigDecimal("1234567890123456790").stripTrailingZeros(),result.query().parameters().get("next"));
+            assertEquals("00123",result.query().parameters().get("text"));assertEquals(true,result.query().parameters().get("flag"));assertNull(result.query().parameters().get("empty"));
+            var json=f.mapper.readTree(f.mapper.writeValueAsString(result));
+            assertEquals("1234567890123456789",json.at("/query/parameters/term/$number").asText());
+            assertEquals("1234567890123456790",json.at("/query/parameters/next/$number").asText());
+            assertEquals(result.query(),newService().get(Long.parseLong(result.requestId()),actor).query());
+        }
+        assertTrue(http.systemMessage.contains("$number"));
+    }
     @Test void rejectedAstVerdictNeverReturnsOrStoresTheSqlCandidate()throws Exception {
         query.reject=true;var result=finished(service.start(input(),actor).requestId());
         assertEquals(SqlAssistanceDtos.Status.FAILED,result.status());assertEquals("SQL_VALIDATION_FAILED",result.errorCode());assertNull(result.query());
