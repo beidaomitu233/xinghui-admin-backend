@@ -30,10 +30,11 @@ public final class SceneDtos {
         public DataObject { fields=List.copyOf(fields); }
     }
     public record Definition(String name,String purpose,String promptText,String outputRequirement,
-                             List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings,ModelRef initialModel) {
+                             List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings,ModelRef initialModel,List<com.xinghuiTec.ai.contract.AiSceneQueryRuntime.QueryBinding> sqlBindings) {
+        public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings,ModelRef initialModel){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,dataBindings,initialModel,List.of());}
         public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,dataBindings,null);}
         public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,List.of());}
-        public Definition { dataObjects=dataObjects==null?List.of():List.copyOf(dataObjects);dataBindings=dataBindings==null?List.of():List.copyOf(dataBindings); }
+        public Definition { dataObjects=dataObjects==null?List.of():List.copyOf(dataObjects);dataBindings=dataBindings==null?List.of():List.copyOf(dataBindings);sqlBindings=sqlBindings==null?List.of():List.copyOf(sqlBindings); }
         @Override public String toString() { return "SceneDefinition[REDACTED]"; }
     }
     /** Creates a stable unconfigured identity. Enabled is intent only until a valid executable save. */

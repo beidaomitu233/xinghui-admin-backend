@@ -244,10 +244,28 @@ public class AiRuntimeService {
         all.addAll(history.messages());all.addAll(current.subList(leading,current.size()));return List.copyOf(all);
     }
 
+    /** Reuse the existing bounded worker pool; SQL assistance owns its safe polling/result boundary. */
+    public void dispatchPrivate(AiRequestExecutor.Work work,Runnable completed) {
+        var owner=owner(work.invocation().actor());long id=AiApplicationService.positiveId(work.invocation().requestId());
+        var request=requests.owned(id,owner);
+        if(work.privateOutput()==null || !AiRequestStore.SQL_ASSISTANCE_TYPE.equals(request.businessType())) throw new AiRuntimeException(ErrorCode.FORBIDDEN);
+        if(closing) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
+        dispatched.put(id,owner);
+        try {
+            pool.execute(()->{try{worker.execute(work);}finally{
+                try{completed.run();}catch(RuntimeException unavailableResult){/* Polling fails closed; never publish raw text or re-dispatch. */}
+                dispatched.remove(id);
+            }});
+        }catch(java.util.concurrent.RejectedExecutionException busy){
+            dispatched.remove(id);lifecycle.finish(id,owner,AiRequestStatus.FAILED,ErrorCode.RATE_LIMITED,null);throw new AiRuntimeException(ErrorCode.RATE_LIMITED);
+        }
+    }
+
     public AiRequestStore.Request status(long id, TrustedActor actor) {
         AiRequestStore.Request request;
         try { request = requests.owned(id, owner(actor)); }
         catch (IllegalArgumentException notOwned) { throw new AiRuntimeException(ErrorCode.NOT_FOUND); }
+        if(AiRequestStore.SQL_ASSISTANCE_TYPE.equals(request.businessType())) throw new AiRuntimeException(ErrorCode.NOT_FOUND);
         AiApplicationPolicy policy = policy(request);
         if (!(request.kind() == AiRequestStore.Kind.TEST ? policy.permitsSubject(actor) : policy.permits(actor))) {
             throw new AiRuntimeException(ErrorCode.FORBIDDEN);

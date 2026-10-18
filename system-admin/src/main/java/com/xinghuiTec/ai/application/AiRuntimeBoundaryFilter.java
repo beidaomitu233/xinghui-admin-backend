@@ -50,7 +50,7 @@ public class AiRuntimeBoundaryFilter extends OncePerRequestFilter {
             if (path.isEmpty()) path = request.getRequestURI().substring(request.getContextPath().length());
             boolean sceneConfig=(path.equals("/system/ai/scenes") || path.startsWith("/system/ai/scenes/") || path.startsWith("/system/ai/settings/scene-routes/"))
                     && ("PUT".equals(request.getMethod()) || ("POST".equals(request.getMethod()) && !path.endsWith("/preview") && !path.endsWith("/test-requests")));
-            if (sceneConfig || ("POST".equals(request.getMethod()) && (path.equals("/ai/conversations") || path.startsWith("/ai/conversations/") || path.endsWith("/requests") || path.endsWith("/test-requests") || path.endsWith("/preview")))) {
+            if (sceneConfig || ("POST".equals(request.getMethod()) && (path.equals("/ai/scenes/sql-assistance") || path.matches("/ai/scenes/sql-assistance/[0-9]+/cancel") || path.equals("/ai/conversations") || path.startsWith("/ai/conversations/") || path.endsWith("/requests") || path.endsWith("/test-requests") || path.endsWith("/preview")))) {
                 String type = request.getContentType(), encoding = request.getHeader("Content-Encoding");
                 if (type == null || !type.split(";", 2)[0].trim().equalsIgnoreCase("application/json")
                         || (encoding != null && !encoding.equalsIgnoreCase("identity"))) {

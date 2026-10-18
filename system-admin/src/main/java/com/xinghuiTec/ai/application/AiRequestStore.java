@@ -22,6 +22,7 @@ import java.util.List;
  */
 @Repository
 public class AiRequestStore {
+    public static final String SQL_ASSISTANCE_TYPE="ai.sql.assist";
     private final JdbcTemplate jdbc;
 
     public AiRequestStore(JdbcTemplate jdbc) {

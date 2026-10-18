@@ -36,12 +36,23 @@ public class AiRequestLifecycle {
     public boolean delta(long id, AiRequestStore.Owner owner, String text) {
         return Boolean.TRUE.equals(transaction.execute(status -> {
             var current = store.currentOwned(id, owner);
+            if(AiRequestStore.SQL_ASSISTANCE_TYPE.equals(current.businessType())) throw new com.xinghuiTec.ai.contract.AiRuntimeException(ErrorCode.FORBIDDEN);
             if (current.status() != AiRequestStatus.RUNNING || !store.markOutputStarted(id, Instant.now())) return false;
             if(conversations!=null)conversations.delta(current,text);
             // A rolled-back output marker must never release a fragment. If this callback fails,
             // output_started is already durable, so the worker must end incomplete, never retry.
             afterCommit(() -> events.append(event(AiRuntimeEvents.Name.DELTA, current, text, null, null)));
             return true;
+        }));
+    }
+
+    /** Private raw generation text never enters conversation storage or the generic SSE buffer. */
+    boolean privateDelta(long id,AiRequestStore.Owner owner,String text,java.util.function.Consumer<String> sink) {
+        return Boolean.TRUE.equals(transaction.execute(status->{
+            var current=store.currentOwned(id,owner);
+            if(!AiRequestStore.SQL_ASSISTANCE_TYPE.equals(current.businessType())) throw new com.xinghuiTec.ai.contract.AiRuntimeException(ErrorCode.FORBIDDEN);
+            if(current.status()!=AiRequestStatus.RUNNING || !store.markOutputStarted(id,Instant.now())) return false;
+            afterCommit(()->sink.accept(text));return true;
         }));
     }
 

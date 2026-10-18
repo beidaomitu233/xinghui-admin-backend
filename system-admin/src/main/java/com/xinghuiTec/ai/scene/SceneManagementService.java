@@ -73,7 +73,7 @@ public class SceneManagementService {
             var runtime=data.getIfUnique();require(runtime!=null,503,"DEPENDENCY_UNAVAILABLE");
             AiSceneDataRuntime.CompiledScene compiled;
             try {
-                var editor=new AiSceneDataRuntime.EditorInput(definition.promptText(),"",selections,definition.dataBindings());
+                var editor=new AiSceneDataRuntime.EditorInput(definition.promptText(),"",selections,definition.dataBindings(),definition.sqlBindings());
                 if(head.legacyBaseVersion()!=null){
                     var view=legacyView(head,actor);require(view.compatibility()==AiSceneLegacyTemplates.Compatibility.CONVERTIBLE,409,"LEGACY_READ_ONLY");
                     boolean first=scenes.version(head.currentVersion()).compiled()==null;
@@ -82,12 +82,37 @@ public class SceneManagementService {
                 }else compiled=runtime.compile(editor,actor,control(10));
             }
             catch(AiSceneDataRuntime.InvalidConfiguration invalid) {throw new SceneFailure(400,"INVALID_SCENE_CONFIGURATION",new SceneDtos.ErrorDetails(invalid.diagnostics().stream().map(d->new SceneDtos.FieldError(fieldPath(d.path()),d.code().name())).toList(),head.revision(),head.currentVersion(),null));}
-            require(compiled!=null,503,"DEPENDENCY_UNAVAILABLE");
+            require(compiled!=null && compiled.sqlBindings().size()==definition.sqlBindings().size(),503,"DEPENDENCY_UNAVAILABLE");
+            String requiredCurrentSource="lowcode."+head.formId();
+            if(head.kind()==SceneDtos.Kind.RECORD_SUMMARY && definition.dataObjects().isEmpty()
+                    && compiled.bindings().stream().noneMatch(b->requiredCurrentSource.equals(b.binding().sourceKey()) && b.binding().row()!=null && b.binding().row().currentRecord())
+                    && compiled.sqlBindings().stream().noneMatch(q->requiredCurrentSource.equals(q.compiled().currentRecordDatasetKey()))) throw SceneFailure.field("definition.sqlBindings","CURRENT_RECORD_REQUIRED");
             var policy=policy(head,definition,compiled);
             if(head.appId()==null){String app=execution.createApplication(head,policy,actor.subjectId());scenes.attachApplication(head,app);head=scenes.head(key,true);}
             String appVersion=execution.append(head,policy,definition,actor.subjectId());
             var version=scenes.insertVersion(head,appVersion,definition,compiled,actor.subjectId());scenes.activate(head,version,definition);
             var result=new SceneDtos.SaveResult(detail(key,actor),input.clientMutationId(),version.createdAt());scenes.mutation(key,input.clientMutationId(),fingerprint,result);return result;
+        });
+    }
+    /** Internal immutable model selection for assistance; never serialized by a controller. */
+    public record AssistanceRoute(String sceneKey,int revision,String appId,String appVersion,AiApplicationPolicy policy) {}
+    public AssistanceRoute assistanceRoute(SqlAssistanceDtos.Start input,TrustedActor actor) {
+        return references.withReferenceGuard(()->{
+            var h=scenes.head(input.sceneKey(),true);expected(h,input.expectedSceneRevision());
+            AiApplicationPolicy policy;String version=null;
+            if(h.currentVersion()!=null) {
+                require(input.initialModel()==null,409,"ROUTING_MANAGEMENT_REQUIRED");
+                var current=scenes.version(h.currentVersion());version=current.appVersion();policy=execution.policy(version);
+                require(policy.permitsSubject(actor),403,"FORBIDDEN");
+            }else {
+                require(input.initialModel()!=null,409,"MODEL_REQUIRED");
+                var model=input.initialModel();SceneStore.decimal(model.modelRef());SceneStore.decimal(model.configVersion());
+                policy=new AiApplicationPolicy(AiApplicationPolicy.ModelMode.FIXED,List.of(new AiProviderRuntime.ModelBinding(new ModelVersionRef(model.modelRef(),model.configVersion()),AiProviderRuntime.KeyMode.AUTO,Set.of(),null,List.of())),false,null,
+                        Set.of("description"),new Requirements(OutputFormat.TEXT,true,false),AiApplicationPolicy.Scope.FRONTEND,Set.of(actor.subjectId()),Set.of(),null,120,8,2,1024);
+            }
+            var provider=providers.getIfUnique();require(provider!=null,503,"DEPENDENCY_UNAVAILABLE");
+            require(provider.validateBindings(policy.models(),policy.requirements()).valid(),409,"ROUTING_UNAVAILABLE");
+            return new AssistanceRoute(h.key(),h.revision(),h.appId(),version,policy);
         });
     }
     public SceneRoutingDtos.View routing(String key) {
@@ -109,7 +134,7 @@ public class SceneManagementService {
             expected(head,input.expectedRevision());require(head.currentVersion()!=null,409,"SCENE_UNCONFIGURED");
             var current=scenes.version(head.currentVersion());require(current.definition()!=null && current.compiled()!=null,409,"LEGACY_EDITOR_UNAVAILABLE");
             var d=current.definition();
-            var definition=new SceneDtos.Definition(d.name(),d.purpose(),d.promptText(),d.outputRequirement(),d.dataObjects(),input.modelPolicy(),d.dataBindings());
+            var definition=new SceneDtos.Definition(d.name(),d.purpose(),d.promptText(),d.outputRequirement(),d.dataObjects(),input.modelPolicy(),d.dataBindings(),null,d.sqlBindings());
             validate(definition);var policy=policy(head,definition,current.compiled());
             var provider=providers.getIfUnique();require(provider!=null,503,"DEPENDENCY_UNAVAILABLE");
             var validation=provider.validateBindings(policy.models(),policy.requirements());
@@ -146,7 +171,7 @@ public class SceneManagementService {
             var provider=providers.getIfUnique();require(provider!=null,503,"DEPENDENCY_UNAVAILABLE");
             require(provider.validateBindings(List.of(new AiProviderRuntime.ModelBinding(new ModelVersionRef(model.modelRef(),model.configVersion()),AiProviderRuntime.KeyMode.AUTO,Set.of(),null,List.of())),new Requirements(OutputFormat.TEXT,true,false)).valid(),409,"ROUTING_UNAVAILABLE");
         }
-        return new SceneDtos.Definition(definition.name(),definition.purpose(),definition.promptText(),definition.outputRequirement(),definition.dataObjects(),route,definition.dataBindings());
+        return new SceneDtos.Definition(definition.name(),definition.purpose(),definition.promptText(),definition.outputRequirement(),definition.dataObjects(),route,definition.dataBindings(),null,definition.sqlBindings());
     }
     public SceneDtos.SaveResult enabled(String key,SceneDtos.Enabled input,TrustedActor actor) {
         require(input!=null && input.expectedRevision()>=0,400,"INVALID_INPUT");SceneStore.mutationId(input.clientMutationId());
@@ -209,13 +234,13 @@ public class SceneManagementService {
     private List<AiSceneDataRuntime.Selection> selections(SceneStore.Head h,SceneDtos.Definition d) {
         require(d.dataObjects().size()<=1,400,"INVALID_INPUT");
         if(h.kind()==SceneDtos.Kind.RECORD_SUMMARY && d.dataObjects().isEmpty()
-                && d.dataBindings().stream().noneMatch(b->("lowcode."+h.formId()).equals(b.sourceKey()) && b.row()!=null && b.row().currentRecord()))throw SceneFailure.field("definition.dataObjects","REQUIRED");
+                && d.dataBindings().stream().noneMatch(b->("lowcode."+h.formId()).equals(b.sourceKey()) && b.row()!=null && b.row().currentRecord()) && d.sqlBindings().isEmpty())throw SceneFailure.field("definition.dataObjects","REQUIRED");
         return d.dataObjects().stream().map(o->{String form=o.formId()==null?h.formId():o.formId();SceneStore.decimal(form);
             if(h.kind()==SceneDtos.Kind.RECORD_SUMMARY)require(h.formId().equals(form),400,"INVALID_INPUT");
             return new AiSceneDataRuntime.Selection(o.objectKey(),form,o.fields());}).toList();
     }
     private void validate(SceneDtos.Definition d) {
-        require(d.dataBindings().size()<=16,400,"INVALID_INPUT");
+        require(d.dataBindings().size()+d.sqlBindings().size()<=16,400,"INVALID_INPUT");
         if(d.promptText()==null)throw SceneFailure.field("definition.promptText","REQUIRED");
         text(d.name(),128,"name");purpose(d.purpose());require(d.modelPolicy()!=null,400,"INVALID_INPUT");
         var p=d.modelPolicy();require(p.mode()!=null && p.outputFormat()!=null && p.models()!=null && !p.models().isEmpty() && p.models().size()<=16,400,"INVALID_INPUT");
@@ -230,7 +255,7 @@ public class SceneManagementService {
     static SceneDtos.Definition singlePrompt(SceneDtos.Definition d){
         String prompt=d.promptText();
         if(d.outputRequirement()!=null && !d.outputRequirement().isEmpty())prompt=(prompt==null?"":prompt)+"\n\n输出要求：\n"+d.outputRequirement();
-        return new SceneDtos.Definition(d.name(),d.purpose(),prompt,"",d.dataObjects(),d.modelPolicy(),d.dataBindings(),d.initialModel());
+        return new SceneDtos.Definition(d.name(),d.purpose(),prompt,"",d.dataObjects(),d.modelPolicy(),d.dataBindings(),d.initialModel(),d.sqlBindings());
     }
     private String fingerprint(String kind,Object input){try{return cipher.fingerprint("ai:scene-mutation:v1",mapper.writeValueAsBytes(Map.of("kind",kind,"input",input)));}catch(Exception invalid){throw new SceneFailure(503,"CREDENTIAL_UNAVAILABLE");}}
     private void text(String text,int limit,String field){if(text==null || text.isBlank() || text.length()>limit || text.codePoints().anyMatch(Character::isISOControl))throw SceneFailure.field(field,"INVALID_INPUT");}
