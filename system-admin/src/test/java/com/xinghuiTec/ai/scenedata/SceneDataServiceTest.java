@@ -58,6 +58,29 @@ public class SceneDataServiceTest {
         assertDoesNotThrow(() -> service.compile(editor("{{user_request:用户要求:补充说明}}"), actor(), control()));
     }
 
+    @Test void sqlBindingsCompileWithoutSamplesAndRenderOnceAsUserData() throws Exception {
+        var compiledCalls=new java.util.concurrent.atomic.AtomicInteger();var readCalls=new java.util.concurrent.atomic.AtomicInteger();var authorizedCalls=new java.util.concurrent.atomic.AtomicInteger();
+        service.queries(new AiSceneQueryRuntime() {
+            public AuthorizedSchema authorizedSchema(TrustedActor a,QueryContext c,InvocationControl i){throw new AssertionError("Not a generation flow");}
+            public SqlValidation validateGeneratedSql(SqlQuery q,TrustedActor a,QueryContext c,InvocationControl i){throw new AssertionError("Compile directly");}
+            public CompiledQuery compile(SqlQuery q,TrustedActor a,QueryContext c,InvocationControl i){assertNull(c.businessRef());compiledCalls.incrementAndGet();return new CompiledQuery(AiSceneQueryRuntime.COMPILER_VERSION,q,List.of(),List.of(),"test",null);}
+            public QueryResult preview(SqlQuery q,TrustedActor a,QueryContext c,InvocationControl i){throw new AssertionError("Compilation must never preview");}
+            public QueryResult read(CompiledQuery q,TrustedActor a,QueryContext c,InvocationControl i){assertEquals("101",a.subjectId());assertEquals("1:11",c.businessRef().id());readCalls.incrementAndGet();return new QueryResult(List.of(new QueryColumn("name","名称","STRING",false)),List.of(Map.of("name","业务 {{user_request}} $1")),1,false,List.of());}
+            public void authorize(CompiledQuery q,TrustedActor a,QueryContext c,InvocationControl i){authorizedCalls.incrementAndGet();}
+        });
+        var binding=new AiSceneQueryRuntime.QueryBinding("orders","订单:汇总","",List.of("db.orders"),new AiSceneQueryRuntime.SqlQuery("select name from orders",Map.of(),20));
+        var input=new EditorInput("分析{{orders:订单:汇总}} / {{user_request:用户要求}}","",List.of(),List.of(),List.of(binding));
+        var compiled=service.compile(input,actor(),control());assertEquals(1,compiledCalls.get());assertEquals(0,readCalls.get());
+        compiled=json.readValue(json.writeValueAsBytes(compiled),CompiledScene.class);assertEquals(AiSceneDataRuntime.QUERY_COMPILER_VERSION,compiled.compilerVersion());
+        service.authorize(compiled,context("11"),control());assertEquals(1,authorizedCalls.get());assertEquals(0,readCalls.get());
+        var result=service.render(compiled,context("11"),new AiInputs(Map.of("user_request","简短")),control());assertEquals(1,readCalls.get());
+        assertTrue(result.messages().stream().filter(m->m.role()==MessageRole.USER).anyMatch(m->m.content().contains("业务 {{user_request}} $1")));
+        assertFalse(result.messages().stream().filter(m->m.role()==MessageRole.SYSTEM).anyMatch(m->m.content().contains("业务 {{user_request}} $1")));
+        assertEquals("orders",result.bindingPreview().reads().get(0).variable());assertEquals(1,result.bindingPreview().reads().get(0).rowCount());
+        var fixed=compiled;assertThrows(InvalidConfiguration.class,()->ScenePromptCompiler.compile(input,s->{throw new AssertionError();}));
+        assertEquals(1,fixed.sqlBindings().size());
+    }
+
     @Test void catalogMetadataAndSamplesExposeOnlyAllowedIdentities(){
         assertEquals("lowcode.record",service.catalog(actor(),control()).objects().get(0).objectKey());
         var forms=service.forms(new OptionQuery(null,1,20),actor(),control());assertEquals("1",forms.total());assertEquals("公开表单",forms.records().get(0).name());

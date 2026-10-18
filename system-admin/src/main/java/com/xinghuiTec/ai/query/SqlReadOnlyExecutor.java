@@ -155,6 +155,8 @@ public final class SqlReadOnlyExecutor {
         if (value instanceof Timestamp timestamp) return timestamp.toLocalDateTime().toString();
         if (value instanceof java.sql.Date date) return date.toLocalDate().toString();
         if (value instanceof java.sql.Time time) return time.toLocalTime().toString();
+        if (value instanceof LocalDateTime || value instanceof LocalDate || value instanceof LocalTime
+                || value instanceof OffsetDateTime || value instanceof OffsetTime || value instanceof Instant) return value.toString();
         throw new SqlQueryException(SCHEMA_CHANGED);
     }
     private static int seconds(InvocationControl control) {

@@ -32,11 +32,13 @@ class SceneQueryHttpSecurityTest {
         @Bean SceneQueryController controller(FakeRuntime runtime,AiInvocationIdentity identity){return new SceneQueryController(runtime,identity);}
     }
     static class FakeRuntime implements AiSceneQueryRuntime {
-        int calls;TrustedActor actor;
+        int calls;TrustedActor actor;SqlQuery lastQuery;
         public AuthorizedSchema authorizedSchema(TrustedActor actor,QueryContext context,InvocationControl control){this.actor=actor;calls++;return new AuthorizedSchema(List.of(),List.of(),List.of(),"safe","fingerprint");}
         public SqlValidation validateGeneratedSql(SqlQuery q,TrustedActor a,QueryContext c,InvocationControl i){calls++;return new SqlValidation(true,q.sql(),List.of(),List.of(),"fingerprint");}
         public CompiledQuery compile(SqlQuery q,TrustedActor a,QueryContext c,InvocationControl i){throw new UnsupportedOperationException();}
-        public QueryResult preview(SqlQuery q,TrustedActor a,QueryContext c,InvocationControl i){calls++;return new QueryResult(List.of(),List.of(),0,false,List.of());}
+        public QueryResult preview(SqlQuery q,TrustedActor a,QueryContext c,InvocationControl i){calls++;lastQuery=q;
+            if(q.sql().equals("select decimal_fixture"))return new QueryResult(List.of(new QueryColumn("amount","金额","DECIMAL",false)),List.of(Map.of("amount",new java.math.BigDecimal("1234567890123456789.12345678"))),1,false,List.of());
+            return new QueryResult(List.of(),List.of(),0,false,List.of());}
         public QueryResult read(CompiledQuery q,TrustedActor a,QueryContext c,InvocationControl i){throw new UnsupportedOperationException();}
         public void authorize(CompiledQuery q,TrustedActor a,QueryContext c,InvocationControl i){throw new UnsupportedOperationException();}
     }
@@ -64,5 +66,27 @@ class SceneQueryHttpSecurityTest {
         for(String value:List.of("{\"datasetKeys\":[],\"datasetKeys\":[]}","{\"actor\":{\"tenantId\":\"other\"}}", "{\"scope\":\"PLATFORM\"}"))
             http.perform(post("/system/ai/scene-data/sql/schema").with(authentication(login("ai:scene:query"))).contentType("application/json").content(value)).andExpect(status().isBadRequest());
         http.perform(post("/system/ai/scene-data/sql/schema").with(authentication(login("ai:scene:query"))).contentType("application/json").content(" ".repeat(65537))).andExpect(status().isPayloadTooLarge());assertEquals(0,runtime.calls);
+    }
+    @Test void adjacentNineteenDigitParametersSurviveHttpJsonRoundTrip()throws Exception {
+        var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
+        for(String number:List.of("9007199254740993123","9007199254740993124")) {
+            var query=new SqlQuery("select id from orders where id=:key",Map.of("key",new java.math.BigDecimal(number),"code","00123"),20);
+            String outgoing=mapper.writeValueAsString(Map.of("datasetKeys",List.of("db.orders"),"query",query));
+            // Browser JSON.parse/stringify sees strings in a typed number envelope, never the rounded JS number.
+            String roundTrip=mapper.writeValueAsString(mapper.readValue(outgoing,Map.class));
+            assertTrue(roundTrip.contains("\"$number\":\""+number+"\""));
+            http.perform(post("/system/ai/scene-data/sql/preview").with(authentication(login("ai:scene:test"))).contentType("application/json").content(roundTrip)).andExpect(status().isOk());
+            assertEquals(new java.math.BigDecimal(number),runtime.lastQuery.parameters().get("key"));assertEquals("00123",runtime.lastQuery.parameters().get("code"));
+            // Non-sensitive synthetic parameter evidence can also be parsed by an actual ECMAScript JSON runtime.
+            System.out.println("SQL_NUMBER_ENVELOPE "+mapper.writeValueAsString(mapper.readTree(outgoing).path("query").path("parameters")));
+        }
+    }
+    @Test void publicRowsAreExactTextWhileInternalRowsRemainNumbers()throws Exception {
+        var response=http.perform(post("/system/ai/scene-data/sql/preview").with(authentication(login("ai:scene:test"))).contentType("application/json")
+                .content("{\"query\":{\"sql\":\"select decimal_fixture\",\"maxRows\":20}}" )).andExpect(status().isOk()).andReturn().getResponse();
+        var tree=new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.getContentAsString());
+        assertEquals("1234567890123456789.12345678",tree.path("data").path("rows").get(0).path("amount").textValue());
+        var result=runtime.preview(runtime.lastQuery,null,null,null);assertInstanceOf(java.math.BigDecimal.class,result.rows().get(0).get("amount"));
+        assertTrue(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(result.rows()).contains("1234567890123456789.12345678"));
     }
 }

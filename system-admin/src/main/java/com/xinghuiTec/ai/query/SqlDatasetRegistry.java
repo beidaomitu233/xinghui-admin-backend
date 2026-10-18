@@ -110,7 +110,7 @@ public final class SqlDatasetRegistry {
             String type = sqlType(actual.type());
             if (type == null) continue;
             columns.add(new QueryColumn(field.getKey(), label(actual.comment(), field.getKey()), type, actual.nullable()));
-            projection.add((type.equals("STRING") ? "LEFT(" + q(actual.name()) + ",8193)" : q(actual.name())) + " AS " + q(field.getKey()));
+            projection.add(q(actual.name()) + " AS " + q(field.getKey()));
         }
         if (columns.isEmpty() || columns.size() > 64) throw new SqlQueryException(RESULT_LIMIT);
         var conditions = new ArrayList<String>();
@@ -189,7 +189,7 @@ public final class SqlDatasetRegistry {
             if (type.equals("DECIMAL")) expression = "CASE WHEN JSON_TYPE(" + json + ") IN ('INTEGER','DOUBLE','DECIMAL') THEN CAST(JSON_UNQUOTE(" + json + ") AS DECIMAL(65,20)) END";
             else if (type.equals("BOOLEAN")) expression = "CASE WHEN JSON_TYPE(" + json + ")='BOOLEAN' THEN (JSON_UNQUOTE(" + json + ")='true') END";
             else if (type.equals("JSON")) expression = "CASE WHEN JSON_TYPE(" + json + ")='ARRAY' THEN " + json + " END";
-            else expression = "CASE WHEN JSON_TYPE(" + json + ")='STRING' THEN LEFT(JSON_UNQUOTE(" + json + "),8193) END";
+            else expression = "CASE WHEN JSON_TYPE(" + json + ")='STRING' THEN JSON_UNQUOTE(" + json + ") END";
             projection.add("CASE WHEN r.schema_version IN (" + String.join(",", compatible) + ") THEN " + expression + " END AS " + q(field.fieldKey()));
             columns.add(new QueryColumn(field.fieldKey(), field.label(), type, true));
         }

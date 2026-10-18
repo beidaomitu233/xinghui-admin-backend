@@ -32,6 +32,10 @@ AuthorizedSchema字段：datasets（DatasetSchema[]）、supportedSyntax、trust
 
 SqlQuery为sql（1..16000字符）、parameters（最多32业务参数）、maxRows（1..200）。当前user/tenant/record的保留参数由服务端绑定，客户端同名值拒绝。输出Result均no-store/private；不记通用操作日志，不回显SQL异常、系统schema或真实参数值。受控参数须使用PreparedStatement；SQL字面常量在AST生成执行计划时也转换为绑定值，不直接拼接用户业务值。
 
+数值参数的HTTP及持久化编码为单键对象，如 `{"record_id":{"$number":"9007199254740993123"},"amount":{"$number":"12.34"},"code":"00123","active":true,"missing":null}`。服务端恢复BigDecimal，普通字符串不猜类型；数值精度最多65位、scale绝对值最多64。AI/服务端原始JSON number仍可被精确解析，但对外一律输出精确编码，以免浏览器JSON.parse后保存丢精度。高级JSON编辑器必须拒绝不安全普通number或做无损解析，不可在丢精度后安静保存。`$number`对象只接受该单键及合法十进制字符串；不能作为任意嵌套对象入口。
+
+公共QueryResult.rows中的数值单元格返回精确十进制**字符串**，例如 `"1234567890123456789.12345678"`，columns.type仍为DECIMAL/INTEGER。表格直接显示原文；不要Number()转换。布尔、null和字符串原样返回。Java内部rows仍保留Number；模型渲染读取内部rows后独立JSON编码，保持实际数字类型和精度。此规则只作用于查询预览rows，不修改全局Jackson。
+
 SqlValidation为valid/normalizedSql/columns/diagnostics/schemaFingerprint/currentRecordDatasetKey（可空）；静态非法SQL返回valid=false、安全枚举诊断，不执行查询。非空currentRecordDatasetKey表示动态上下文依赖，可以静态校验后保存并标注尚未试查；实际preview/read/authorize才校验可信业务上下文及来源行。QueryResult为columns/rows/rowCount/truncated/notices；rows保持实际JSON类型/null。查询最多200行、结果256KiB，并受10秒及InvocationControl总deadline/取消限制。长整型遵循项目REST Long字符串规则，调用模型的服务端JSON保持实际值精度。业务数字参数以精确十进制读取、规范化并持久化，避免默认ObjectMapper经double往返丢失精度。
 
 鉴权拒绝HTTP403；语法/数据集字段或不支持语法的实际执行请求HTTP422；参数/体积边界400/413；固定schema变化409；强制只读不可用503；查询超时504；取消按现有运行取消码处理。安全分类为QueryIssue中的固定枚举，不返回输入SQL/参数/provider正文。最终Controller映射随实现逐项验证，不由路径可见性授予权限。
@@ -60,6 +64,6 @@ QuerySnapshot包含binding及compiled，CompiledQuery保存query、datasets固�
 
 初版支持单条SELECT、明确列/安全别名、允许的比较/AND/OR、受控INNER/LEFT JOIN、GROUP BY/有界排序及白名单聚合。UNION、子查询、CTE、递归/窗口、写入/DDL、多语句、系统schema、文件/锁/会话操作、危险或未知函数一律拒绝。隐藏prompt使用authorizedSchema返回的实际支持语法，不引导生成必失败SQL。
 
-通用业务表支持整数、十进制、布尔、日期时间及文本；不开放物理JSON、二进制和未知复杂类型。低代码多选仍按已声明JSON数组投影，既有安全JSON绑定保持兼容。字符串来源最多保留8193字符用于超限识别，响应最多保留8192并带RESULT_LIMIT通知；每查询最多64列、四个来源。当前记录参数只匹配真实metadata单列主键；非id主键支持，复合主键的单参数上下文首版拒绝。对同名SQL虚拟数据集不按列表顺序猜来源。
+通用业务表支持整数、十进制、布尔、日期时间及文本；不开放物理JSON、二进制和未知复杂类型。低代码多选仍按已声明JSON数组投影，既有安全JSON绑定保持兼容。只在服务端最终结果投影截取8193字符识别超限，响应最多保留8192并带RESULT_LIMIT通知；来源字段不预截断，以保留过滤、DISTINCT及聚合的真实语义。每查询最多64列、四个来源。当前记录参数只匹配真实metadata单列主键；非id主键支持，复合主键的单参数上下文首版拒绝。对同名SQL虚拟数据集不按列表顺序猜来源。
 
 每个来源先重写为服务端授权投影及内部tenant/owner/软删条件，再执行用户表达式，OR或JOIN不能消掉来源边界；敏感列在投影、过滤、JOIN、表达式中均不存在。数据库强制RO事务与Wall是第二道防线，不能以SELECT前缀或JDBC hint替代；SQL专用事务REQUIRES_NEW，MySQL实际SET TRANSACTION READ ONLY，禁止意外加入外层RW。可选SELECT-only账号是部署强化，不新增必须填写的连接配置页面。

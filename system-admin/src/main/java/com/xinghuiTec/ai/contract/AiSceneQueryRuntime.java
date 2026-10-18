@@ -60,6 +60,7 @@ public interface AiSceneQueryRuntime {
 
     /** Parameters are business values only. Reserved current_* values come exclusively from the server. */
     record SqlQuery(String sql, @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using=SqlQueryParametersDeserializer.class)
+                    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using=SqlQueryParametersSerializer.class)
                     Map<String, Object> parameters, int maxRows) {
         public SqlQuery {
             Objects.requireNonNull(sql);
@@ -68,8 +69,15 @@ public interface AiSceneQueryRuntime {
                 throw new IllegalArgumentException("Invalid query bounds");
             var canonical=new java.util.LinkedHashMap<String,Object>();
             parameters.forEach((name,value)-> {
+                if(!name.matches("[A-Za-z_][A-Za-z0-9_]{0,63}") || value instanceof String text && text.length()>2048)
+                    throw new IllegalArgumentException("Invalid query parameter");
                 if(value!=null && !(value instanceof String || value instanceof Boolean || value instanceof Number))throw new IllegalArgumentException("Invalid query parameter");
-                canonical.put(name,value instanceof Number n?new java.math.BigDecimal(n.toString()).stripTrailingZeros():value);
+                if(value instanceof Number n) {
+                    var decimal=new java.math.BigDecimal(n.toString());
+                    if(decimal.precision()>65 || Math.abs((long)decimal.scale())>64)throw new IllegalArgumentException("Invalid query number");
+                    value=decimal.stripTrailingZeros();
+                }
+                canonical.put(name,value);
             });
             parameters=java.util.Collections.unmodifiableMap(canonical);
         }
@@ -126,7 +134,8 @@ public interface AiSceneQueryRuntime {
         @Override public String toString() { return "CompiledQuery[REDACTED]"; }
     }
 
-    record QueryResult(List<QueryColumn> columns, List<Map<String, Object>> rows,
+    record QueryResult(List<QueryColumn> columns, @com.fasterxml.jackson.databind.annotation.JsonSerialize(using=SqlQueryRowsSerializer.class)
+                       List<Map<String, Object>> rows,
                        int rowCount, boolean truncated, List<QueryDiagnostic> notices) {
         public QueryResult {
             columns = List.copyOf(columns);

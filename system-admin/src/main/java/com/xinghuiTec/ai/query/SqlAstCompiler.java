@@ -77,6 +77,13 @@ public final class SqlAstCompiler {
             String normalized = readable.select(select, joins);
             var executable = new Emitter(query, sources, true, maximum);
             String sql = executable.select(select, joins);
+            // Cap only final returned strings. Capping source fields would silently change filters, DISTINCT and aggregation.
+            var output = new ArrayList<String>();
+            for(var column:readable.columns) {
+                String reference="`sql_result`."+quoted(column.name());
+                output.add((column.type().equals("STRING")||column.type().equals("JSON")?"LEFT("+reference+",8193)":reference)+" AS "+quoted(column.name()));
+            }
+            sql="SELECT /*+ MAX_EXECUTION_TIME(10000) */ "+String.join(", ",output)+" FROM ("+sql+") AS `sql_result`";
             var dependencies = new LinkedHashMap<String, List<QueryColumn>>();
             for (var source : sources.values()) {
                 var names = executable.dependencies.getOrDefault(source.dataset().schema().datasetKey(), new TreeSet<>());

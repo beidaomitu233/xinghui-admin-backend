@@ -28,7 +28,7 @@ class AiSceneSqlDruidMySqlIT {
     final String tenantA="qa"+nonce+"a",tenantB="qa"+nonce+"b";
     final long base=1_800_000_000_000_000_000L+Math.floorMod(System.nanoTime(),100_000_000L)*100;
     final Set<String> grants=Set.of("ai:scene:query","ai:data:database:read","lowcode:record:list","lowcode:record:query","qa:sql:read");
-    DruidDataSource source;JdbcTemplate jdbc;SceneQueryService runtime;SqlReadOnlyExecutor executor;long form;
+    DruidDataSource source;JdbcTemplate jdbc;SceneQueryService runtime;SqlReadOnlyExecutor executor;long form;boolean formCreated;
     final List<String> ownedTables=new ArrayList<>();final List<Long> users=new ArrayList<>(),menus=new ArrayList<>(),roles=new ArrayList<>(),tenants=new ArrayList<>();
     TrustedActor platform,a,b;
     InvocationControl control(){return control(10_000);}
@@ -87,6 +87,7 @@ class AiSceneSqlDruidMySqlIT {
         create(heavy,"n INT PRIMARY KEY");jdbc.batchUpdate("INSERT INTO `"+heavy+"` VALUES(?)",java.util.stream.IntStream.range(0,1000).mapToObj(i->new Object[]{i}).toList());
         String schema="{\"fields\":[{\"fieldKey\":\"subject\",\"label\":\"主题\",\"type\":\"text\",\"required\":false,\"maxLength\":100,\"options\":[],\"listVisible\":true,\"searchable\":true}]}";
         form=base+50;jdbc.update("INSERT INTO sys_lowcode_form(id,form_key,name,status,draft_schema,published_version,creator) VALUES(?,?,?,'enabled',?,1,?)",form,"sql_"+nonce,"SQL QA",schema,platform.subjectId());
+        formCreated=true;
         jdbc.update("INSERT INTO sys_lowcode_form_version(form_id,schema_version,schema_json,creator) VALUES(?,1,?,?)",form,schema,platform.subjectId());
         for(int i=0;i<3;i++)jdbc.update("INSERT INTO sys_lowcode_record(id,form_id,schema_version,tenant_id,creator,data_json) VALUES(?,?,1,?,?,?)",base+60+i,form,tenantIds[i],platform.subjectId(),"{\"subject\":\"lowcode"+i+"\"}");
         var actors=new SqlActorVerifier(jdbc,true);var fields=new LinkedHashMap<String,String>();for(String field:List.of("order_no","id","customer_id","name","amount"))fields.put(field,field);
@@ -98,7 +99,7 @@ class AiSceneSqlDruidMySqlIT {
     void create(String table,String ddl){jdbc.execute("CREATE TABLE `"+table+"` ("+ddl+") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");ownedTables.add(table);}
     @AfterAll void cleanup(){
         if(runtime!=null)runtime.close();if(jdbc!=null){
-            if(form!=0){jdbc.update("DELETE FROM sys_lowcode_record WHERE form_id=?",form);jdbc.update("DELETE FROM sys_lowcode_form_version WHERE form_id=?",form);jdbc.update("DELETE FROM sys_lowcode_form WHERE id=? AND form_key=?",form,"sql_"+nonce);}
+            if(formCreated){jdbc.update("DELETE FROM sys_lowcode_record WHERE form_id=?",form);jdbc.update("DELETE FROM sys_lowcode_form_version WHERE form_id=?",form);jdbc.update("DELETE FROM sys_lowcode_form WHERE id=? AND form_key=?",form,"sql_"+nonce);}
             for(long role:roles){jdbc.update("DELETE FROM sys_role_menu WHERE role_id=?",role);jdbc.update("DELETE FROM sys_user_role WHERE role_id=?",role);jdbc.update("DELETE FROM sys_role WHERE role_id=?",role);}
             for(long menu:menus)jdbc.update("DELETE FROM sys_menu WHERE menu_id=?",menu);for(long user:users)jdbc.update("DELETE FROM sys_user WHERE user_id=?",user);for(long tenant:tenants)jdbc.update("DELETE FROM sys_tenant WHERE id=?",tenant);
             for(String table:ownedTables)jdbc.execute("DROP TABLE `"+table+"`");
@@ -166,9 +167,38 @@ class AiSceneSqlDruidMySqlIT {
         assertTrue(failure instanceof SqlQueryException q && q.issue()==QueryIssue.QUERY_TIMEOUT || failure instanceof AiRuntimeException a && (a.code()==ErrorCode.DEADLINE_EXCEEDED||a.code()==ErrorCode.CANCELLED));
         assertEquals(1,read("select name from "+orders,platform,"db."+orders).rowCount());
     }
-    @Test void exactDecimalsNullParametersAndLikeEscapeExecuteThroughWall(){
+    @Test void exactDecimalsNullParametersAndLikeEscapeExecuteThroughWall()throws Exception{
         var params=new HashMap<String,Object>();params.put("fallback",null);
         var query=new SqlQuery("select amount,coalesce(name,:fallback) as label from "+orders+" where name like 'order!_%' escape '!' or name not like 'none%'",params,20);
         var result=runtime.preview(query,platform,context("db."+orders),control());assertEquals(1,result.rowCount());assertEquals(new BigDecimal("1234567890123456789.12345678"),result.rows().get(0).get("amount"));
+        var wire=new ObjectMapper().readTree(new ObjectMapper().writeValueAsBytes(result));assertEquals("1234567890123456789.12345678",wire.path("rows").get(0).path("amount").textValue());
+        assertTrue(new ObjectMapper().writeValueAsString(result.rows()).contains("1234567890123456789.12345678"));
+    }
+    @Test void supportedDateTimeBooleanNullAndLongTextKeepSqlSemantics(){
+        String types="qa_sql_types_"+nonce;create(types,"id BIGINT PRIMARY KEY,created_at DATETIME,happened TIMESTAMP NULL,record_date DATE,record_time TIME,active BIT(1),note TEXT,optional_amount DECIMAL(20,4)");
+        String longText="x".repeat(9000);
+        jdbc.update("INSERT INTO `"+types+"` VALUES(1,'2026-10-18 12:34:56','2026-10-18 12:34:56','2026-10-18','12:34:56',b'1',?,NULL)",longText);
+        var result=read("select * from "+types,platform,"db."+types);var row=result.rows().get(0);
+        assertTrue(row.get("created_at").toString().startsWith("2026-10-18T12:34:56"));assertTrue(row.get("happened").toString().startsWith("2026-10-18T12:34:56"));
+        assertEquals("2026-10-18",row.get("record_date"));assertEquals("12:34:56",row.get("record_time"));assertEquals(true,row.get("active"));assertNull(row.get("optional_amount"));
+        assertEquals(8192,row.get("note").toString().length());assertTrue(result.notices().stream().anyMatch(n->n.code()==QueryIssue.RESULT_LIMIT));
+        var aggregate=read("select length(note) as size from "+types+" where length(note)>8999",platform,"db."+types);
+        assertEquals(9000,((Number)aggregate.rows().get(0).get("size")).intValue());
+        jdbc.update("INSERT INTO `"+types+"`(id,note) VALUES(2,?)", "x".repeat(8999)+"y");
+        var distinct=read("select distinct note from "+types,platform,"db."+types);assertEquals(2,distinct.rowCount());
+        assertEquals(distinct.rows().get(0).get("note"),distinct.rows().get(1).get("note"),"Truncated displayed prefixes may match; DISTINCT must compare the original full values");
+    }
+    @Test void adjacentNineteenDigitIdsRemainExactAfterWireAndSavedSnapshot()throws Exception {
+        String exact="qa_sql_exact_"+nonce;create(exact,"record_key BIGINT PRIMARY KEY,name VARCHAR(20)");
+        long first=base+300,second=base+301;jdbc.update("INSERT INTO `"+exact+"` VALUES(?,'first'),(?,'second')",first,second);
+        var mapper=new ObjectMapper();
+        for(long id:new long[]{first,second}) {
+            var query=new SqlQuery("select name from "+exact+" where record_key=:key",Map.of("key",new BigDecimal(Long.toString(id))),20);
+            String wire=mapper.writeValueAsString(query);assertTrue(wire.contains("\"$number\":\""+id+"\""));
+            query=mapper.readValue(mapper.writeValueAsBytes(mapper.readValue(wire,Map.class)),SqlQuery.class);
+            var fixed=runtime.compile(query,platform,context("db."+exact),control());
+            fixed=mapper.readValue(mapper.writeValueAsBytes(fixed),CompiledQuery.class);
+            assertEquals(id==first?"first":"second",runtime.read(fixed,platform,context("db."+exact),control()).rows().get(0).get("name"));
+        }
     }
 }

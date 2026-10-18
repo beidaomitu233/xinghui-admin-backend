@@ -94,5 +94,9 @@ class SqlAstCompilerTest {
         var query=mapper.readValue("{\"sql\":\"select id from orders where amount=:value\",\"parameters\":{\"value\":1234567890123456789.12345678},\"maxRows\":20}",SqlQuery.class);
         assertEquals(new BigDecimal("1234567890123456789.12345678"),query.parameters().get("value"));
         assertEquals(query,mapper.readValue(mapper.writeValueAsBytes(query),SqlQuery.class));
+        var wire=mapper.readTree(mapper.writeValueAsBytes(query));
+        assertEquals("1234567890123456789.12345678",wire.path("parameters").path("value").path("$number").textValue());
+        var text=new SqlQuery(query.sql(),Map.of("value","00123"),20);
+        assertEquals("00123",mapper.readValue(mapper.writeValueAsBytes(text),SqlQuery.class).parameters().get("value"));
     }
 }
