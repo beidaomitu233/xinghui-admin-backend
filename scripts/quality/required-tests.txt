@@ -93,3 +93,8 @@ AiSettingsKeyRotationTest
 AiModelCatalogTest
 AiMultiChannelRuntimeTest
 ConversationDruidWallTest
+ScenePromptRoutingTest
+SqlAssistanceServiceTest
+SceneSqlBindingWiringTest
+SqlAstCompilerTest
+SceneQueryHttpSecurityTest

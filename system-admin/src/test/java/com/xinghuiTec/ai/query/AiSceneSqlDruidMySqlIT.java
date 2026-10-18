@@ -41,13 +41,24 @@ class AiSceneSqlDruidMySqlIT {
         String user=Objects.requireNonNull(System.getenv("DB_USERNAME"),"Missing DB_USERNAME");
         String password=Objects.requireNonNull(System.getenv("DB_PASSWORD"),"Missing DB_PASSWORD");
         boolean ci="true".equals(System.getenv("CI"));
-        if(ci){assertTrue(url.startsWith("jdbc:mysql://127.0.0.1:3306/xinghui_oss04_ci?"));assertEquals("oss04_ci",user);}
-        else {assertEquals("true",System.getenv("AI_SQL_C_NATIVE"));assertTrue(url.startsWith("jdbc:mysql://127.0.0.1:13319/aiux_c_20261017?"));assertEquals("aiux_c",user);}
+        boolean localC="true".equals(System.getenv("AI_SQL_C_NATIVE"));
+        boolean localPm="true".equals(System.getenv("AI_SQL_PM_NATIVE"));
+        String expectedSchema;
+        if(ci){
+            assertFalse(localC || localPm,"CI must use its declared service container");
+            assertTrue(url.startsWith("jdbc:mysql://127.0.0.1:3306/xinghui_oss04_ci?"));assertEquals("oss04_ci",user);expectedSchema="xinghui_oss04_ci";
+        } else {
+            assertTrue(localC ^ localPm,"Select exactly one explicitly assigned local QA mode");
+            expectedSchema=localPm?"aiprompt_pm_20261018":"aiux_c_20261017";
+            assertTrue(url.startsWith("jdbc:mysql://127.0.0.1:13319/"+expectedSchema+"?"));
+            assertEquals(localPm?"aipr_pm":"aiux_c",user);
+        }
         source=new DruidDataSource();source.setUrl(url);source.setUsername(user);source.setPassword(password);
         source.setDriverClassName("com.mysql.cj.jdbc.Driver");source.setDbType(DbType.mysql);source.setInitialSize(1);source.setMinIdle(0);source.setMaxActive(2);source.setMaxWait(3000);
         var wall=new WallFilter();wall.setDbType(DbType.mysql);wall.setConfig(new WallConfig());source.setProxyFilters(List.of(new StatFilter(),wall));
         jdbc=new JdbcTemplate(source);
-        assertEquals(ci?"xinghui_oss04_ci":"aiux_c_20261017",jdbc.queryForObject("SELECT DATABASE()",String.class));
+        assertEquals(expectedSchema,jdbc.queryForObject("SELECT DATABASE()",String.class));
+        assertEquals(ci?3306:13319,jdbc.queryForObject("SELECT @@port",Integer.class));
         String series=Objects.requireNonNull(System.getenv("OSS04_MYSQL_SERIES"),"Missing OSS04_MYSQL_SERIES");
         assertTrue(Set.of("5.7","8.0").contains(series));assertTrue(jdbc.queryForObject("SELECT VERSION()",String.class).startsWith(series+"."));
         assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=1",Integer.class)>0);
