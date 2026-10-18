@@ -11,10 +11,11 @@ import java.util.regex.Pattern;
 public final class ScenePromptCompiler {
     private ScenePromptCompiler() {}
     static final Set<String> FIELDS = Set.of("subject", "summary");
-    static final Pattern SLOT = Pattern.compile("\\{\\{([\\p{L}_][\\p{L}\\p{N}_.]{0,63})(?::([^{}\\r\\n:]{1,100}))?}}");
+    static final Pattern SLOT = Pattern.compile("\\{\\{([\\p{L}_][\\p{L}\\p{N}_.]{0,63})(?::([^{}\\r\\n]{1,100}))?}}");
 
     public static CompiledScene compile(EditorInput input, Function<Selection, FieldCatalog> metadata) {
         if (input == null) fail("definition", IssueCode.REQUIRED);
+        if (!input.sqlBindings().isEmpty()) fail("sqlBindings", IssueCode.INVALID_SELECTION);
         if (input.prompt().isBlank()) fail("prompt", IssueCode.REQUIRED);
         if (input.prompt().length() + input.outputInstructions().length() > 32000) fail("prompt", IssueCode.TOO_LONG);
         if (input.selections().size() > 1) fail("selections", IssueCode.INVALID_SELECTION);
@@ -39,6 +40,7 @@ public final class ScenePromptCompiler {
     }
 
     public static CompiledScene compileBindings(EditorInput input,List<BindingSnapshot> bindings) {
+        if(input != null && !input.sqlBindings().isEmpty())fail("sqlBindings",IssueCode.INVALID_SELECTION);
         if(input==null||input.prompt().isBlank())fail("prompt",IssueCode.REQUIRED);
         if(input.prompt().length()+input.outputInstructions().length()>32000)fail("prompt",IssueCode.TOO_LONG);
         if(!input.selections().isEmpty()||!input.bindings().equals(bindings.stream().map(BindingSnapshot::binding).toList()))fail("bindings",IssueCode.INVALID_SELECTION);
@@ -47,11 +49,28 @@ public final class ScenePromptCompiler {
         return new CompiledScene(AiSceneDataRuntime.BINDING_COMPILER_VERSION,input,List.of(),List.of(new InputVariable("user_request","用户要求",VariableType.STRING,required,2048)),List.of(),bindings);
     }
 
+    public static CompiledScene compileQueries(EditorInput input, List<BindingSnapshot> bindings,
+            List<com.xinghuiTec.ai.contract.AiSceneQueryRuntime.QuerySnapshot> queries) {
+        if(input==null||input.prompt().isBlank())fail("prompt",IssueCode.REQUIRED);
+        if(input.prompt().length()+input.outputInstructions().length()>32000)fail("prompt",IssueCode.TOO_LONG);
+        if(!input.selections().isEmpty() || queries.isEmpty() || bindings.size()+queries.size()>16
+                || !input.bindings().equals(bindings.stream().map(BindingSnapshot::binding).toList())
+                || !input.sqlBindings().equals(queries.stream().map(com.xinghuiTec.ai.contract.AiSceneQueryRuntime.QuerySnapshot::binding).toList()))
+            fail("sqlBindings",IssueCode.INVALID_SELECTION);
+        var names=new HashSet<String>(Set.of("user_request"));
+        for(var binding:bindings)if(!names.add(binding.binding().variable()))fail("bindings",IssueCode.INVALID_SELECTION);
+        for(var query:queries)if(!names.add(query.binding().variable()))fail("sqlBindings",IssueCode.INVALID_SELECTION);
+        boolean required=slots(input.prompt(),names,"prompt")|slots(input.outputInstructions(),names,"outputInstructions");
+        return new CompiledScene(AiSceneDataRuntime.QUERY_COMPILER_VERSION,input,List.of(),
+                List.of(new InputVariable("user_request","用户要求",VariableType.STRING,required,2048)),List.of(),bindings,queries);
+    }
+
     private static boolean slots(String text, Set<String> allowed, String path) {
         var matcher = SLOT.matcher(text); boolean required = false;
         while (matcher.find()) {
             if (matcher.group(2) != null && (!matcher.group(1).matches("[A-Za-z_][A-Za-z0-9_.]{0,63}")
-                    || matcher.group(2).isBlank() || matcher.group(2).chars().anyMatch(Character::isISOControl)))
+                    || matcher.group(2).isBlank() || matcher.group(2).length() > 100
+                    || matcher.group(2).codePoints().anyMatch(c -> Character.isISOControl(c) || c == 0x2028 || c == 0x2029)))
                 fail(path, IssueCode.INVALID_SYNTAX);
             if (!allowed.contains(matcher.group(1))) fail(path, IssueCode.UNKNOWN_VARIABLE);
             required |= matcher.group(1).equals("user_request");

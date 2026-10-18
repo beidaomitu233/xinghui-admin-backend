@@ -51,10 +51,11 @@ public class SceneDataServiceTest {
     }
 
     @Test void namedTokenCannotAuthorizeUnknownIdentityOrMalformedLabels() {
-        for (String text : List.of("{{not_allowed:主题}}", "{{user_request:}}", "{{user_request:含:冒号}}",
+        for (String text : List.of("{{not_allowed:主题}}", "{{user_request:}}", "{{user_request:破{坏}}",
                 "{{user_request:换\n行}}", "{{user_request:   }}", "{{user_request:控制\u0001符}}"))
             assertThrows(InvalidConfiguration.class, () -> service.compile(editor(text), actor(), control()));
         assertDoesNotThrow(() -> service.compile(editor("{{user_request:可更改的显示说明}}"), actor(), control()));
+        assertDoesNotThrow(() -> service.compile(editor("{{user_request:用户要求:补充说明}}"), actor(), control()));
     }
 
     @Test void catalogMetadataAndSamplesExposeOnlyAllowedIdentities(){
