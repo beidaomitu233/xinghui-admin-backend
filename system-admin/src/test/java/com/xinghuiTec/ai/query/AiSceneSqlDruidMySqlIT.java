@@ -107,6 +107,9 @@ class AiSceneSqlDruidMySqlIT {
     }
     @Test void platformDiscoversAndJoinsTwoOrdinaryNonRegisteredBusinessTables(){
         var catalog=runtime.catalog(new OptionQuery(nonce,1,100),platform,control());assertTrue(catalog.records().stream().anyMatch(row->row.datasetKey().equals("db."+orders)));
+        var validation=runtime.validateGeneratedSql(sql("select o.order_no,c.name from "+orders+" o join "+customers+" c on o.customer_id=c.customer_id"),
+                platform,context("db."+orders,"db."+customers,"db."+heavy),control());
+        assertTrue(validation.valid());assertEquals(List.of("db."+orders,"db."+customers),validation.usedDatasetKeys());
         var result=read("select o.order_no,c.name from "+orders+" o join "+customers+" c on o.customer_id=c.customer_id where o.amount>1",platform,"db."+orders,"db."+customers);
         assertEquals(1,result.rowCount());assertEquals("customer0",result.rows().get(0).get("name"));
     }

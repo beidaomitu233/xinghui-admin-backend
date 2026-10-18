@@ -113,12 +113,17 @@ public interface AiSceneQueryRuntime {
     }
 
     record SqlValidation(boolean valid, String normalizedSql, List<QueryColumn> columns,
-                         List<QueryDiagnostic> diagnostics, String schemaFingerprint, String currentRecordDatasetKey) {
+                         List<QueryDiagnostic> diagnostics, String schemaFingerprint, String currentRecordDatasetKey,
+                         List<String> usedDatasetKeys) {
+        public SqlValidation(boolean valid,String normalizedSql,List<QueryColumn> columns,List<QueryDiagnostic> diagnostics,
+                             String schemaFingerprint,String currentRecordDatasetKey) {
+            this(valid,normalizedSql,columns,diagnostics,schemaFingerprint,currentRecordDatasetKey,List.of());
+        }
         public SqlValidation(boolean valid, String normalizedSql, List<QueryColumn> columns,
                              List<QueryDiagnostic> diagnostics, String schemaFingerprint) {
             this(valid, normalizedSql, columns, diagnostics, schemaFingerprint, null);
         }
-        public SqlValidation { columns = List.copyOf(columns); diagnostics = List.copyOf(diagnostics); }
+        public SqlValidation { columns = List.copyOf(columns); diagnostics = List.copyOf(diagnostics);usedDatasetKeys=usedDatasetKeys==null?List.of():List.copyOf(usedDatasetKeys); }
         @Override public String toString() { return "SqlValidation[REDACTED]"; }
     }
 

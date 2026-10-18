@@ -54,7 +54,8 @@ public final class SceneQueryService implements AiSceneQueryRuntime {
             String fingerprint = schema(current, allowed).fingerprint();
             try {
                 var plan = compiler.compile(query, allowed);
-                return new SqlValidation(true, plan.normalizedSql(), plan.columns(), List.of(), fingerprint, plan.currentRecordDatasetKey());
+                return new SqlValidation(true, plan.normalizedSql(), plan.columns(), List.of(), fingerprint, plan.currentRecordDatasetKey(),
+                        plan.datasets().stream().map(dataset->dataset.schema().datasetKey()).toList());
             } catch (SqlQueryException invalid) {
                 return new SqlValidation(false, null, List.of(), List.of(new QueryDiagnostic("query", invalid.issue())), fingerprint);
             }

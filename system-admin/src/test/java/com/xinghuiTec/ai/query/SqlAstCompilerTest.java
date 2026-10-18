@@ -126,4 +126,16 @@ class SqlAstCompilerTest {
         }
         } finally {service.close();}
     }
+    @Test void validationActualDatasetListIsImmutableAndLegacyCompatible()throws Exception {
+        var legacy=new SqlValidation(true,"select id",List.of(),List.of(),"fingerprint",null);
+        assertEquals(List.of(),legacy.usedDatasetKeys());
+        var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
+        var missing=mapper.readValue("{\"valid\":true,\"normalizedSql\":\"select id\",\"columns\":[],\"diagnostics\":[],\"schemaFingerprint\":\"fingerprint\"}",SqlValidation.class);
+        assertEquals(List.of(),missing.usedDatasetKeys());
+        var plan=compile("select o.id from orders o");
+        var actual=new SqlValidation(true,plan.normalizedSql(),plan.columns(),List.of(),"fingerprint",null,
+                plan.datasets().stream().map(dataset->dataset.schema().datasetKey()).toList());
+        assertEquals(List.of("db.orders"),actual.usedDatasetKeys());assertEquals(actual,mapper.readValue(mapper.writeValueAsBytes(actual),SqlValidation.class));
+        assertThrows(UnsupportedOperationException.class,()->actual.usedDatasetKeys().add("db.customers"));
+    }
 }
