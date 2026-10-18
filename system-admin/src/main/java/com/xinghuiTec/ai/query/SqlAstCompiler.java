@@ -202,6 +202,7 @@ public final class SqlAstCompiler {
         String project(Expression expression, String requestedAlias) {
             if (columns.size() >= 64) fail(RESULT_LIMIT);
             String value = expr(expression, false, 0);
+            expression = unparenthesized(expression);
             String name = requestedAlias == null ? expression instanceof Column column
                     ? field(column).name() : "value_" + (columns.size() + 1) : identifier(requestedAlias);
             if (SqlDatasetRegistry.secret(name,"")) fail(FIELD_FORBIDDEN);
@@ -213,6 +214,7 @@ public final class SqlAstCompiler {
             return value + " AS " + quoted(name);
         }
         String type(Expression expression) {
+            expression = unparenthesized(expression);
             if (expression instanceof Column column) return field(column).type();
             if (expression instanceof Function function) {
                 String name = function.getName().toUpperCase(Locale.ROOT);
@@ -261,8 +263,8 @@ public final class SqlAstCompiler {
         }
         void currentRecord(Expression expression) {
             if (!(expression instanceof BinaryExpression binary)) return;
-            Expression parameter = binary.getRightExpression();
-            Expression column = binary.getLeftExpression();
+            Expression parameter = unparenthesized(binary.getRightExpression());
+            Expression column = unparenthesized(binary.getLeftExpression());
             if (parameter instanceof Column && column instanceof JdbcNamedParameter) { var swap = column; column = parameter; parameter = swap; }
             if (parameter instanceof JdbcNamedParameter named && "current_record_id".equals(named.getName())) {
                 if (!(column instanceof Column)) fail(PARAMETER_INVALID);
@@ -273,6 +275,11 @@ public final class SqlAstCompiler {
                 if (currentDataset != null && !currentDataset.equals(key)) fail(PARAMETER_INVALID);
                 currentDataset = key;
             }
+        }
+
+        Expression unparenthesized(Expression expression) {
+            while(expression instanceof ParenthesedExpressionList<?> list && list.size()==1)expression=list.get(0);
+            return expression;
         }
 
         String expr(Expression expression, boolean allowOutput, int depth) {
@@ -315,7 +322,9 @@ public final class SqlAstCompiler {
                 return "(" + signed.getSign() + expr(signed.getExpression(), allowOutput, depth + 1) + ")";
             }
             if (expression instanceof ParenthesedExpressionList<?> list && list.size() == 1)
-                return "(" + expr(list.get(0), allowOutput, depth + 1) + ")";
+                // Every supported operator emits its own precedence-preserving parentheses.
+                // Re-emitting parser grouping here would grow SQL on each saved-snapshot normalization.
+                return expr(list.get(0), allowOutput, depth + 1);
             if (expression instanceof NotExpression not) return "(NOT " + expr(not.getExpression(), allowOutput, depth + 1) + ")";
             if (expression instanceof IsNullExpression isNull) return "(" + expr(isNull.getLeftExpression(), allowOutput, depth + 1)
                     + (isNull.isNot() ? " IS NOT NULL)" : " IS NULL)");

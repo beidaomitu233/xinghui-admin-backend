@@ -148,9 +148,12 @@ class AiSceneSqlDruidMySqlIT {
             "select api_key from "+orders,"select name from "+orders+" where api_key='x'","select password from sys_user","delete from "+orders,"select name from mysql.user")){
         var result=runtime.validateGeneratedSql(sql(query),platform,context("db."+orders,"db."+customers),control());assertFalse(result.valid());assertNull(result.normalizedSql());}}
     @Test void realReadOnlyTransactionRejectsDmlAtDatabaseThenSameConnectionRecovers(){
-        source.setMaxActive(1);try{
+        // An already-used multi-connection pool may retain multiple idle physical connections even after maxActive shrinks.
+        // A fresh maxActive=1 pool makes identity/recovery assertions deterministic without removing them.
+        try(var single=singleConnectionSource()) {
+            var jdbc=new JdbcTemplate(single);var executor=new SqlReadOnlyExecutor(jdbc);
             long[] connection={0};executor.transaction(control(),()->{connection[0]=jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class);
-                assertEquals(1,serverReadOnly());
+                assertEquals(1,serverReadOnly(jdbc));
                 var client=assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("INSERT INTO `"+heavy+"` VALUES(1001)"));
                 assertInstanceOf(SQLException.class,client.getMostSpecificCause());
                 assertEquals("S1009",((SQLException)client.getMostSpecificCause()).getSQLState(),"Client guard is distinct from the database proof below");
@@ -168,13 +171,21 @@ class AiSceneSqlDruidMySqlIT {
                     return null;
                 });return true;});
             assertEquals(connection[0],jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class));
-            assertEquals(0,serverReadOnly());
+            assertEquals(0,serverReadOnly(jdbc));
             assertEquals(1,jdbc.update("INSERT INTO `"+heavy+"` VALUES(1001)"));jdbc.update("DELETE FROM `"+heavy+"` WHERE n=1001");
             var wall=assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.queryForObject("SELECT COUNT(*) FROM `"+heavy+"` WHERE 1=1",Integer.class));
             assertTrue(wall.getMostSpecificCause().getMessage().toLowerCase(Locale.ROOT).contains("sql injection violation"));
-        }finally{source.setMaxActive(2);}
+        }
+    }
+    DruidDataSource singleConnectionSource(){
+        var single=new DruidDataSource();single.setUrl(source.getUrl());single.setUsername(source.getUsername());single.setPassword(source.getPassword());
+        single.setDriverClassName("com.mysql.cj.jdbc.Driver");single.setDbType(DbType.mysql);single.setInitialSize(0);single.setMinIdle(0);single.setMaxActive(1);single.setMaxWait(3000);
+        var wall=new WallFilter();wall.setDbType(DbType.mysql);wall.setConfig(new WallConfig());single.setProxyFilters(List.of(new StatFilter(),wall));return single;
     }
     int serverReadOnly(){
+        return serverReadOnly(jdbc);
+    }
+    int serverReadOnly(JdbcTemplate jdbc){
         String version=jdbc.queryForObject("SELECT VERSION()",String.class);
         return jdbc.queryForObject(version.startsWith("5.7.")?"SELECT @@session.tx_read_only":"SELECT @@session.transaction_read_only",Integer.class);
     }

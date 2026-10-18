@@ -99,4 +99,31 @@ class SqlAstCompilerTest {
         var text=new SqlQuery(query.sql(),Map.of("value","00123"),20);
         assertEquals("00123",mapper.readValue(mapper.writeValueAsBytes(text),SqlQuery.class).parameters().get("value"));
     }
+    @Test void normalizationIsIdempotentAcrossSavedExpressionsAndJoins() throws Exception {
+        var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
+        var service=new SceneQueryService(null,null,compiler,null);
+        try {
+        for(String statement:List.of(
+                "select name from orders where amount>1",
+                "select name from orders where amount>1 or (customer_id=2 and name in ('x','y'))",
+                "select name from orders where not (amount>1 or name is null)",
+                "select (amount+1)*2 as adjusted from orders where (amount-1)/2>3",
+                "select (id), (amount) as price, min((amount)) as minimum from orders where amount>(1) group by id,amount",
+                "select id from orders where name not in ('x','y') and amount between 1 and 9",
+                "select id from orders where id=:current_record_id and customer_id=:current_user_id",
+                "select id from orders where amount=:minimum",
+                "select o.id,c.name from orders o left join customers c on o.customer_id=c.id where o.amount>1 or c.name is null")) {
+            var query=new SqlQuery(statement,Map.of("minimum",new BigDecimal("1.25")),20);
+            var first=compiler.compile(query,sources);
+            var second=compiler.compile(new SqlQuery(first.normalizedSql(),query.parameters(),first.maxRows()),sources);
+            var fixed=(CompiledQuery)org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"snapshot",query,first);
+            fixed=mapper.readValue(mapper.writeValueAsBytes(fixed),CompiledQuery.class);
+            var actual=(CompiledQuery)org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"snapshot",fixed.query(),second);
+            assertEquals(mapper.valueToTree(fixed),mapper.valueToTree(actual),"Actual saved and restored snapshots must match, including the fingerprint");
+            assertEquals(first.normalizedSql(),second.normalizedSql(),"Saved query normalization must not grow parentheses");
+            assertEquals(first.columns(),second.columns());assertEquals(first.dependencies(),second.dependencies());
+            assertEquals(first.currentRecordDatasetKey(),second.currentRecordDatasetKey());
+        }
+        } finally {service.close();}
+    }
 }
