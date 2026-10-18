@@ -110,7 +110,8 @@ class AiSceneSqlDruidMySqlIT {
         var result=read("select o.order_no,c.name from "+orders+" o join "+customers+" c on o.customer_id=c.customer_id where o.amount>1",platform,"db."+orders,"db."+customers);
         assertEquals(1,result.rowCount());assertEquals("customer0",result.rows().get(0).get("name"));
     }
-    @Test void platformGenericTableIsNotDelegatedToTenant(){assertThrows(RuntimeException.class,()->read("select order_no from "+orders,a,"db."+orders));}
+    @Test void platformGenericTableIsNotDelegatedToTenant(){assertEquals(QueryIssue.DATASET_FORBIDDEN,
+            assertThrows(SqlQueryException.class,()->read("select order_no from "+orders,a,"db."+orders)).issue());}
     @Test void tenantScopeSurvivesOrAndSoftDelete(){var rows=read("select name from scoped_orders where amount>0 or name='deleted'",a,"qa.tenant");assertEquals(Set.of("order1","other-owner"),new HashSet<>(rows.rows().stream().map(r->r.get("name")).toList()));}
     @Test void explicitPersonalScopeExcludesOtherOwner(){var rows=read("select name from personal_orders where amount>0 or name='other-owner'",a,"qa.personal");assertEquals(List.of("order1"),rows.rows().stream().map(r->r.get("name")).toList());}
     @Test void joinSourcesEachKeepTheirOwnershipBoundary(){var rows=read("select t.order_no,p.name from scoped_orders t left join personal_orders p on t.order_no=p.order_no order by t.order_no",a,"qa.tenant","qa.personal");assertEquals(2,rows.rowCount());assertEquals(1,rows.rows().stream().filter(r->r.get("name")==null).count());}
@@ -129,20 +130,20 @@ class AiSceneSqlDruidMySqlIT {
     @Test void addedUnrelatedColumnDoesNotExpandPinnedStar(){var ctx=context("db."+orders);var fixed=runtime.compile(sql("select * from "+orders),platform,ctx,control());
         jdbc.execute("ALTER TABLE `"+orders+"` ADD extra_column VARCHAR(20)");try{var result=runtime.read(fixed,platform,ctx,control());assertFalse(result.columns().stream().anyMatch(c->c.name().equals("extra_column")));}finally{jdbc.execute("ALTER TABLE `"+orders+"` DROP extra_column");}}
     @Test void queryOnlyDependencyDriftFailsClosed(){var ctx=context("db."+orders);var fixed=runtime.compile(sql("select name from "+orders+" where id>0"),platform,ctx,control());
-        jdbc.execute("ALTER TABLE `"+orders+"` MODIFY id VARCHAR(30)");try{assertThrows(SqlQueryException.class,()->runtime.read(fixed,platform,ctx,control()));}finally{jdbc.execute("ALTER TABLE `"+orders+"` MODIFY id BIGINT");}}
+        jdbc.execute("ALTER TABLE `"+orders+"` MODIFY id VARCHAR(30)");try{assertEquals(QueryIssue.SCHEMA_CHANGED,assertThrows(SqlQueryException.class,()->runtime.read(fixed,platform,ctx,control())).issue());}finally{jdbc.execute("ALTER TABLE `"+orders+"` MODIFY id BIGINT");}}
     @Test void scopeColumnDriftFailsClosed(){var ctx=context("qa.tenant");var fixed=runtime.compile(sql("select name from scoped_orders"),a,ctx,control());
-        jdbc.execute("ALTER TABLE `"+orders+"` MODIFY tenant_id VARCHAR(20) COMMENT 'changed guard'");try{assertThrows(SqlQueryException.class,()->runtime.read(fixed,a,ctx,control()));}finally{jdbc.execute("ALTER TABLE `"+orders+"` MODIFY tenant_id VARCHAR(20) COMMENT ''");}}
+        jdbc.execute("ALTER TABLE `"+orders+"` MODIFY tenant_id VARCHAR(20) COMMENT 'changed guard'");try{assertEquals(QueryIssue.SCHEMA_CHANGED,assertThrows(SqlQueryException.class,()->runtime.read(fixed,a,ctx,control())).issue());}finally{jdbc.execute("ALTER TABLE `"+orders+"` MODIFY tenant_id VARCHAR(20) COMMENT ''");}}
     @Test void realNonIdPrimaryKeySupportsNineteenDigitCurrentRecord() throws Exception {
         var ctx=context("db."+orders);var fixed=runtime.compile(sql("select name from "+orders+" where order_no=:current_record_id"),platform,ctx,control());
         String ref="db1."+Base64.getUrlEncoder().withoutPadding().encodeToString(new ObjectMapper().writeValueAsBytes(Map.of("sourceKey","db."+orders,"key",Map.of("order_no",Long.toString(base+200)))));
         assertEquals("order0",runtime.read(fixed,platform,new QueryContext(ctx.datasetKeys(),new BusinessRef("database.record",ref)),control()).rows().get(0).get("name"));
-        assertThrows(SqlQueryException.class,()->runtime.compile(sql("select name from "+orders+" where id=:current_record_id"),platform,ctx,control()));
-        assertThrows(SqlQueryException.class,()->runtime.read(fixed,platform,ctx,control()));
+        assertEquals(QueryIssue.PARAMETER_INVALID,assertThrows(SqlQueryException.class,()->runtime.compile(sql("select name from "+orders+" where id=:current_record_id"),platform,ctx,control())).issue());
+        assertEquals(QueryIssue.CONTEXT_REQUIRED,assertThrows(SqlQueryException.class,()->runtime.read(fixed,platform,ctx,control())).issue());
     }
     @Test void liveRoleRevocationRejectsAlreadyCompiledSnapshot(){var ctx=context("qa.tenant");var fixed=runtime.compile(sql("select name from scoped_orders"),a,ctx,control());long role=base+11;
-        jdbc.update("UPDATE sys_role SET status=0 WHERE role_id=?",role);try{assertThrows(AiRuntimeException.class,()->runtime.read(fixed,a,ctx,control()));}finally{jdbc.update("UPDATE sys_role SET status=1 WHERE role_id=?",role);}}
+        jdbc.update("UPDATE sys_role SET status=0 WHERE role_id=?",role);try{assertEquals(ErrorCode.RESOURCE_FORBIDDEN,assertThrows(AiRuntimeException.class,()->runtime.read(fixed,a,ctx,control())).code());}finally{jdbc.update("UPDATE sys_role SET status=1 WHERE role_id=?",role);}}
     @Test void liveTenantDisableRejectsBackgroundRead(){var ctx=context("qa.tenant");var fixed=runtime.compile(sql("select name from scoped_orders"),a,ctx,control());
-        jdbc.update("UPDATE sys_tenant SET status='1' WHERE tenant_id=?",tenantA);try{assertThrows(AiRuntimeException.class,()->runtime.read(fixed,a,ctx,control()));}finally{jdbc.update("UPDATE sys_tenant SET status='0' WHERE tenant_id=?",tenantA);}}
+        jdbc.update("UPDATE sys_tenant SET status='1' WHERE tenant_id=?",tenantA);try{assertEquals(ErrorCode.RESOURCE_FORBIDDEN,assertThrows(AiRuntimeException.class,()->runtime.read(fixed,a,ctx,control())).code());}finally{jdbc.update("UPDATE sys_tenant SET status='0' WHERE tenant_id=?",tenantA);}}
     @Test void unionSubquerySecretsSystemAndWritesNeverPassStaticReview(){for(String query:List.of("select order_no from "+orders+" union select customer_id from "+customers,"select name from (select name from "+orders+") x",
             "select api_key from "+orders,"select name from "+orders+" where api_key='x'","select password from sys_user","delete from "+orders,"select name from mysql.user")){
         var result=runtime.validateGeneratedSql(sql(query),platform,context("db."+orders,"db."+customers),control());assertFalse(result.valid());assertNull(result.normalizedSql());}}
