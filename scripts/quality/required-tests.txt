@@ -99,3 +99,4 @@ SceneSqlBindingWiringTest
 SqlAstCompilerTest
 SceneQueryHttpSecurityTest
 SqlTemporalDecodingTest
+ModelHubRuntimeTest
