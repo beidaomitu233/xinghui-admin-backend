@@ -10,7 +10,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 /** Applies to B scene endpoints only; global business Result and authentication handling remain intact. */
-@RestControllerAdvice(basePackages={"com.xinghuiTec.ai.scene","com.xinghuiTec.ai.conversation"})
+@RestControllerAdvice(basePackages={"com.xinghuiTec.ai.scene","com.xinghuiTec.ai.conversation","com.xinghuiTec.ai.modelhub"})
 public class SceneHttpErrors {
     @ExceptionHandler(com.xinghuiTec.ai.conversation.ConversationFailure.class) public ResponseEntity<Result<?>> conversation(com.xinghuiTec.ai.conversation.ConversationFailure error){
         var original=AiHttpFailures.response(error.status(),error.getMessage());

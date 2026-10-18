@@ -16,6 +16,7 @@ import static org.mockito.Mockito.*;
 public final class SqlAssistanceHttpFixture {
     public final OpenRouterTransport transport;
     public final AtomicInteger generations=new AtomicInteger();
+    public final List<String> generationModels=new CopyOnWriteArrayList<>();
     public final List<Integer> schemaChecksAtAttempt=new CopyOnWriteArrayList<>();
     public volatile IntSupplier schemaChecks=()->0;
     public volatile String output="{\"sql\":\"SELECT f.subject FROM form_1 f WHERE f.subject = :term\",\"parameters\":{\"term\":\"Alpha\"}}";
@@ -33,7 +34,7 @@ public final class SqlAssistanceHttpFixture {
             HttpRequest request=call.getArgument(0);var body=mapper.readTree(body(request));String model=body.path("model").asText();
             boolean stream=body.path("stream").asBoolean();String material=request.headers().firstValue("Authorization").orElseThrow();
             if(!stream)return CompletableFuture.completedFuture(response(200,mapper.writeValueAsString(Map.of("model",model,"choices",List.of(Map.of("message",Map.of("content","OK"),"finish_reason","stop"))))));
-            generations.incrementAndGet();schemaChecksAtAttempt.add(schemaChecks.getAsInt());systemMessage=body.path("messages").get(0).path("content").asText();
+            generations.incrementAndGet();generationModels.add(model);schemaChecksAtAttempt.add(schemaChecks.getAsInt());systemMessage=body.path("messages").get(0).path("content").asText();
             int status=material.contains("primary")?primaryStatus:secondaryStatus;
             String text=echoSystem?systemMessage:echoInParameter?mapper.writeValueAsString(Map.of("sql","SELECT f.subject FROM form_1 f WHERE f.subject = :term","parameters",Map.of("term",systemMessage))):output;
             String payload="data: "+mapper.writeValueAsString(Map.of("model",model,"choices",List.of(Map.of("delta",Map.of("content",text),"finish_reason","stop"))))+"\n\n"+(partial?"":"data: [DONE]\n\n");

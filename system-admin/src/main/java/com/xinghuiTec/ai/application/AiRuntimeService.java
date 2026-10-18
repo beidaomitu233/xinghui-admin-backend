@@ -50,6 +50,9 @@ public class AiRuntimeService {
         }
     }
     private AiSceneRequestAccess sceneAccess;
+    private com.xinghuiTec.ai.modelhub.ModelHubService modelHub;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void modelHub(com.xinghuiTec.ai.modelhub.ModelHubService hub){this.modelHub=hub;}
     private AiConversationRuntime conversations;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     public void conversations(AiConversationRuntime conversations){this.conversations=conversations;}
@@ -104,7 +107,7 @@ public class AiRuntimeService {
             var nativeScene=sceneAccess==null?null:sceneAccess.execution(version.appVersionId());
             if(nativeScene==null)throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
             var policy=version.snapshot().policy();policy.requireModelComplete();
-            if(test){
+            if(test && policy.businessModel()==null){
                 if(modelIndex<0 || modelIndex>=policy.models().size())throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
                 policy=new AiApplicationPolicy(AiApplicationPolicy.ModelMode.FIXED,List.of(policy.models().get(modelIndex)),false,null,
                         policy.inputNames(),policy.requirements(),policy.scope(),policy.allowedSubjects(),policy.allowedAuthorities(),policy.formId(),
@@ -173,6 +176,11 @@ public class AiRuntimeService {
         var invocation = new Invocation(actor, loaded.app().appId(), loaded.version(), input.businessRef(), accepted.request().requestId());
         InvocationControl control = control(accepted.request(), owner);
         try {
+            AiApplicationPolicy effectivePolicy=loaded.policy();
+            if(effectivePolicy.businessModel()!=null){
+                if(modelHub==null)throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
+                var frozen=modelHub.freeze(effectivePolicy);modelHub.pin(id,frozen,actor,loaded.test());effectivePolicy=frozen.policy();
+            }
             journal.stage(id, AiRequestStore.Stage.ACCEPTED, AiRequestJournal.Outcome.SUCCEEDED, null, null, null, null);
             if (!loaded.policy().inputNames().containsAll(input.inputs().keySet())) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             lifecycle.accepted(id, owner); // Verifies a genuinely volatile, available buffer before any model attempt.
@@ -186,7 +194,7 @@ public class AiRuntimeService {
                 int bytes=0;for(AiMessage message:messages)bytes=Math.addExact(bytes,message.content().getBytes(StandardCharsets.UTF_8).length);
                 if(bytes>65536)throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
                 journal.stage(id,AiRequestStore.Stage.RENDER,AiRequestJournal.Outcome.SUCCEEDED,null,null,null,null);
-                var work=new AiRequestExecutor.Work(invocation,loaded.policy(),messages,List.of(),input.inputs().keySet(),loaded.test(),
+                var work=new AiRequestExecutor.Work(invocation,effectivePolicy,messages,List.of(),input.inputs().keySet(),loaded.test(),
                         ()->authorizeEvents(status(id,actor),actor));
                 pool.execute(()->{try{worker.execute(work);}finally{dispatched.remove(id);}});
                 return accepted.request();
@@ -214,7 +222,7 @@ public class AiRuntimeService {
                         case OPTIONAL_RESOURCE_MISSING -> AiRequestJournal.Outcome.OPTIONAL_MISSING;
                         case TRUNCATED -> AiRequestJournal.Outcome.TRUNCATED;
                     }, null, AiRequestJournal.ReferenceKind.VARIABLE, notice.reference(), null);
-            var work = new AiRequestExecutor.Work(invocation, loaded.policy(), messages, rendered.resources(), input.inputs().keySet(), loaded.test());
+            var work = new AiRequestExecutor.Work(invocation, effectivePolicy, messages, rendered.resources(), input.inputs().keySet(), loaded.test());
             pool.execute(() -> {
                 try { worker.execute(work); }
                 finally { dispatched.remove(id); }
@@ -248,7 +256,7 @@ public class AiRuntimeService {
     public void dispatchPrivate(AiRequestExecutor.Work work,Runnable completed) {
         var owner=owner(work.invocation().actor());long id=AiApplicationService.positiveId(work.invocation().requestId());
         var request=requests.owned(id,owner);
-        if(work.privateOutput()==null || !AiRequestStore.SQL_ASSISTANCE_TYPE.equals(request.businessType())) throw new AiRuntimeException(ErrorCode.FORBIDDEN);
+        if(work.privateOutput()==null || !AiRequestStore.privateRequest(request.businessType())) throw new AiRuntimeException(ErrorCode.FORBIDDEN);
         if(closing) throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         dispatched.put(id,owner);
         try {
@@ -265,7 +273,7 @@ public class AiRuntimeService {
         AiRequestStore.Request request;
         try { request = requests.owned(id, owner(actor)); }
         catch (IllegalArgumentException notOwned) { throw new AiRuntimeException(ErrorCode.NOT_FOUND); }
-        if(AiRequestStore.SQL_ASSISTANCE_TYPE.equals(request.businessType())) throw new AiRuntimeException(ErrorCode.NOT_FOUND);
+        if(AiRequestStore.privateRequest(request.businessType())) throw new AiRuntimeException(ErrorCode.NOT_FOUND);
         AiApplicationPolicy policy = policy(request);
         if (!(request.kind() == AiRequestStore.Kind.TEST ? policy.permitsSubject(actor) : policy.permits(actor))) {
             throw new AiRuntimeException(ErrorCode.FORBIDDEN);
@@ -302,7 +310,7 @@ public class AiRuntimeService {
         if(conversations!=null)for(long prior:conversations.contextRequests(Long.parseLong(request.requestId())))authorizeSingle(status(prior,actor),actor);
     }
     private void authorizeSingle(AiRequestStore.Request request,TrustedActor actor) {
-        if(AiRequestStore.SQL_ASSISTANCE_TYPE.equals(request.businessType())) throw new AiRuntimeException(ErrorCode.NOT_FOUND);
+        if(AiRequestStore.privateRequest(request.businessType())) throw new AiRuntimeException(ErrorCode.NOT_FOUND);
         var policy = policy(request);
         if (request.kind() == AiRequestStore.Kind.TEST && request.appVersionId()==null && applications.get(AiApplicationService.positiveId(request.appId())).draftRevision()
                 != request.draftRevision()) throw new AiRuntimeException(ErrorCode.VERSION_CONFLICT);

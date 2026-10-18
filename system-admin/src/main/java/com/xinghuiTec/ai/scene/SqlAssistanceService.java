@@ -42,6 +42,9 @@ public class SqlAssistanceService {
     private final AiRuntimeService runtime;
     private final ObjectProvider<AiSceneQueryRuntime> queries;
     private final TransactionTemplate tx;
+    private com.xinghuiTec.ai.modelhub.ModelHubService modelHub;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void modelHub(com.xinghuiTec.ai.modelhub.ModelHubService hub){this.modelHub=hub;}
 
     public SqlAssistanceService(JdbcTemplate jdbc,ObjectMapper mapper,SecretCipher cipher,AiApplicationReferences references,
             SceneManagementService scenes,AiApplicationStore applications,AiRequestStore requests,AiRequestLifecycle lifecycle,
@@ -69,11 +72,14 @@ public class SqlAssistanceService {
                 return new Admission(id,false,null,null,schema,context);
             }
             var selected=scenes.assistanceRoute(input,actor);
+            com.xinghuiTec.ai.modelhub.ModelHubService.Frozen frozen=null;
+            if(selected.policy().businessModel()!=null){require(modelHub!=null,503,"DEPENDENCY_UNAVAILABLE");frozen=modelHub.freeze(selected.policy());selected=new SceneManagementService.AssistanceRoute(selected.sceneKey(),selected.revision(),selected.appId(),selected.appVersion(),frozen.policy());}
             var app=application(selected,actor);Instant now=Instant.now();
             var accepted=requests.accept(new AiRequestStore.Admission(app[0],app[1],null,AiRequestStore.Kind.BUSINESS,owner,
                     AiRequestStore.SQL_ASSISTANCE_TYPE,input.clientMutationId(),input.clientMutationId(),hash,now.plusSeconds(selected.policy().timeoutSeconds())),now);
             require(accepted.created(),409,"IDEMPOTENCY_CONFLICT");
             long id=Long.parseLong(accepted.request().requestId());
+            if(frozen!=null)modelHub.pin(id,frozen,actor,true);
             jdbc.update("INSERT INTO sys_ai_sql_assistance(request_id,owner_scope,mutation_id,input_fingerprint,scene_key,scene_revision,description,context_json,schema_fingerprint,scope_description) VALUES(?,?,?,?,?,?,?,?,?,?)",
                     id,owner.scope(),input.clientMutationId(),hash,input.sceneKey(),selected.revision(),input.description(),json(context),schema.fingerprint(),schema.scopeDescription());
             return new Admission(id,true,selected.policy(),Long.toString(app[1]),schema,context);

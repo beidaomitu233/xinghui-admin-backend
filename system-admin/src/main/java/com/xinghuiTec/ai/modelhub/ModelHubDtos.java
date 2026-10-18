@@ -20,5 +20,9 @@ public final class ModelHubDtos {
                         boolean enabled,Strategy strategy,boolean fallback,List<RouteView> routes,Health health,Instant updatedAt) {}
     public record Page(List<Model> records,String total,int pageNum,int pageSize) {}
     public record Test(int expectedRevision,String clientMutationId,boolean confirmedCosts) {}
-    public record TestView(String requestId,String status,String errorCode,int attemptCount,Instant deadline) {}
+    public record TestAttempt(int number,String providerCode,String upstreamModel,String status,String errorCode,String switchReason,Long elapsedMs) {}
+    public record TestView(String requestId,String status,String errorCode,int attemptCount,Instant deadline,List<TestAttempt> attempts) {
+        public TestView(String requestId,String status,String errorCode,int attemptCount,Instant deadline){this(requestId,status,errorCode,attemptCount,deadline,List.of());}
+        public TestView {attempts=List.copyOf(attempts);}
+    }
 }

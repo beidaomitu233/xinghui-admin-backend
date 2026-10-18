@@ -10,7 +10,8 @@ public final class SqlAssistanceDtos {
     public enum Status { QUEUED,RUNNING,VALIDATING,SUCCEEDED,FAILED,CANCELLED,TIMED_OUT,INCOMPLETE }
     public record Start(String sceneKey,int expectedSceneRevision,String description,List<String> datasetKeys,
                         SceneDtos.BusinessRef businessRef,SceneDtos.ModelRef initialModel,String expectedSchemaFingerprint,
-                        boolean confirmedCosts,String clientMutationId,int maxRows) {
+                        boolean confirmedCosts,String clientMutationId,int maxRows,String businessModel) {
+        public Start(String sceneKey,int expectedSceneRevision,String description,List<String> datasetKeys,SceneDtos.BusinessRef businessRef,SceneDtos.ModelRef initialModel,String expectedSchemaFingerprint,boolean confirmedCosts,String clientMutationId,int maxRows){this(sceneKey,expectedSceneRevision,description,datasetKeys,businessRef,initialModel,expectedSchemaFingerprint,confirmedCosts,clientMutationId,maxRows,null);}
         public Start {datasetKeys=datasetKeys==null?List.of():List.copyOf(datasetKeys);if(maxRows==0)maxRows=20;}
         @Override public String toString(){return "SqlAssistanceStart[REDACTED]";}
     }
