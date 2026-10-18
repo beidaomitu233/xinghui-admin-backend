@@ -44,5 +44,8 @@ public class ModelHubController {
     @GetMapping("/{id}/tests/{requestId}")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:config:test')")
     public Result<ModelHubDtos.TestView> test(@PathVariable String id,@PathVariable String requestId){return Result.ok(tests.get(id,requestId,identity.current()));}
+    @PostMapping("/{id}/tests/{requestId}/cancel")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:config:test')")
+    public Result<ModelHubDtos.TestView> cancel(@PathVariable String id,@PathVariable String requestId,HttpServletRequest request){body(request,ModelHubDtos.Cancel.class);return Result.ok(tests.cancel(id,requestId,identity.current()));}
     private <T>T body(HttpServletRequest request,Class<T> type){return codec.readSceneConfiguration((byte[])request.getAttribute(AiRuntimeBoundaryFilter.BODY),type);}
 }

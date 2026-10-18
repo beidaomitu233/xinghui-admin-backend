@@ -99,13 +99,14 @@ public class ModelHubService {
         jdbc.update("UPDATE sys_ai_business_model SET deleted=TRUE,enabled=FALSE,revision=revision+1,update_time=CURRENT_TIMESTAMP(3) WHERE model_id=?",id(value));return true;
     });}
     private void validate(Change d){
-        check(d!=null,400,"INVALID_INPUT");text(d.name(),50);text(d.capabilities(),128);text(d.contextWindow(),32);
+        check(d!=null,400,"INVALID_INPUT");text(d.name(),50);metadata(d.capabilities(),128);metadata(d.contextWindow(),32);
         check(d.slug()!=null&&d.slug().matches("[a-z0-9][a-z0-9._:-]{0,79}")&&d.strategy()!=null&&d.routes().size()<=16,400,"INVALID_INPUT");
         check(d.clientMutationId()!=null&&d.clientMutationId().matches("[a-fA-F0-9-]{36}"),400,"INVALID_MUTATION_ID");
         var identities=new HashSet<String>();var routeIds=new HashSet<String>();
         for(var r:d.routes()){check(r!=null,400,"INVALID_INPUT");id(r.channelId());text(r.upstreamModel(),128);check(identities.add(r.channelId()+"/"+r.upstreamModel()),400,"DUPLICATE_ROUTE");if(r.routeId()!=null)check(r.routeId().matches("[a-fA-F0-9-]{36}")&&routeIds.add(r.routeId()),400,"INVALID_ROUTE_ID");}
     }
     private void text(String s,int maximum){check(s!=null&&!s.isBlank()&&s.length()<=maximum&&s.codePoints().noneMatch(Character::isISOControl),400,"INVALID_INPUT");}
+    private void metadata(String s,int maximum){check(s!=null&&s.length()<=maximum&&s.codePoints().noneMatch(Character::isISOControl),400,"INVALID_INPUT");}
     private boolean textCapable(Change d){return !d.capabilities().contains("向量")&&!d.capabilities().toLowerCase(Locale.ROOT).contains("embedding");}
     private List<AiProviderRuntime.AvailableModel> available(Requirements requirements){var p=providers.getIfUnique();return p==null?List.of():p.availableModels(requirements);}
     private record Channel(String provider,String name,String status,Set<String> upstreamModels) {}

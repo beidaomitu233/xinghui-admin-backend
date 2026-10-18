@@ -140,6 +140,17 @@ public class ModelHubRuntimeTest {
         var done=finished(m,test(m).requestId());var other=new TrustedActor("102","tenant_b",actor.authorities(),null);assertEquals(404,assertThrows(SceneFailure.class,()->tests.get(m.modelId(),done.requestId(),other)).status());
         hub.delete(m.modelId(),m.revision());assertEquals(404,assertThrows(SceneFailure.class,()->hub.get(m.modelId())).status());
     }
+    @Test void privateCancellationStopsSameRequestAndIsOwnerScopedAndTerminalIdempotent()throws Exception{
+        var unknown=hub.save(null,new ModelHubDtos.Change(null,UUID.randomUUID().toString(),"Unknown metadata","unknown-metadata",null,null,false,ModelHubDtos.Strategy.PRIORITY,true,List.of()),actor);
+        assertEquals("",unknown.capabilities());assertEquals("",unknown.contextWindow());assertFalse(unknown.health().ready());
+        var m=model(ModelHubDtos.Strategy.PRIORITY,true);http.hold=true;var pending=test(m);assertTrue(http.entered.await(2,TimeUnit.SECONDS));
+        for(var other:List.of(new TrustedActor("102","tenant_a",actor.authorities(),null),new TrustedActor("101","tenant_b",actor.authorities(),null)))assertEquals(404,assertThrows(SceneFailure.class,()->tests.cancel(m.modelId(),pending.requestId(),other)).status());
+        var cancelled=tests.cancel(m.modelId(),pending.requestId(),actor);assertEquals(pending.requestId(),cancelled.requestId());assertEquals("CANCELLED",cancelled.status());
+        Instant end=Instant.now().plusSeconds(2);while(!http.pending.isCancelled()&&Instant.now().isBefore(end))Thread.sleep(5);assertTrue(http.pending.isCancelled());
+        assertEquals("CANCELLED",tests.cancel(m.modelId(),pending.requestId(),actor).status());assertEquals(1,http.generations.get());
+        assertEquals(ErrorCode.NOT_FOUND,assertThrows(AiRuntimeException.class,()->f.runtime.cancel(Long.parseLong(pending.requestId()),actor)).code());
+        http.hold=false;var done=finished(m,test(m).requestId());assertEquals("SUCCEEDED",done.status());assertEquals("SUCCEEDED",tests.cancel(m.modelId(),done.requestId(),actor).status());assertEquals(2,http.generations.get());
+    }
     @Configuration @EnableMethodSecurity static class Security {}
     private void login(String tenant,Set<String> rights){var user=new SysUser();user.setUserId(101L);user.setTenantId(tenant);var login=new LoginUser(user,new ArrayList<>(rights));login.setTenantId(tenant);SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(login,null,login.getAuthorities()));}
     @Test void actualHttpEnforcesPlatformActionPermissionsStrictBodyAndDedicatedTestAccess()throws Exception{

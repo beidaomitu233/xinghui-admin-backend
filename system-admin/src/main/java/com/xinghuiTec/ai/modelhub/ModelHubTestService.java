@@ -51,6 +51,11 @@ public class ModelHubTestService {
         }
         return get(modelId,admitted.request().requestId(),actor);
     }
+    public ModelHubDtos.TestView cancel(String modelId,String requestId,TrustedActor actor){
+        get(modelId,requestId,actor); // Reuse the exact model, owner, tenant and current action permission gate.
+        lifecycle.finish(id(requestId),new AiRequestStore.Owner(actor.subjectId(),actor.tenantId()),AiRequestStatus.CANCELLED,ErrorCode.CANCELLED,null);
+        return get(modelId,requestId,actor); // Terminal rows are immutable: duplicate cancel and completed tests remain stable.
+    }
     public ModelHubDtos.TestView get(String modelId,String requestId,TrustedActor actor){
         id(modelId);id(requestId);check(actor!=null&&actor.servicePrincipalRef()==null&&actor.authorities().contains("ai:config:test"),403,"FORBIDDEN");
         Long matches=jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_business_model_request WHERE request_id=? AND model_id=? AND owner_scope=? AND test_request=TRUE",Long.class,id(requestId),id(modelId),actor.subjectId()+"@"+actor.tenantId());check(matches!=null&&matches==1L,404,"NOT_FOUND");
