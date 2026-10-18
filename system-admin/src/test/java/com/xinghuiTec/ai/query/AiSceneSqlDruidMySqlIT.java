@@ -150,16 +150,48 @@ class AiSceneSqlDruidMySqlIT {
     @Test void realReadOnlyTransactionRejectsDmlAtDatabaseThenSameConnectionRecovers(){
         source.setMaxActive(1);try{
             long[] connection={0};executor.transaction(control(),()->{connection[0]=jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class);
-                var failure=assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("INSERT INTO `"+heavy+"` VALUES(1001)"));
-                var cause=failure.getMostSpecificCause();assertInstanceOf(SQLException.class,cause);var sql=(SQLException)cause;
-                assertTrue(sql.getErrorCode()==1792||"25006".equals(sql.getSQLState()),"Database must enforce RO independently of AST");return true;});
+                assertEquals(1,serverReadOnly());
+                var client=assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("INSERT INTO `"+heavy+"` VALUES(1001)"));
+                assertInstanceOf(SQLException.class,client.getMostSpecificCause());
+                assertEquals("S1009",((SQLException)client.getMostSpecificCause()).getSQLState(),"Client guard is distinct from the database proof below");
+                jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) pooled -> {
+                    var raw=pooled.unwrap(com.mysql.cj.jdbc.JdbcConnection.class);
+                    try(var statement=raw.createStatement()) {
+                        var nativeStatement=(com.mysql.cj.jdbc.StatementImpl)statement;
+                        // Test only: bypass the driver's client-side readOnly guard for this owned constant fixture INSERT.
+                        // No flags or Wall configuration change; only server error 1792/25006 proves DB enforcement.
+                        var failure=assertThrows(Exception.class,()->nativeStatement.executeSimpleNonQuery(raw,"INSERT INTO `"+heavy+"` VALUES(1001)"));
+                        if(failure instanceof SQLException sql){assertEquals(1792,sql.getErrorCode());assertEquals("25006",sql.getSQLState());}
+                        else if(failure instanceof com.mysql.cj.exceptions.CJException sql){assertEquals(1792,sql.getVendorCode());assertEquals("25006",sql.getSQLState());}
+                        else fail("Expected the actual server read-only error, not an application or driver guard");
+                    }
+                    return null;
+                });return true;});
             assertEquals(connection[0],jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class));
+            assertEquals(0,serverReadOnly());
             assertEquals(1,jdbc.update("INSERT INTO `"+heavy+"` VALUES(1001)"));jdbc.update("DELETE FROM `"+heavy+"` WHERE n=1001");
+            var wall=assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.queryForObject("SELECT COUNT(*) FROM `"+heavy+"` WHERE 1=1",Integer.class));
+            assertTrue(wall.getMostSpecificCause().getMessage().toLowerCase(Locale.ROOT).contains("sql injection violation"));
         }finally{source.setMaxActive(2);}
     }
+    int serverReadOnly(){
+        String version=jdbc.queryForObject("SELECT VERSION()",String.class);
+        return jdbc.queryForObject(version.startsWith("5.7.")?"SELECT @@session.tx_read_only":"SELECT @@session.transaction_read_only",Integer.class);
+    }
+    @Test void disabledServerPropagationCannotDegradeToJdbcHint(){
+        var properties=new java.util.Properties();properties.setProperty("user",source.getUsername());properties.setProperty("password",source.getPassword());
+        properties.setProperty("readOnlyPropagatesToServer","false");
+        var isolated=new org.springframework.jdbc.datasource.DriverManagerDataSource(source.getUrl(),properties);
+        var check=new JdbcTemplate(isolated);var readonly=new SqlReadOnlyExecutor(check);
+        var failure=assertThrows(org.springframework.transaction.CannotCreateTransactionException.class,
+                ()->readonly.transaction(control(),()->{fail("No body may run without confirmed server read-only");return true;}));
+        var cause=failure.getMostSpecificCause();assertInstanceOf(SQLException.class,cause);
+        assertEquals("25006",((SQLException)cause).getSQLState());assertEquals("AI_QUERY_READ_ONLY_UNAVAILABLE",cause.getMessage());
+    }
     @Test void innerReadOnlyNeverJoinsOuterWritableTransaction(){var manager=new DataSourceTransactionManager(source);var tx=new TransactionTemplate(manager);
-        tx.execute(status->{long outer=jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class);
-            executor.transaction(control(),()->{assertNotEquals(outer,jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class));return true;});
+        tx.execute(status->{long outer=jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class);assertEquals(0,serverReadOnly());
+            executor.transaction(control(),()->{assertNotEquals(outer,jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class));assertEquals(1,serverReadOnly());return true;});
+            assertEquals(0,serverReadOnly());
             assertEquals(1,jdbc.update("INSERT INTO `"+heavy+"` VALUES(1002)"));status.setRollbackOnly();return true;});
         assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM `"+heavy+"` WHERE n=1002",Integer.class));}
     @Test void timeoutCancelsActualComputationAndPoolStillReads(){

@@ -38,7 +38,24 @@ public final class SqlReadOnlyExecutor {
     private final DataSourceTransactionManager manager;
     public SqlReadOnlyExecutor(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        this.manager = new DataSourceTransactionManager(Objects.requireNonNull(jdbc.getDataSource()));
+        this.manager = new DataSourceTransactionManager(Objects.requireNonNull(jdbc.getDataSource())) {
+            @Override protected void prepareTransactionalConnection(Connection connection,TransactionDefinition definition)throws SQLException {
+                // Connector/J propagates setReadOnly(true) as fixed SESSION READ ONLY before transaction begin.
+                // Wall rejects Spring's additional SET TRANSACTION statement. Verify actual server mode instead;
+                // a driver-only hint, disabled propagation, unknown database or unreadable mode must fail closed.
+                if(!definition.isReadOnly() || !"MySQL".equals(connection.getMetaData().getDatabaseProductName()))
+                    throw new SQLException("AI_QUERY_READ_ONLY_UNAVAILABLE","25006");
+                String variable=connection.getMetaData().getDatabaseMajorVersion()==5
+                        && connection.getMetaData().getDatabaseMinorVersion()==7 ? "@@session.tx_read_only" : "@@session.transaction_read_only";
+                try(var statement=connection.createStatement()) {
+                    statement.setQueryTimeout(3);
+                    try(var result=statement.executeQuery("SELECT "+variable)) {
+                        if(!result.next() || result.getInt(1)!=1 || result.wasNull() || result.next())
+                            throw new SQLException("AI_QUERY_READ_ONLY_UNAVAILABLE","25006");
+                    }
+                }
+            }
+        };
         manager.setEnforceReadOnly(true);
         manager.setValidateExistingTransaction(true);
     }
