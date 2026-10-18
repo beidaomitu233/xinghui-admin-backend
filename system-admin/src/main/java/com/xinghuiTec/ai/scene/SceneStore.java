@@ -78,6 +78,13 @@ public class SceneStore {
             s.setString(5,json(definition));s.setString(6,json(compiled));s.setLong(7,Long.parseLong(actor));return s;},keys);
         require(keys.getKey()!=null,503,"DEPENDENCY_UNAVAILABLE");return version(keys.getKey().toString());
     }
+    Version insertRoutingVersion(Head head,Version previous,String appVersion,SceneDtos.Definition definition,String actor) {
+        Integer number=jdbc.queryForObject("SELECT COALESCE(MAX(version_number),0)+1 FROM sys_ai_scene_version WHERE scene_key=?",Integer.class,head.key);
+        var keys=new GeneratedKeyHolder();
+        jdbc.update(c->{var statement=c.prepareStatement("INSERT INTO sys_ai_scene_version(scene_key,version_number,saved_revision,app_version_id,definition_json,compiled_json,source,legacy_template_id,legacy_template_version_id,created_by) SELECT scene_key,?,?,?,?,compiled_json,source,legacy_template_id,legacy_template_version_id,? FROM sys_ai_scene_version WHERE scene_version_id=?",new String[]{"scene_version_id"});
+            statement.setInt(1,number);statement.setInt(2,head.revision+1);statement.setLong(3,Long.parseLong(appVersion));statement.setString(4,json(definition));statement.setLong(5,Long.parseLong(actor));statement.setLong(6,Long.parseLong(previous.id()));return statement;},keys);
+        require(keys.getKey()!=null,503,"STATE_UNAVAILABLE");return version(keys.getKey().toString());
+    }
     Head activate(Head head,Version version,SceneDtos.Definition definition) {
         require(jdbc.update("UPDATE sys_ai_scene SET name=?,purpose=?,current_version_id=?,revision=revision+1,"
                 +"compatibility_status='MAPPED',update_time=CURRENT_TIMESTAMP(3) WHERE scene_key=? AND revision=?",definition.name(),definition.purpose(),version.id,head.key,head.revision)==1,409,"VERSION_CONFLICT");

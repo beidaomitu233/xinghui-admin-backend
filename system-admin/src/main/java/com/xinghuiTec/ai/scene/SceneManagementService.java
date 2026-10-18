@@ -68,7 +68,7 @@ public class SceneManagementService {
         return references.withReferenceGuard(()->{
             var head=scenes.head(key,true);String fingerprint=fingerprint("SAVE",input);
             var replay=scenes.mutation(key,input.clientMutationId());if(replay!=null){require(replay.fingerprint().equals(fingerprint),409,"IDEMPOTENCY_CONFLICT");return replay.result();}
-            expected(head,input.expectedRevision());var definition=singlePrompt(input.definition());validate(definition);
+            expected(head,input.expectedRevision());var definition=bodyRouting(head,singlePrompt(input.definition()));validate(definition);
             var selections=selections(head,definition);
             var runtime=data.getIfUnique();require(runtime!=null,503,"DEPENDENCY_UNAVAILABLE");
             AiSceneDataRuntime.CompiledScene compiled;
@@ -89,6 +89,64 @@ public class SceneManagementService {
             var version=scenes.insertVersion(head,appVersion,definition,compiled,actor.subjectId());scenes.activate(head,version,definition);
             var result=new SceneDtos.SaveResult(detail(key,actor),input.clientMutationId(),version.createdAt());scenes.mutation(key,input.clientMutationId(),fingerprint,result);return result;
         });
+    }
+    public SceneRoutingDtos.View routing(String key) {
+        return references.withReferenceGuard(()->{
+            var head=scenes.head(key,true);
+            return new SceneRoutingDtos.View(key,head.revision(),head.currentVersion(),head.currentVersion()==null?null:wirePolicy(execution.policy(scenes.version(head.currentVersion()).appVersion())));
+        });
+    }
+    public SceneRoutingDtos.Saved routing(String key,SceneRoutingDtos.Change input,TrustedActor actor) {
+        require(input!=null && input.modelPolicy()!=null && input.expectedRevision()>=0,400,"INVALID_INPUT");SceneStore.mutationId(input.clientMutationId());
+        return references.withReferenceGuard(()->{
+            var head=scenes.head(key,true);String hash=fingerprint("ROUTING",input);
+            var replay=scenes.mutation(key,input.clientMutationId());
+            if(replay!=null) {
+                require(replay.fingerprint().equals(hash),409,"IDEMPOTENCY_CONFLICT");
+                var detail=replay.result().detail();
+                return new SceneRoutingDtos.Saved(new SceneRoutingDtos.View(key,detail.scene().revision(),detail.scene().currentVersionId(),detail.definition().modelPolicy()),input.clientMutationId(),replay.result().effectiveFrom());
+            }
+            expected(head,input.expectedRevision());require(head.currentVersion()!=null,409,"SCENE_UNCONFIGURED");
+            var current=scenes.version(head.currentVersion());require(current.definition()!=null && current.compiled()!=null,409,"LEGACY_EDITOR_UNAVAILABLE");
+            var d=current.definition();
+            var definition=new SceneDtos.Definition(d.name(),d.purpose(),d.promptText(),d.outputRequirement(),d.dataObjects(),input.modelPolicy(),d.dataBindings());
+            validate(definition);var policy=policy(head,definition,current.compiled());
+            var provider=providers.getIfUnique();require(provider!=null,503,"DEPENDENCY_UNAVAILABLE");
+            var validation=provider.validateBindings(policy.models(),policy.requirements());
+            require(validation.valid(),409,"ROUTING_UNAVAILABLE");
+            String appVersion=execution.append(head,policy,definition,actor.subjectId());
+            var version=scenes.insertRoutingVersion(head,current,appVersion,definition,actor.subjectId());scenes.activate(head,version,definition);
+            var detail=new SceneDtos.Detail(summary(scenes.head(key,false)),definition);
+            var result=new SceneDtos.SaveResult(detail,input.clientMutationId(),version.createdAt());scenes.mutation(key,input.clientMutationId(),hash,result);
+            return new SceneRoutingDtos.Saved(new SceneRoutingDtos.View(key,detail.scene().revision(),version.id(),definition.modelPolicy()),input.clientMutationId(),version.createdAt());
+        });
+    }
+    private boolean sameRouting(SceneDtos.ModelPolicy left,SceneDtos.ModelPolicy right) {
+        if(left.mode()!=right.mode() || left.fallback()!=right.fallback() || left.outputFormat()!=right.outputFormat()
+                || left.timeoutSeconds()!=right.timeoutSeconds() || left.maxAttempts()!=right.maxAttempts()
+                || left.maxConcurrent()!=right.maxConcurrent() || left.maxTokens()!=right.maxTokens() || left.models().size()!=right.models().size()) return false;
+        for(int i=0;i<left.models().size();i++) {
+            var one=left.models().get(i);var two=right.models().get(i);
+            if(!Objects.equals(one.model(),two.model()) || one.keyMode()!=two.keyMode() || !Set.copyOf(one.allowedKeys()).equals(Set.copyOf(two.allowedKeys()))
+                    || !Objects.equals(one.fixedKey(),two.fixedKey()) || !one.fallbackKeys().equals(two.fallbackKeys())) return false;
+        }
+        return true;
+    }
+    private SceneDtos.Definition bodyRouting(SceneStore.Head head,SceneDtos.Definition definition) {
+        SceneDtos.ModelPolicy route=definition.modelPolicy();
+        if(head.currentVersion()!=null) {
+            require(definition.initialModel()==null,409,"ROUTING_MANAGEMENT_REQUIRED");
+            var preserved=wirePolicy(execution.policy(scenes.version(head.currentVersion()).appVersion()));
+            require(route==null || sameRouting(route,preserved),409,"ROUTING_MANAGEMENT_REQUIRED");
+            route=preserved;
+        } else if(definition.initialModel()!=null) {
+            require(route==null,400,"INVALID_INPUT");
+            var model=definition.initialModel();SceneStore.decimal(model.modelRef());SceneStore.decimal(model.configVersion());
+            route=new SceneDtos.ModelPolicy(SceneDtos.ModelMode.FIXED,List.of(new SceneDtos.ModelBinding(model,SceneDtos.KeyMode.AUTO,List.of(),null,List.of())),false,SceneDtos.OutputFormat.TEXT,120,8,2,1024);
+            var provider=providers.getIfUnique();require(provider!=null,503,"DEPENDENCY_UNAVAILABLE");
+            require(provider.validateBindings(List.of(new AiProviderRuntime.ModelBinding(new ModelVersionRef(model.modelRef(),model.configVersion()),AiProviderRuntime.KeyMode.AUTO,Set.of(),null,List.of())),new Requirements(OutputFormat.TEXT,true,false)).valid(),409,"ROUTING_UNAVAILABLE");
+        }
+        return new SceneDtos.Definition(definition.name(),definition.purpose(),definition.promptText(),definition.outputRequirement(),definition.dataObjects(),route,definition.dataBindings());
     }
     public SceneDtos.SaveResult enabled(String key,SceneDtos.Enabled input,TrustedActor actor) {
         require(input!=null && input.expectedRevision()>=0,400,"INVALID_INPUT");SceneStore.mutationId(input.clientMutationId());
@@ -172,7 +230,7 @@ public class SceneManagementService {
     static SceneDtos.Definition singlePrompt(SceneDtos.Definition d){
         String prompt=d.promptText();
         if(d.outputRequirement()!=null && !d.outputRequirement().isEmpty())prompt=(prompt==null?"":prompt)+"\n\n输出要求：\n"+d.outputRequirement();
-        return new SceneDtos.Definition(d.name(),d.purpose(),prompt,"",d.dataObjects(),d.modelPolicy(),d.dataBindings());
+        return new SceneDtos.Definition(d.name(),d.purpose(),prompt,"",d.dataObjects(),d.modelPolicy(),d.dataBindings(),d.initialModel());
     }
     private String fingerprint(String kind,Object input){try{return cipher.fingerprint("ai:scene-mutation:v1",mapper.writeValueAsBytes(Map.of("kind",kind,"input",input)));}catch(Exception invalid){throw new SceneFailure(503,"CREDENTIAL_UNAVAILABLE");}}
     private void text(String text,int limit,String field){if(text==null || text.isBlank() || text.length()>limit || text.codePoints().anyMatch(Character::isISOControl))throw SceneFailure.field(field,"INVALID_INPUT");}
