@@ -98,3 +98,4 @@ SqlAssistanceServiceTest
 SceneSqlBindingWiringTest
 SqlAstCompilerTest
 SceneQueryHttpSecurityTest
+SqlTemporalDecodingTest
