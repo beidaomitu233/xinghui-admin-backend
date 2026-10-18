@@ -1,6 +1,7 @@
 package com.xinghuiTec.controller;
 
 import com.xinghuiTec.ai.config.*;
+import com.xinghuiTec.ai.application.AiInvocationIdentity;
 import com.xinghuiTec.utils.Result;
 import com.xinghuiTec.emues.ResultCodeEnum;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,8 +26,11 @@ public class AiModelCatalogController {
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private final AiModelCatalogService catalogs;
+    private final AiInvocationIdentity identity;
 
-    public AiModelCatalogController(AiModelCatalogService catalogs) { this.catalogs = catalogs; }
+    public AiModelCatalogController(AiModelCatalogService catalogs) {this(catalogs,new AiInvocationIdentity());}
+    @org.springframework.beans.factory.annotation.Autowired
+    public AiModelCatalogController(AiModelCatalogService catalogs,AiInvocationIdentity identity) { this.catalogs = catalogs;this.identity=identity; }
 
     @ModelAttribute
     public void noCache(HttpServletResponse response) { response.setHeader("Cache-Control", "no-store"); }
@@ -41,7 +45,25 @@ public class AiModelCatalogController {
 
     @PostMapping("/scan")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and (hasAuthority('ai:config:test') or hasAuthority('ai:model:test'))")
-    public Result<Page> scan(@RequestBody Scan request) { return Result.ok(catalogs.scan(request)); }
+    public Result<Page> scan(@RequestBody Scan request) { return Result.ok(catalogs.scan(request,identity.current())); }
+
+    @PostMapping("/attach")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and (hasAuthority('ai:config:add') or hasAuthority('ai:config:edit') or hasAuthority('ai:config:test') or hasAuthority('ai:model:add') or hasAuthority('ai:model:edit') or hasAuthority('ai:model:test'))")
+    public Result<StoredCatalog> attach(@RequestBody Attach request){return Result.ok(catalogs.attach(request,identity.current()));}
+
+    @GetMapping("/channels/{configId}")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and (hasAuthority('ai:config:query') or hasAuthority('ai:model:query'))")
+    public Result<StoredCatalog> stored(@PathVariable(name="configId") String configId,@RequestParam(name="keyId",required=false) String keyId,@RequestParam(name="search",required=false) String search,
+                                      @RequestParam(name="pageNum",defaultValue="1") int pageNum,@RequestParam(name="pageSize",defaultValue="20") int pageSize) {
+        return Result.ok(catalogs.stored(configId,keyId,search,pageNum,pageSize));
+    }
+
+    @GetMapping("/scans/{scanId}")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and (hasAuthority('ai:config:add') or hasAuthority('ai:config:edit') or hasAuthority('ai:config:test') or hasAuthority('ai:model:add') or hasAuthority('ai:model:edit') or hasAuthority('ai:model:test'))")
+    public Result<Page> savedScan(@PathVariable(name="scanId") String scanId,@RequestParam(name="search",required=false) String search,
+                                  @RequestParam(name="pageNum",defaultValue="1") int pageNum,@RequestParam(name="pageSize",defaultValue="20") int pageSize) {
+        return Result.ok(catalogs.savedScan(scanId,identity.current(),search,pageNum,pageSize));
+    }
 
     @PostMapping(value="/draft-scan", consumes="application/json")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and (hasAuthority('ai:config:add') or hasAuthority('ai:config:edit') or hasAuthority('ai:config:test') or hasAuthority('ai:model:add') or hasAuthority('ai:model:edit') or hasAuthority('ai:model:test'))")
@@ -53,7 +75,7 @@ public class AiModelCatalogController {
             draft = INPUT.readValue(body, DraftScan.class);
         } catch (AiModelCatalogException safe) { throw safe; }
         catch (Exception invalid) { throw new AiModelCatalogException(400, "INVALID_INPUT"); }
-        return Result.ok(catalogs.draftScan(draft));
+        return Result.ok(catalogs.draftScan(draft,identity.current()));
     }
 
     @ExceptionHandler(AiModelCatalogException.class)
@@ -64,6 +86,12 @@ public class AiModelCatalogController {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Result<Void>> forbidden() {
         return ResponseEntity.status(403).body(Result.fail(ResultCodeEnum.ADMIN_ACCESS_FORBIDDEN.getCode(), "AI_MODEL_CATALOG:FORBIDDEN"));
+    }
+
+    @ExceptionHandler(com.xinghuiTec.ai.contract.AiRuntimeException.class)
+    public ResponseEntity<Result<Void>> identity(com.xinghuiTec.ai.contract.AiRuntimeException error) {
+        int status=error.code()==com.xinghuiTec.ai.contract.AiTypes.ErrorCode.UNAUTHENTICATED?401:403;
+        return ResponseEntity.status(status).body(Result.fail(ResultCodeEnum.ADMIN_ACCESS_FORBIDDEN.getCode(),"AI_MODEL_CATALOG:FORBIDDEN"));
     }
 
     @ExceptionHandler(Exception.class)

@@ -22,6 +22,9 @@ import java.util.List;
  */
 @Repository
 public class AiRequestStore {
+    public static final String SQL_ASSISTANCE_TYPE="ai.sql.assist";
+    public static final String MODEL_HUB_TEST_TYPE="ai.modelhub.test";
+    public static boolean privateRequest(String type){return SQL_ASSISTANCE_TYPE.equals(type)||MODEL_HUB_TEST_TYPE.equals(type);}
     private final JdbcTemplate jdbc;
 
     public AiRequestStore(JdbcTemplate jdbc) {
@@ -53,7 +56,8 @@ public class AiRequestStore {
                 throw new IllegalArgumentException("Invalid admission");
             }
             if ((kind == Kind.BUSINESS && (appVersionId == null || appVersionId <= 0 || draftRevision != null))
-                    || (kind == Kind.TEST && sceneKey==null && (appVersionId != null || draftRevision == null || draftRevision <= 0))
+                    || (kind == Kind.TEST && sceneKey==null && !MODEL_HUB_TEST_TYPE.equals(businessType) && (appVersionId != null || draftRevision == null || draftRevision <= 0))
+                    || (kind == Kind.TEST && MODEL_HUB_TEST_TYPE.equals(businessType) && (appVersionId==null || appVersionId<=0 || draftRevision!=null || sceneKey!=null))
                     || (sceneKey!=null && (appVersionId==null || appVersionId<=0 || draftRevision!=null || sceneVersionId==null))) {
                 throw new IllegalArgumentException("Invalid version binding");
             }

@@ -15,7 +15,12 @@ public record AiApplicationPolicy(ModelMode modelMode, List<ModelBinding> models
                                   Requirements requirements, Scope scope,
                                   Set<String> allowedSubjects, Set<String> allowedAuthorities,
                                   String formId, int timeoutSeconds, int maxAttempts,
-                                  int maxConcurrent, int maxTokens) {
+                                  int maxConcurrent, int maxTokens, String businessModel) {
+    public AiApplicationPolicy(ModelMode modelMode,List<ModelBinding> models,boolean modelFallback,
+            TemplateVersionRef template,Set<String> inputNames,Requirements requirements,Scope scope,
+            Set<String> allowedSubjects,Set<String> allowedAuthorities,String formId,int timeoutSeconds,int maxAttempts,int maxConcurrent,int maxTokens){
+        this(modelMode,models,modelFallback,template,inputNames,requirements,scope,allowedSubjects,allowedAuthorities,formId,timeoutSeconds,maxAttempts,maxConcurrent,maxTokens,null);
+    }
     public enum ModelMode { FIXED, ROUND_ROBIN }
     public enum Scope { FRONTEND, BACKGROUND, BOTH }
 
@@ -23,6 +28,7 @@ public record AiApplicationPolicy(ModelMode modelMode, List<ModelBinding> models
         Objects.requireNonNull(modelMode);
         Objects.requireNonNull(requirements);
         Objects.requireNonNull(scope);
+        if(businessModel!=null && (!businessModel.matches("[a-z0-9][a-z0-9._:-]{0,79}") || !models.isEmpty()))throw new IllegalArgumentException("Invalid business model");
         models = List.copyOf(models);
         inputNames = Set.copyOf(inputNames);
         allowedSubjects = Set.copyOf(allowedSubjects);
@@ -47,8 +53,8 @@ public record AiApplicationPolicy(ModelMode modelMode, List<ModelBinding> models
 
     /** Native scenes carry C's compiled snapshot rather than inventing a template ID. */
     public void requireModelComplete() {
-        if (models.isEmpty() || (allowedSubjects.isEmpty() && allowedAuthorities.isEmpty())
-                || (modelMode == ModelMode.FIXED && !modelFallback && models.size() != 1)) {
+        if ((models.isEmpty() && businessModel==null) || (allowedSubjects.isEmpty() && allowedAuthorities.isEmpty())
+                || (businessModel==null && modelMode == ModelMode.FIXED && !modelFallback && models.size() != 1)) {
             throw new IllegalArgumentException("Incomplete application configuration");
         }
         if (requirements.tools()) throw new IllegalArgumentException("Tools require the second phase");

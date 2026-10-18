@@ -1,2 +1,3 @@
 ReleaseServicesIT
 AiConfigurationDruidMySqlIT
+AiSceneSqlDruidMySqlIT

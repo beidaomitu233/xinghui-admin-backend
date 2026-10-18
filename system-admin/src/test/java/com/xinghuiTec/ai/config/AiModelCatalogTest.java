@@ -27,7 +27,7 @@ class AiModelCatalogTest {
     volatile long delay;
     volatile Runnable callback;
     final AtomicInteger calls = new AtomicInteger();
-    volatile String path, authorization, method;
+    volatile String path, authorization, method,query;
 
     @BeforeEach void start() throws Exception {
         body = OPENROUTER;
@@ -38,6 +38,7 @@ class AiModelCatalogTest {
         server.createContext("/", exchange -> {
             calls.incrementAndGet();
             path = exchange.getRequestURI().getPath();
+            query = exchange.getRequestURI().getRawQuery();
             method = exchange.getRequestMethod();
             authorization = exchange.getRequestHeaders().getFirst("Authorization");
             if (callback != null) callback.run();
@@ -62,7 +63,7 @@ class AiModelCatalogTest {
                 URI.create("http://127.0.0.1:" + server.getAddress().getPort()), timeout);
     }
 
-    @AfterEach void stop() { if (server != null) server.stop(0); if (executor != null) executor.shutdownNow(); }
+    @AfterEach void stop() { if (server != null) server.stop(0); if (executor != null) executor.shutdownNow();org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
 
     Scan request() { return new Scan("123", "456", 3, "", 1, 20); }
 
@@ -112,6 +113,24 @@ class AiModelCatalogTest {
         assertTrue(model.supportedParameters().isEmpty());
         assertEquals("another-future-model", page.records().get(0).name());
         assertEquals(400, assertThrows(AiModelCatalogException.class, () -> transport.fetch("deepseek", null)).status());
+    }
+    @Test void openaiDirectoryKeepsUnknownCapabilitiesUnknownAndUsesOfficialEndpoint() {
+        body="{\"data\":[{\"id\":\"future-openai-model\",\"object\":\"model\",\"owned_by\":\"openai\"}]}";
+        var result=service.draftScan(new DraftScan("openai",KEY,"",1,20));
+        assertEquals("/v1/models",path);assertEquals("Bearer "+KEY,authorization);
+        var model=result.records().get(0);assertEquals("future-openai-model",model.code());assertNull(model.contextLength());assertNull(model.maxCompletionTokens());
+        assertEquals(List.of(),model.inputModalities());assertEquals(List.of(),model.outputModalities());assertFalse(result.generationVerified());
+    }
+    @Test void siliconflowDirectoryUsesOfficialChatSubtypeAndNeverInventsMetadata() {
+        body="{\"data\":[{\"id\":\"vendor/future-chat-model\",\"object\":\"model\"}]}";
+        var result=service.draftScan(new DraftScan("siliconflow",KEY,"",1,20));
+        assertEquals("/v1/models",path);assertEquals("sub_type=chat",query);assertEquals("Bearer "+KEY,authorization);
+        assertEquals("vendor/future-chat-model",result.records().get(0).code());assertNull(result.records().get(0).contextLength());assertFalse(result.generationVerified());
+    }
+    @Test void officialCatalogNeverAcceptsArbitraryCustomOrMismatchedDestination() {
+        assertEquals(422,assertThrows(AiModelCatalogException.class,()->service.draftScan(new DraftScan("custom",KEY,"",1,20,"https://evil.example/v1/chat/completions"))).status());
+        assertEquals(422,assertThrows(AiModelCatalogException.class,()->service.draftScan(new DraftScan("openai",KEY,"",1,20,"https://evil.example/v1/chat/completions"))).status());
+        assertEquals(0,calls.get());
     }
 
     @Test void providerFailuresAreFixedSafeCodesAndRedirectsAreNeverFollowed() {
@@ -236,6 +255,7 @@ class AiModelCatalogTest {
     }
 
     @Test void draftHttpBodyIsBoundedStrictAndNeverEchoesSecrets() throws Exception {
+        authenticate("ai:config:add");
         var controller = new com.xinghuiTec.controller.AiModelCatalogController(service);
         var valid = new org.springframework.mock.web.MockHttpServletRequest();
         valid.setContent(("{\"provider\":\"openrouter\",\"apiKey\":\"" + KEY + "\",\"pageNum\":1,\"pageSize\":20}").getBytes(StandardCharsets.UTF_8));
@@ -282,6 +302,7 @@ class AiModelCatalogTest {
     }
 
     @Test void httpCatalogUsesNoStoreAndSafeErrors() throws Exception {
+        authenticate("ai:config:test");
         var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
                 new com.xinghuiTec.controller.AiModelCatalogController(service)).build();
         var success = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/system/ai/model-catalog"))
@@ -306,8 +327,10 @@ class AiModelCatalogTest {
     }
 
     private void authenticate(String authority) {
+        var user=new com.xinghuiTec.domain.entity.SysUser();user.setUserId(101L);user.setTenantId("000000");user.setStatus(1);
+        var login=new com.xinghuiTec.domain.entity.LoginUser(user,List.of(authority));login.setTenantId("000000");
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
-                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("operator", "",
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(login, "",
                         org.springframework.security.core.authority.AuthorityUtils.createAuthorityList(authority)));
     }
 

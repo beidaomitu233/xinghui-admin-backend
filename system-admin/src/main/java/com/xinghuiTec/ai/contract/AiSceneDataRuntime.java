@@ -18,6 +18,7 @@ import java.util.Objects;
 public interface AiSceneDataRuntime {
     String COMPILER_VERSION = "scene-data-v1";
     String BINDING_COMPILER_VERSION = "scene-data-v2";
+    String QUERY_COMPILER_VERSION = "scene-data-v3";
 
     Catalog catalog(TrustedActor actor, InvocationControl control);
 
@@ -158,11 +159,15 @@ public interface AiSceneDataRuntime {
     }
 
     /** A single editor plus optional output instructions; no resource/app/template IDs or mapping JSON. */
-    record EditorInput(String prompt, String outputInstructions, List<Selection> selections,List<DataBinding> bindings) {
+    record EditorInput(String prompt, String outputInstructions, List<Selection> selections,List<DataBinding> bindings,
+                       List<AiSceneQueryRuntime.QueryBinding> sqlBindings) {
+        public EditorInput(String prompt,String outputInstructions,List<Selection> selections,List<DataBinding> bindings){this(prompt,outputInstructions,selections,bindings,List.of());}
         public EditorInput(String prompt,String outputInstructions,List<Selection> selections){this(prompt,outputInstructions,selections,List.of());}
         public EditorInput {
             Objects.requireNonNull(prompt); outputInstructions = outputInstructions == null ? "" : outputInstructions;
-            selections = List.copyOf(selections); bindings=bindings==null?List.of():List.copyOf(bindings);if(bindings.size()>16)throw new IllegalArgumentException("Too many bindings");
+            selections = List.copyOf(selections); bindings=bindings==null?List.of():List.copyOf(bindings);
+            sqlBindings=sqlBindings==null?List.of():List.copyOf(sqlBindings);
+            if(bindings.size()+sqlBindings.size()>16)throw new IllegalArgumentException("Too many bindings");
         }
         @Override public String toString() { return "SceneEditorInput[REDACTED]"; }
     }
@@ -178,7 +183,9 @@ public interface AiSceneDataRuntime {
     }
 
     record CompiledScene(String compilerVersion, EditorInput editor, List<SelectionSnapshot> selections,
-                         List<InputVariable> inputVariables, List<LegacyScope> legacyScopes,List<BindingSnapshot> bindings) {
+                         List<InputVariable> inputVariables, List<LegacyScope> legacyScopes,List<BindingSnapshot> bindings,
+                         List<AiSceneQueryRuntime.QuerySnapshot> sqlBindings) {
+        public CompiledScene(String compilerVersion,EditorInput editor,List<SelectionSnapshot> selections,List<InputVariable> inputVariables,List<LegacyScope> legacyScopes,List<BindingSnapshot> bindings){this(compilerVersion,editor,selections,inputVariables,legacyScopes,bindings,List.of());}
         public CompiledScene(String compilerVersion,EditorInput editor,List<SelectionSnapshot> selections,List<InputVariable> inputVariables,List<LegacyScope> legacyScopes){this(compilerVersion,editor,selections,inputVariables,legacyScopes,List.of());}
         public CompiledScene(String compilerVersion, EditorInput editor, List<SelectionSnapshot> selections,List<InputVariable> inputVariables) {
             this(compilerVersion,editor,selections,inputVariables,List.of());
@@ -187,6 +194,7 @@ public interface AiSceneDataRuntime {
             reference(compilerVersion); Objects.requireNonNull(editor);
             selections = List.copyOf(selections); inputVariables = List.copyOf(inputVariables);
             legacyScopes=legacyScopes==null?List.of():List.copyOf(legacyScopes);bindings=bindings==null?List.of():List.copyOf(bindings);
+            sqlBindings=sqlBindings==null?List.of():List.copyOf(sqlBindings);
         }
         @Override public String toString() { return "CompiledScene[REDACTED]"; }
     }

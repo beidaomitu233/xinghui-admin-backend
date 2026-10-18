@@ -85,6 +85,9 @@ public class SceneRuntimeService {
         var preview=rendered.bindingPreview();
         return new SceneDtos.Preview(key,selected.version.id(),original,messages,inputs,resources,rendered.notices().stream().map(AiSceneDataRuntime.Notice::code).toList(),preview==null?java.util.Map.of():preview.values(),preview==null?List.of():preview.reads());
     }
+    @org.springframework.beans.factory.annotation.Autowired
+    private ObjectProvider<AiSceneQueryRuntime> queryRuntime;
+    public void queryRuntime(ObjectProvider<AiSceneQueryRuntime> queryRuntime){this.queryRuntime=queryRuntime;}
     private boolean visible(SceneStore.Head h,TrustedActor actor){
         if(h.currentVersion()==null || !"MAPPED".equals(h.compatibilityStatus()))return false;
         var v=scenes.version(h.currentVersion());var policy=execution.policy(v.appVersion());if(!policy.permits(actor))return false;
@@ -94,8 +97,12 @@ public class SceneRuntimeService {
                 for(var selection:v.compiled().selections())service.fields(selection.objectKey(),selection.formId(),actor,SceneManagementService.control(5));}
             if(v.compiled()!=null && !v.compiled().bindings().isEmpty()){var service=data.getIfUnique();if(service==null)return false;
                 for(var binding:v.compiled().bindings())service.databaseFields(binding.binding().sourceKey(),actor,SceneManagementService.control(5));}
+            if(v.compiled()!=null && !v.compiled().sqlBindings().isEmpty()) {
+                var query=queryRuntime==null?null:queryRuntime.getIfUnique();if(query==null)return false;
+                for(var binding:v.compiled().sqlBindings()) query.authorizedSchema(actor,new AiSceneQueryRuntime.QueryContext(binding.binding().datasetKeys(),null),SceneManagementService.control(5));
+            }
             return true;
-        }catch(AiRuntimeException denied){return false;}
+        }catch(RuntimeException denied){return false;}
     }
     private SceneDtos.Entry entry(SceneStore.Head h,TrustedActor actor){
         var version=scenes.version(h.currentVersion());String source=null,label=null;boolean required=false;
@@ -104,6 +111,12 @@ public class SceneRuntimeService {
             var current=version.compiled().bindings().stream().filter(b->b.binding().row()!=null && b.binding().row().currentRecord()).toList();
             if(!current.isEmpty()){required=true;if(current.stream().map(b->b.binding().sourceKey()).distinct().count()==1){source=current.get(0).binding().sourceKey();label=current.get(0).binding().label();}}
             else if(!version.compiled().selections().isEmpty()){required=true;source="lowcode."+version.compiled().selections().get(0).formId();label=h.name();}
+            var queryCurrent=version.compiled().sqlBindings().stream().filter(q->q.compiled().currentRecordDatasetKey()!=null).toList();
+            if(!queryCurrent.isEmpty()) {
+                var sources=new java.util.HashSet<String>();if(source!=null)sources.add(source);
+                queryCurrent.forEach(q->sources.add(q.compiled().currentRecordDatasetKey()));required=true;
+                if(sources.size()==1){source=sources.iterator().next();label=queryCurrent.get(0).binding().label();}else{source=null;label=null;}
+            }
         }else required=!execution.snapshot(version.appVersion()).resources().isEmpty();
         if(source!=null){
             try{
@@ -118,7 +131,8 @@ public class SceneRuntimeService {
     private AiRuntimeService.Submission normalize(SceneStore.Head h,SceneStore.Version v,SceneDtos.Submission input){
         require(input!=null && input.inputs()!=null,400,"INVALID_INPUT");SceneStore.mutationId(input.idempotencyKey());
         BusinessRef business;
-        boolean currentBinding=v.compiled()!=null && v.compiled().bindings().stream().anyMatch(b->b.binding().row()!=null && b.binding().row().currentRecord());
+        boolean currentBinding=v.compiled()!=null && (v.compiled().bindings().stream().anyMatch(b->b.binding().row()!=null && b.binding().row().currentRecord())
+                || v.compiled().sqlBindings().stream().anyMatch(q->q.compiled().currentRecordDatasetKey()!=null));
         boolean noSelections=v.compiled()!=null?v.compiled().selections().isEmpty():execution.snapshot(v.appVersion()).resources().isEmpty();
         if(h.kind()==SceneDtos.Kind.GENERAL && noSelections && !currentBinding && input.conversationId()!=null && input.businessRef()!=null){
             business=new BusinessRef(input.businessRef().type(),input.businessRef().id());
@@ -131,6 +145,10 @@ public class SceneRuntimeService {
             require(input.businessRef()!=null && "lowcode.record".equals(input.businessRef().type()),400,"INVALID_INPUT");
             String[] ids=input.businessRef().id()==null?new String[0]:input.businessRef().id().split(":",-1);require(ids.length==2,400,"INVALID_INPUT");SceneStore.decimal(ids[0]);SceneStore.decimal(ids[1]);
             String form=h.formId();if(form==null && v.compiled()!=null && !v.compiled().selections().isEmpty())form=v.compiled().selections().get(0).formId();
+            if(form==null && v.compiled()!=null) {
+                var sources=v.compiled().sqlBindings().stream().map(q->q.compiled().currentRecordDatasetKey()).filter(java.util.Objects::nonNull).distinct().toList();
+                if(sources.size()==1 && sources.get(0).startsWith("lowcode."))form=sources.get(0).substring("lowcode.".length());
+            }
             if(form!=null)require(form.equals(ids[0]),403,"RESOURCE_FORBIDDEN");business=new BusinessRef("lowcode.record",input.businessRef().id());
         }
         return new AiRuntimeService.Submission(business,new AiInputs(input.inputs()).values(),input.idempotencyKey(),conversationTarget(input));

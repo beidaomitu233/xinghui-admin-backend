@@ -91,7 +91,7 @@ public class AiModelCatalogTransport {
         String destination = secret == null ? preset.publicModelsEndpoint() : preset.modelsEndpoint();
         if (destination == null) throw failure(400, "KEY_REQUIRED");
         URI official = URI.create(destination);
-        URI endpoint = localBase == null ? official : localBase.resolve(official.getPath());
+        URI endpoint = localBase == null ? official : localBase.resolve(official.getRawPath()+(official.getRawQuery()==null?"":"?"+official.getRawQuery()));
         if (secret != null && (secret.isBlank() || secret.length() > 8192
                 || secret.chars().anyMatch(c -> c < 32 || c == 127)))
             throw failure(503, "CREDENTIAL_UNAVAILABLE");
