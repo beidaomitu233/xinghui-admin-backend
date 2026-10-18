@@ -41,6 +41,22 @@ public class SceneDataServiceTest {
     private EditorInput editor(String text,String... fields){return new EditorInput(text,"",fields.length==0?List.of():List.of(new Selection("lowcode.record","1",List.of(fields))));}
     private SceneContext context(String record){return new SceneContext("scene.server","version.1",actor(),new BusinessRef("lowcode.record","1:"+record),"7");}
 
+    @Test void namedTokenUsesStableIdentityAndRetainsLegacyTokensWithSingleReplacement() {
+        var input = editor("{{user_request:用户要求}} / {{user_request}} / {{record_subject:主题说明}}", "subject");
+        var compiled = service.compile(input, actor(), control());
+        var output = service.render(compiled, context("11"), new AiInputs(Map.of("user_request", "本次输入")), control());
+        assertTrue(output.messages().stream().anyMatch(message -> message.content().contains("本次输入 / 本次输入 / 业务 {{user_request}} $1")));
+        assertTrue(compiled.inputVariables().get(0).required());
+        assertThrows(AiRuntimeException.class, () -> service.render(compiled, context("11"), new AiInputs(Map.of()), control()));
+    }
+
+    @Test void namedTokenCannotAuthorizeUnknownIdentityOrMalformedLabels() {
+        for (String text : List.of("{{not_allowed:主题}}", "{{user_request:}}", "{{user_request:含:冒号}}",
+                "{{user_request:换\n行}}", "{{user_request:   }}", "{{user_request:控制\u0001符}}"))
+            assertThrows(InvalidConfiguration.class, () -> service.compile(editor(text), actor(), control()));
+        assertDoesNotThrow(() -> service.compile(editor("{{user_request:可更改的显示说明}}"), actor(), control()));
+    }
+
     @Test void catalogMetadataAndSamplesExposeOnlyAllowedIdentities(){
         assertEquals("lowcode.record",service.catalog(actor(),control()).objects().get(0).objectKey());
         var forms=service.forms(new OptionQuery(null,1,20),actor(),control());assertEquals("1",forms.total());assertEquals("公开表单",forms.records().get(0).name());

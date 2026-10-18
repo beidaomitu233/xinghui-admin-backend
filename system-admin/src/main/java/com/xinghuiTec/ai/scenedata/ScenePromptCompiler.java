@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 public final class ScenePromptCompiler {
     private ScenePromptCompiler() {}
     static final Set<String> FIELDS = Set.of("subject", "summary");
-    static final Pattern SLOT = Pattern.compile("\\{\\{([\\p{L}_][\\p{L}\\p{N}_.]{0,63})}}");
+    static final Pattern SLOT = Pattern.compile("\\{\\{([\\p{L}_][\\p{L}\\p{N}_.]{0,63})(?::([^{}\\r\\n:]{1,100}))?}}");
 
     public static CompiledScene compile(EditorInput input, Function<Selection, FieldCatalog> metadata) {
         if (input == null) fail("definition", IssueCode.REQUIRED);
@@ -50,6 +50,9 @@ public final class ScenePromptCompiler {
     private static boolean slots(String text, Set<String> allowed, String path) {
         var matcher = SLOT.matcher(text); boolean required = false;
         while (matcher.find()) {
+            if (matcher.group(2) != null && (!matcher.group(1).matches("[A-Za-z_][A-Za-z0-9_.]{0,63}")
+                    || matcher.group(2).isBlank() || matcher.group(2).chars().anyMatch(Character::isISOControl)))
+                fail(path, IssueCode.INVALID_SYNTAX);
             if (!allowed.contains(matcher.group(1))) fail(path, IssueCode.UNKNOWN_VARIABLE);
             required |= matcher.group(1).equals("user_request");
         }
