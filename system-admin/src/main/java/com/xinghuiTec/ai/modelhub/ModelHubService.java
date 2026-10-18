@@ -18,6 +18,7 @@ import static com.xinghuiTec.ai.modelhub.ModelHubDtos.*;
 /** Logical identities resolve to current, admitted provider versions once per new request. No network health claims. */
 @Service
 public class ModelHubService {
+    public static final int MODEL_LIMIT=512;
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private final AiConfigurationService configs;
@@ -28,8 +29,9 @@ public class ModelHubService {
     public static void check(boolean value,int status,String code){if(!value)throw new SceneFailure(status,code);}
     public static long id(String value){check(value!=null&&value.matches("[1-9][0-9]{0,18}"),400,"INVALID_INPUT");try{return Long.parseLong(value);}catch(NumberFormatException invalid){throw new SceneFailure(400,"INVALID_INPUT");}}
     private record Stored(String id,int revision,Change definition,boolean enabled,long cursor,Instant updated) {}
+    private Stored readStored(java.sql.ResultSet r)throws java.sql.SQLException{return new Stored(r.getString("model_id"),r.getInt("revision"),decode(r.getString("definition_json"),Change.class),r.getBoolean("enabled"),r.getLong("next_index"),r.getTimestamp("update_time").toInstant());}
     private Stored stored(String value,boolean lock){
-        var rows=jdbc.query("SELECT * FROM sys_ai_business_model WHERE model_id=? AND deleted=FALSE"+(lock?" FOR UPDATE":""),(r,n)->new Stored(r.getString("model_id"),r.getInt("revision"),decode(r.getString("definition_json"),Change.class),r.getBoolean("enabled"),r.getLong("next_index"),r.getTimestamp("update_time").toInstant()),id(value));
+        var rows=jdbc.query("SELECT * FROM sys_ai_business_model WHERE model_id=? AND deleted=FALSE"+(lock?" FOR UPDATE":""),(r,n)->readStored(r),id(value));
         check(rows.size()==1,404,"MODEL_NOT_FOUND");return rows.get(0);
     }
     public Model get(String value){return view(stored(value,false));}
@@ -42,11 +44,25 @@ public class ModelHubService {
     public Page page(int page,int size,String search){
         check(page>=1&&page<=100000&&size>=1&&size<=100&&(search==null||search.length()<=128),400,"INVALID_INPUT");
         String term=search==null?"":search.toLowerCase(Locale.ROOT).strip();
-        // Name is inside bounded metadata JSON; filter before paging without interpreting search as SQL.
-        var all=jdbc.query("SELECT model_id FROM sys_ai_business_model WHERE deleted=FALSE ORDER BY model_id",(r,n)->r.getString(1)).stream().map(this::get)
-                .filter(m->term.isEmpty()||m.name().toLowerCase(Locale.ROOT).contains(term)||m.slug().contains(term)).toList();
-        int start=(int)Math.min((long)(page-1)*size,all.size());return new Page(all.subList(start,Math.min(start+size,all.size())),Integer.toString(all.size()),page,size);
+        String where=" WHERE deleted=FALSE";var args=new ArrayList<Object>();
+        if(!term.isEmpty()){
+            where+=" AND (LOWER(JSON_UNQUOTE(JSON_EXTRACT(definition_json,'$.name'))) LIKE ? ESCAPE '!' OR slug LIKE ? ESCAPE '!')";
+            String pattern="%"+term.replace("!","!!").replace("%","!%").replace("_","!_")+"%";args.add(pattern);args.add(pattern);
+        }
+        Long count=jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_business_model"+where,Long.class,args.toArray());
+        args.add(size);args.add((long)(page-1)*size);
+        var selected=jdbc.query("SELECT * FROM sys_ai_business_model"+where+" ORDER BY model_id LIMIT ? OFFSET ?",(r,n)->readStored(r),args.toArray());
+        var context=healthContext(selected,new Requirements(OutputFormat.TEXT,true,false));
+        return new Page(selected.stream().map(s->view(s,context)).toList(),Long.toString(Objects.requireNonNull(count)),page,size);
     }
+    public Summary summary(){return guard.withReferenceGuard(()->{
+        var rows=jdbc.query("SELECT * FROM sys_ai_business_model WHERE deleted=FALSE ORDER BY model_id LIMIT ?",(r,n)->readStored(r),MODEL_LIMIT+1);
+        check(rows.size()<=MODEL_LIMIT,503,"MODEL_LIMIT_EXCEEDED");
+        var context=healthContext(rows,new Requirements(OutputFormat.TEXT,true,false));var models=rows.stream().map(s->view(s,context)).toList();
+        int enabled=(int)models.stream().filter(Model::enabled).count(),ready=(int)models.stream().filter(m->m.health().ready()).count();
+        int protectedModels=(int)models.stream().filter(m->m.health().multiProviderProtected()).count();
+        return new Summary(models.size(),enabled,ready,enabled-ready,models.size()-enabled,protectedModels,enabled-protectedModels,MODEL_LIMIT,Instant.now());
+    });}
     public Model save(String value,Change input,TrustedActor actor){
         validate(input);return guard.withReferenceGuard(()->saveNow(value,input,actor,false));
     }
@@ -65,6 +81,7 @@ public class ModelHubService {
         var routes=input.routes().stream().map(r->new Route(r.routeId()==null?UUID.randomUUID().toString():r.routeId(),r.channelId(),r.upstreamModel(),r.enabled())).toList();
         var normalized=new Change(null,null,input.name(),input.slug(),input.capabilities(),input.contextWindow(),input.enabled(),input.strategy(),input.fallback(),routes);
         if(old==null){
+            check(jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_business_model WHERE deleted=FALSE",Long.class)<MODEL_LIMIT,409,"MODEL_LIMIT_EXCEEDED");
             check(jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_business_model WHERE slug=?",Long.class,input.slug())==0L,409,"MODEL_SLUG_EXISTS");
             var keys=new GeneratedKeyHolder();jdbc.update(c->{var s=c.prepareStatement("INSERT INTO sys_ai_business_model(slug,definition_json,enabled) VALUES(?,?,?)",new String[]{"model_id"});s.setString(1,input.slug());s.setString(2,encode(normalized));s.setBoolean(3,input.enabled());return s;},keys);
             value=Objects.requireNonNull(keys.getKey()).toString();
@@ -91,13 +108,30 @@ public class ModelHubService {
     private void text(String s,int maximum){check(s!=null&&!s.isBlank()&&s.length()<=maximum&&s.codePoints().noneMatch(Character::isISOControl),400,"INVALID_INPUT");}
     private boolean textCapable(Change d){return !d.capabilities().contains("向量")&&!d.capabilities().toLowerCase(Locale.ROOT).contains("embedding");}
     private List<AiProviderRuntime.AvailableModel> available(Requirements requirements){var p=providers.getIfUnique();return p==null?List.of():p.availableModels(requirements);}
-    private Model view(Stored s){
-        var d=s.definition();var available=available(new Requirements(OutputFormat.TEXT,true,false));
+    private record Channel(String provider,String name,String status,Set<String> upstreamModels) {}
+    private record HealthContext(List<AiProviderRuntime.AvailableModel> available,Map<String,Channel> channels) {}
+    private HealthContext healthContext(List<Stored> models,Requirements requirements){
+        var available=available(requirements);var ids=models.stream().flatMap(m->m.definition().routes().stream()).map(Route::channelId).distinct().toList();
+        var channels=new HashMap<String,Channel>();
+        if(!ids.isEmpty()){
+            String placeholders=String.join(",",Collections.nCopies(ids.size(),"?"));
+            jdbc.query("SELECT c.config_id,c.config_name AS name,c.provider_code,c.status,v.snapshot_json FROM sys_ai_configuration c LEFT JOIN sys_ai_configuration_version v ON v.version_id=c.draft_version_id AND v.config_id=c.config_id WHERE c.config_id IN ("+placeholders+")",(org.springframework.jdbc.core.RowCallbackHandler)r->{
+                try{var snapshot=json.readValue(r.getString("snapshot_json"),AiConfigurationDtos.Snapshot.class);
+                    channels.put(r.getString("config_id"),new Channel(r.getString("provider_code"),r.getString("name"),r.getString("status"),snapshot.models().stream().map(AiConfigurationDtos.ModelSpec::modelCode).collect(java.util.stream.Collectors.toSet())));
+                }catch(Exception unavailable){/* Missing/corrupt draft is unavailable, never a ready binding. */}
+            },ids.stream().map(ModelHubService::id).toArray());
+        }
+        return new HealthContext(available,channels);
+    }
+    private Model view(Stored s){return view(s,healthContext(List.of(s),new Requirements(OutputFormat.TEXT,true,false)));}
+    private Model view(Stored s,HealthContext context){
+        var d=s.definition();var available=context.available();
         var routes=new ArrayList<RouteView>();var distinct=new HashSet<String>();int ready=0;
         for(var r:d.routes()){
             var reasons=new ArrayList<String>();String provider=null,name=null;boolean configured=false;
             if(!r.enabled())reasons.add("BINDING_DISABLED");
-            try{var c=configs.get(id(r.channelId()));provider=c.providerCode();name=c.name();configured=c.draft()!=null&&c.draft().models().stream().anyMatch(m->m.modelCode().equals(r.upstreamModel()));if(!configured)reasons.add("UPSTREAM_NOT_CONFIGURED");if(!"ACTIVE".equals(c.status()))reasons.add("CHANNEL_NOT_ACTIVE");}catch(RuntimeException absent){reasons.add("CHANNEL_UNAVAILABLE");}
+            var channel=context.channels().get(r.channelId());
+            if(channel==null)reasons.add("CHANNEL_UNAVAILABLE");else{provider=channel.provider();name=channel.name();configured=channel.upstreamModels().contains(r.upstreamModel());if(!configured)reasons.add("UPSTREAM_NOT_CONFIGURED");if(!"ACTIVE".equals(channel.status()))reasons.add("CHANNEL_NOT_ACTIVE");}
             boolean usable=available.stream().anyMatch(a->a.configId().equals(r.channelId())&&a.modelCode().equals(r.upstreamModel()));
             if(!usable)reasons.add("NO_VERIFIED_ACTIVE_PAIR");if(!textCapable(d))reasons.add("UNSUPPORTED_CAPABILITY");
             boolean routeReady=reasons.isEmpty();if(routeReady){ready++;distinct.add(provider);}
@@ -108,8 +142,8 @@ public class ModelHubService {
     }
     public record Frozen(String modelId,int revision,AiApplicationPolicy policy) {}
     public Frozen freeze(AiApplicationPolicy base){return guard.withReferenceGuard(()->{
-        var s=find(base.businessModel(),true);var model=view(s);check(model.health().ready(),409,"BUSINESS_MODEL_NOT_READY");
-        var available=available(base.requirements());var bindings=new ArrayList<AiProviderRuntime.ModelBinding>();
+        var s=find(base.businessModel(),true);var context=healthContext(List.of(s),base.requirements());var model=view(s,context);check(model.health().ready(),409,"BUSINESS_MODEL_NOT_READY");
+        var available=context.available();var bindings=new ArrayList<AiProviderRuntime.ModelBinding>();
         for(var r:model.routes())if(r.health().ready()){
             var matches=available.stream().filter(a->a.configId().equals(r.channelId())&&a.modelCode().equals(r.upstreamModel())).toList();
             if(matches.size()==1)bindings.add(new AiProviderRuntime.ModelBinding(matches.get(0).model(),AiProviderRuntime.KeyMode.AUTO,Set.of(),null,List.of()));

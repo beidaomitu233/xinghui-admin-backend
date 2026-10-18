@@ -20,6 +20,9 @@ public class ModelHubController {
     @GetMapping
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:config:query')")
     public Result<ModelHubDtos.Page> page(@RequestParam(defaultValue="1")int pageNum,@RequestParam(defaultValue="100")int pageSize,@RequestParam(required=false)String search){return Result.ok(models.page(pageNum,pageSize,search));}
+    @GetMapping("/summary")
+    @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:config:query')")
+    public Result<ModelHubDtos.Summary> summary(){return Result.ok(models.summary());}
     @GetMapping("/{id}")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:config:query')")
     public Result<ModelHubDtos.Model> get(@PathVariable String id){return Result.ok(models.get(id));}

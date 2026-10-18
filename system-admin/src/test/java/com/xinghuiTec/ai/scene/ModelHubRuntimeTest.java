@@ -25,26 +25,31 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /** Real configured provider/executor/ledger; HTTP alone is controlled. Not native DB or live vendor evidence. */
-class ModelHubRuntimeTest {
+public class ModelHubRuntimeTest {
     private SceneTestSupport f;
     private AiConfigurationService configs;
     private AiConfigurationTests probes;
     private SqlAssistanceHttpFixture http;
+    private AiConfiguredProviderRuntime provider;
     private ModelHubService hub;
     private ModelHubTestService tests;
     private TrustedActor actor;
     private String channelA,channelB;
     @BeforeEach void setup()throws Exception{
         f=new SceneTestSupport();f.script(f.read("V20261016_180__ai_config_v04.sql").split("-- Existing configurations")[0]);f.script(f.read("V20261018_245__ai_key_health.sql"));f.script(f.read("V20261018_248__business_model_hub.sql"));
+        // H2-only equivalents for production MySQL JSON metadata filtering; not native MySQL evidence.
+        f.jdbc.execute("CREATE ALIAS IF NOT EXISTS JSON_EXTRACT FOR 'com.xinghuiTec.ai.scene.ModelHubRuntimeTest.extractName'");f.jdbc.execute("CREATE ALIAS IF NOT EXISTS JSON_UNQUOTE FOR 'com.xinghuiTec.ai.scene.ModelHubRuntimeTest.unquote'");
         var rights=new HashSet<>(f.actor.authorities());rights.addAll(Set.of("ai:config:add","ai:config:edit","ai:config:enable","ai:config:test","ai:config:query"));actor=new TrustedActor("101","tenant_a",rights,null);
         var cipher=new SecretCipher(()->Base64.getEncoder().encodeToString(new byte[32]));
         configs=new AiConfigurationService(f.jdbc,f.mapper,cipher,new AiModelConfigRules(),new TransactionTemplate(f.manager),f.beans.getBeanProvider(AiApplicationReferences.class),mock(AiModelConfigService.class),mock(AiModelCredentialService.class));
         http=new SqlAssistanceHttpFixture(f.mapper);probes=new AiConfigurationTests(configs,http.transport,new TransactionTemplate(f.manager));
         channelA=channel("Primary","unit/model-a","controlled-primary");channelB=channel("Backup","unit/model-b","controlled-secondary");
-        f.beans.addBean("provider",new AiConfiguredProviderRuntime(configs,http.transport));
+        provider=spy(new AiConfiguredProviderRuntime(configs,http.transport));f.beans.addBean("provider",provider);
         hub=new ModelHubService(f.jdbc,f.mapper,configs,f.beans.getBeanProvider(AiProviderRuntime.class),f.references,cipher);f.management.modelHub(hub);f.runtime.modelHub(hub);
         tests=new ModelHubTestService(hub,f.references,f.applications,f.requests,f.lifecycle,f.runtime,f.jdbc,f.mapper);
     }
+    public static String extractName(String value,String path)throws Exception{if(!"$.name".equals(path))throw new IllegalArgumentException();return new com.fasterxml.jackson.databind.ObjectMapper().readTree(value).path("name").toString();}
+    public static String unquote(String value)throws Exception{return new com.fasterxml.jackson.databind.ObjectMapper().readTree(value).asText();}
     private String channel(String name,String model,String key)throws Exception{
         var created=configs.create(new AiConfigurationDtos.Create(new AiConfigurationDtos.DraftChange(0,name,"qa","openrouter",OpenRouterTransport.ENDPOINT,"OPENAI_CHAT",120,List.of(new AiConfigurationDtos.ModelInput(null,model)),List.of(new AiConfigurationDtos.KeyInput(null,name,"DB",null,key))),null));
         long id=Long.parseLong(created.id());var probe=probes.start(id,new AiConfigurationDtos.TestStart(created.revision(),created.draft().configVersion(),true));Instant deadline=Instant.now().plusSeconds(5);
@@ -63,6 +68,26 @@ class ModelHubRuntimeTest {
         var input=change(null,true,ModelHubDtos.Strategy.PRIORITY,true,List.of());var model=hub.save(null,input,actor);
         assertEquals("Independent model",model.name());assertEquals("business-chat",model.slug());assertFalse(model.health().ready());assertTrue(model.routes().isEmpty());assertEquals(model.modelId(),hub.bySlug("business-chat").modelId());assertEquals(0,http.generations.get());
         assertEquals(model,hub.save(null,input,actor));assertEquals("1",hub.page(1,20,"independent").total());
+    }
+    @Test void databaseSearchPagesHaveAccurateTotalsEscapedWildcardsAndBoundedWholeSummary(){
+        model(ModelHubDtos.Strategy.PRIORITY,true);
+        for(int i=0;i<6;i++)hub.save(null,new ModelHubDtos.Change(null,UUID.randomUUID().toString(),i==5?"Literal_100%":"Group Alpha "+i,"group-"+i,"对话","128K",false,ModelHubDtos.Strategy.PRIORITY,true,List.of()),actor);
+        clearInvocations(provider);var second=hub.page(2,2,"gRoUp aLpHa");verify(provider,times(1)).availableModels(any());
+        assertEquals("5",second.total());assertEquals(List.of("group-2","group-3"),second.records().stream().map(ModelHubDtos.Model::slug).toList());
+        assertEquals(1,hub.page(3,2,"Group Alpha").records().size());assertTrue(hub.page(4,2,"Group Alpha").records().isEmpty());
+        assertEquals("1",hub.page(1,2,"100%").total());assertEquals("1",hub.page(1,2,"Literal_").total());
+        assertEquals("7",hub.page(1,2,null).total());assertEquals(2,hub.page(1,2,null).records().size());
+        clearInvocations(provider);var summary=hub.summary();verify(provider,times(1)).availableModels(any());
+        assertEquals(7,summary.totalModels());assertEquals(1,summary.enabledModels());assertEquals(1,summary.readyModels());assertEquals(6,summary.disabledModels());assertEquals(0,summary.unconfiguredModels());assertEquals(0,summary.multiProviderModels());assertEquals(1,summary.assuranceNeededModels());assertEquals(512,summary.modelLimit());assertEquals(0,http.generations.get());
+    }
+    @Test void configurationLimitRejectsCreationAndSummaryNeverTruncatesItsTotal(){
+        var batch=new ArrayList<Object[]>();for(int i=0;i<ModelHubService.MODEL_LIMIT;i++){
+            var d=new ModelHubDtos.Change(null,null,"Bounded "+i,"bounded-"+i,"对话","128K",false,ModelHubDtos.Strategy.PRIORITY,true,List.of());
+            try{batch.add(new Object[]{d.slug(),f.mapper.writeValueAsString(d)});}catch(Exception invalid){throw new AssertionError(invalid);}
+        }
+        f.jdbc.batchUpdate("INSERT INTO sys_ai_business_model(slug,definition_json,enabled) VALUES(?,?,FALSE)",batch);
+        assertEquals("MODEL_LIMIT_EXCEEDED",assertThrows(SceneFailure.class,()->hub.save(null,change(null,true,ModelHubDtos.Strategy.PRIORITY,true,List.of()),actor)).getMessage());
+        clearInvocations(provider);assertEquals(512,hub.summary().totalModels());verify(provider,times(1)).availableModels(any());assertEquals("512",hub.page(1,2,null).total());
     }
     @Test void revisionStableSlugEnablePermissionAndActualChannelAssociationAreEnforced(){
         var m=model(ModelHubDtos.Strategy.PRIORITY,true);var noEnable=new TrustedActor(actor.subjectId(),actor.tenantId(),Set.of("ai:config:edit"),null);

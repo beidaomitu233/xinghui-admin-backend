@@ -19,6 +19,8 @@ public final class ModelHubDtos {
     public record Model(String modelId,int revision,String name,String slug,String capabilities,String contextWindow,
                         boolean enabled,Strategy strategy,boolean fallback,List<RouteView> routes,Health health,Instant updatedAt) {}
     public record Page(List<Model> records,String total,int pageNum,int pageSize) {}
+    public record Summary(int totalModels,int enabledModels,int readyModels,int unconfiguredModels,int disabledModels,
+                          int multiProviderModels,int assuranceNeededModels,int modelLimit,Instant observedAt) {}
     public record Test(int expectedRevision,String clientMutationId,boolean confirmedCosts) {}
     public record TestAttempt(int number,String providerCode,String upstreamModel,String status,String errorCode,String switchReason,Long elapsedMs) {}
     public record TestView(String requestId,String status,String errorCode,int attemptCount,Instant deadline,List<TestAttempt> attempts) {
