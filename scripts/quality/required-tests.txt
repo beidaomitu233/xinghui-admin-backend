@@ -93,3 +93,11 @@ AiSettingsKeyRotationTest
 AiModelCatalogTest
 AiMultiChannelRuntimeTest
 ConversationDruidWallTest
+ScenePromptRoutingTest
+SqlAssistanceServiceTest
+SceneSqlBindingWiringTest
+SqlAstCompilerTest
+SceneQueryHttpSecurityTest
+SqlTemporalDecodingTest
+ModelHubRuntimeTest
+AiModelCatalogPersistenceTest

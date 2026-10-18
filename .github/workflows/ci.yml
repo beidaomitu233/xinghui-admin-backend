@@ -127,6 +127,21 @@ jobs:
           -Dtest=AiConfigurationDruidMySqlIT -Dsurefire.failIfNoSpecifiedTests=false
       - name: Reject missing or skipped AI MySQL regression
         shell: pwsh
+        run: ./scripts/quality/Verify-Build.ps1 -TestsOnly -RequiredClass AiConfigurationDruidMySqlIT
+      - name: Exercise scoped SQL and enforced read-only transactions through Druid Wall
+        env:
+          CI: "true"
+          DB_URL: jdbc:mysql://127.0.0.1:3306/xinghui_oss04_ci?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+          DB_USERNAME: oss04_ci
+          DB_PASSWORD: oss04_ci_database_fixture
+          OSS04_MYSQL_SERIES: ${{ matrix.mysql }}
+          JWT_SECRET: oss04_ci_neutral_jwt_fixture_32_characters
+          CONFIG_MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        run: >-
+          mvn -B -ntp -pl system-admin -am test
+          -Dtest=AiSceneSqlDruidMySqlIT -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Reject missing or skipped service regressions
+        shell: pwsh
         run: ./scripts/quality/Verify-Build.ps1 -TestsOnly -RequiredList scripts/quality/required-service-tests.txt
   quality:
     name: Backend quality gate

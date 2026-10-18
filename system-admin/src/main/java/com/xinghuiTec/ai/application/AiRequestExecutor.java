@@ -18,7 +18,11 @@ import java.util.concurrent.atomic.AtomicReference;
 @Service
 public class AiRequestExecutor {
     public record Work(Invocation invocation, AiApplicationPolicy policy, List<AiMessage> messages,
-                       List<ResourceVersionRef> resources, Set<String> suppliedInputs, boolean draftTest,Runnable sceneAccessCheck) {
+                       List<ResourceVersionRef> resources, Set<String> suppliedInputs, boolean draftTest,Runnable sceneAccessCheck,java.util.function.Consumer<String> privateOutput) {
+        public Work(Invocation invocation,AiApplicationPolicy policy,List<AiMessage> messages,
+                    List<ResourceVersionRef> resources,Set<String> suppliedInputs,boolean draftTest,Runnable sceneAccessCheck) {
+            this(invocation,policy,messages,resources,suppliedInputs,draftTest,sceneAccessCheck,null);
+        }
         public Work(Invocation invocation,AiApplicationPolicy policy,List<AiMessage> messages,
                     List<ResourceVersionRef> resources,Set<String> suppliedInputs,boolean draftTest) {
             this(invocation,policy,messages,resources,suppliedInputs,draftTest,null);
@@ -166,7 +170,7 @@ public class AiRequestExecutor {
                 previousModel = index;
                 var outputTouched = new AtomicBoolean();
                 var usage = new AtomicReference<Usage>();
-                var buffer = new OutputBuffer(id, owner, control, outputTouched);
+                var buffer = new OutputBuffer(id, owner, control, outputTouched,work.privateOutput());
                 ExecutionOutcome outcome;
                 try {
                     outcome = provider.execute(new ExecutionRequest(work.invocation(), attempt.attemptId(), target,
@@ -278,11 +282,12 @@ public class AiRequestExecutor {
         private final AiRequestStore.Owner owner;
         private final InvocationControl control;
         private final AtomicBoolean touched;
+        private final java.util.function.Consumer<String> privateOutput;
         private final StringBuilder pending = new StringBuilder();
         private int total;
         private long lastFlush;
-        OutputBuffer(long id, AiRequestStore.Owner owner, InvocationControl control, AtomicBoolean touched) {
-            this.id = id; this.owner = owner; this.control = control; this.touched = touched;
+        OutputBuffer(long id, AiRequestStore.Owner owner, InvocationControl control, AtomicBoolean touched,java.util.function.Consumer<String> privateOutput) {
+            this.id = id; this.owner = owner; this.control = control; this.touched = touched;this.privateOutput=privateOutput;
         }
         void delta(String text) {
             control.check();
@@ -299,7 +304,7 @@ public class AiRequestExecutor {
                 int end = Math.min(2048, pending.length());
                 if (end < pending.length() && Character.isHighSurrogate(pending.charAt(end - 1))) end--;
                 String text = pending.substring(0, end);
-                if (!lifecycle.delta(id, owner, text)) throw new AiRuntimeException(ErrorCode.CANCELLED);
+                if (!(privateOutput==null?lifecycle.delta(id,owner,text):lifecycle.privateDelta(id,owner,text,privateOutput))) throw new AiRuntimeException(ErrorCode.CANCELLED);
                 pending.delete(0, end);
             }
             lastFlush = System.nanoTime();

@@ -103,7 +103,10 @@ public class OpenRouterTransport {
             if(state.jsonObject) outbound.add(Map.of("role","system","content","Return exactly one JSON object. Do not wrap it in Markdown."));
             outbound.addAll(messages.stream().map(m->Map.of("role",m.role().name().toLowerCase(Locale.ROOT),"content",m.content())).toList());
             body.put("model",modelCode); body.put("messages",outbound);
-            body.put("stream",requirements.streaming()); body.put("max_tokens",maxTokens);
+            body.put("stream",requirements.streaming());
+            // OpenAI Chat Completions uses max_completion_tokens, including reasoning tokens.
+            // https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
+            body.put("openai".equals(provider)?"max_completion_tokens":"max_tokens",maxTokens);
             // These two catalog-verified models support optional reasoning; ordinary chat should reserve output for text.
             // https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
             if("openrouter".equals(provider) && requirements.outputFormat()==OutputFormat.TEXT && Set.of("poolside/laguna-s-2.1:free","nvidia/nemotron-3.5-lightning:free").contains(modelCode))
