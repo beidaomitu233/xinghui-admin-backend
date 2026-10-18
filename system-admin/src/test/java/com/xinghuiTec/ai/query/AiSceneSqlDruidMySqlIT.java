@@ -219,13 +219,20 @@ class AiSceneSqlDruidMySqlIT {
         assertTrue(new ObjectMapper().writeValueAsString(result.rows()).contains("1234567890123456789.12345678"));
     }
     @Test void supportedDateTimeBooleanNullAndLongTextKeepSqlSemantics(){
-        String types="qa_sql_types_"+nonce;create(types,"id BIGINT PRIMARY KEY,created_at DATETIME,happened TIMESTAMP NULL,record_date DATE,record_time TIME,active BIT(1),note TEXT,optional_amount DECIMAL(20,4)");
+        String types="qa_sql_types_"+nonce;create(types,"id BIGINT PRIMARY KEY,created_at DATETIME(6),happened TIMESTAMP(6) NULL,record_date DATE,record_time TIME(6),active BIT(1),note TEXT,optional_amount DECIMAL(20,4)");
         String longText="x".repeat(9000);
-        jdbc.update("INSERT INTO `"+types+"` VALUES(1,'2026-10-18 12:34:56','2026-10-18 12:34:56','2026-10-18','12:34:56',b'1',?,NULL)",longText);
-        var result=read("select * from "+types,platform,"db."+types);var row=result.rows().get(0);
-        assertTrue(row.get("created_at").toString().startsWith("2026-10-18T12:34:56"));assertTrue(row.get("happened").toString().startsWith("2026-10-18T12:34:56"));
-        assertEquals("2026-10-18",row.get("record_date"));assertEquals("12:34:56",row.get("record_time"));assertEquals(true,row.get("active"));assertNull(row.get("optional_amount"));
-        assertEquals(8192,row.get("note").toString().length());assertTrue(result.notices().stream().anyMatch(n->n.code()==QueryIssue.RESULT_LIMIT));
+        jdbc.update("INSERT INTO `"+types+"` VALUES(1,'2026-10-18 12:34:56.123456','2026-10-18 12:34:56.123456','2026-10-18','12:34:56.123456',b'1',?,NULL)",longText);
+        var previousZone=TimeZone.getDefault();
+        try {
+            for(String zone:List.of("UTC","Asia/Shanghai")) {
+                TimeZone.setDefault(TimeZone.getTimeZone(zone));
+                var result=read("select * from "+types,platform,"db."+types);var row=result.rows().get(0);
+                assertEquals("2026-10-18T12:34:56.123456",row.get("created_at"),"DATETIME preserves SQL calendar fields under JVM "+zone);
+                assertEquals("2026-10-18T12:34:56.123456",row.get("happened"),"TIMESTAMP preserves session display fields under JVM "+zone);
+                assertEquals("2026-10-18",row.get("record_date"));assertEquals("12:34:56.123456",row.get("record_time"));assertEquals(true,row.get("active"));assertNull(row.get("optional_amount"));
+                assertEquals(8192,row.get("note").toString().length());assertTrue(result.notices().stream().anyMatch(n->n.code()==QueryIssue.RESULT_LIMIT));
+            }
+        } finally {TimeZone.setDefault(previousZone);}
         var aggregate=read("select length(note) as size from "+types+" where length(note)>8999",platform,"db."+types);
         assertEquals(9000,((Number)aggregate.rows().get(0).get("size")).intValue());
         jdbc.update("INSERT INTO `"+types+"`(id,note) VALUES(2,?)", "x".repeat(8999)+"y");

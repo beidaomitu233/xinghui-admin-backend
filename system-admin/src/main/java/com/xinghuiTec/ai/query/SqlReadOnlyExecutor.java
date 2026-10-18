@@ -138,6 +138,21 @@ public final class SqlReadOnlyExecutor {
     }
 
     private Object value(ResultSet result, int index, QueryColumn column, List<QueryDiagnostic> notices) throws SQLException {
+        if(column.type().equals("DATETIME")) {
+            // Return the SQL calendar fields as ISO local values. TIMESTAMP is represented in the database
+            // session's display timezone, not as a UTC instant. Typed JDBC 4.2 reads avoid Timestamp/Date/Time
+            // conversion through the JVM default timezone and preserve fractional seconds.
+            int jdbcType=result.getMetaData().getColumnType(index);
+            if(jdbcType==Types.TIMESTAMP || jdbcType==Types.TIMESTAMP_WITH_TIMEZONE) {
+                var calendar=result.getObject(index,LocalDateTime.class);return calendar==null?null:calendar.toString();
+            }
+            if(jdbcType==Types.DATE) {
+                var calendar=result.getObject(index,LocalDate.class);return calendar==null?null:calendar.toString();
+            }
+            if(jdbcType==Types.TIME || jdbcType==Types.TIME_WITH_TIMEZONE) {
+                var calendar=result.getObject(index,LocalTime.class);return calendar==null?null:calendar.toString();
+            }
+        }
         Object value = result.getObject(index);
         if (value == null) return null;
         if (column.type().equals("JSON")) {
