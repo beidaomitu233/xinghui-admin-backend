@@ -13,7 +13,9 @@ public final class AiProviderPresets {
                 new Preset("openrouter","OpenRouter","https://openrouter.ai/api/v1/chat/completions","https://openrouter.ai/api/v1/models/user","https://openrouter.ai/api/v1/models",
                         List.of("poolside/laguna-s-2.1:free","nvidia/nemotron-3.5-lightning:free")),
                 new Preset("deepseek","DeepSeek","https://api.deepseek.com/chat/completions","https://api.deepseek.com/models",null,
-                        List.of("deepseek-flash","deepseek-v4-pro")));
+                        List.of("deepseek-flash","deepseek-v4-pro")),
+                new Preset("openai","OpenAI","https://api.openai.com/v1/chat/completions","https://api.openai.com/v1/models",null,List.of()),
+                new Preset("siliconflow","硅基流动","https://api.siliconflow.cn/v1/chat/completions","https://api.siliconflow.cn/v1/models?sub_type=chat",null,List.of()));
     }
     public static Preset require(String code) {
         return all().stream().filter(p->p.code().equals(code)).findFirst()
