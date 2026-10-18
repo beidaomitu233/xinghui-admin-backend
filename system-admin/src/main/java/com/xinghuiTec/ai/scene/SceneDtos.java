@@ -30,7 +30,8 @@ public final class SceneDtos {
         public DataObject { fields=List.copyOf(fields); }
     }
     public record Definition(String name,String purpose,String promptText,String outputRequirement,
-                             List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings) {
+                             List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings,ModelRef initialModel) {
+        public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,dataBindings,null);}
         public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,List.of());}
         public Definition { dataObjects=dataObjects==null?List.of():List.copyOf(dataObjects);dataBindings=dataBindings==null?List.of():List.copyOf(dataBindings); }
         @Override public String toString() { return "SceneDefinition[REDACTED]"; }
