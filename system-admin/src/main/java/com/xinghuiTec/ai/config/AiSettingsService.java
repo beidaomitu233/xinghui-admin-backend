@@ -353,7 +353,7 @@ public class AiSettingsService implements AiConfigurationTestObserver {
             throw fail(403, "无权启用配置");
         var head = configs.head(configId, false);
         var run = tests.startSettings(configId,
-                new AiConfigurationDtos.TestStart(head.revision(), AiConfigurationService.str(head.draft()), true));
+                new AiConfigurationDtos.TestStart(head.revision(), AiConfigurationService.str(head.draft()), true),actor);
         configs.jdbc.update(
                 "INSERT INTO sys_ai_settings_test_intent(test_id,config_id,config_version,expected_revision,activate_on_success,initiated_by) VALUES(?,?,?,?,?,?)",
                 run.id(), configId, run.configVersion(), head.revision(), input.activateOnSuccess(), actor.subjectId());

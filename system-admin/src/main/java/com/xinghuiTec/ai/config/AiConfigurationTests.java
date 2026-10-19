@@ -20,6 +20,9 @@ public class AiConfigurationTests {
     private final AiConfigurationService configs;
     private final OpenRouterTransport transport;
     private final TransactionTemplate transactions;
+    private com.xinghuiTec.ai.application.AiCallLogStore callLogs;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void callLogs(com.xinghuiTec.ai.application.AiCallLogStore store){this.callLogs=store;}
     private org.springframework.beans.factory.ObjectProvider<AiConfigurationTestObserver> completionObservers;
     @org.springframework.beans.factory.annotation.Autowired
     public void completionObservers(org.springframework.beans.factory.ObjectProvider<AiConfigurationTestObserver> observers){this.completionObservers=observers;}
@@ -45,9 +48,12 @@ public class AiConfigurationTests {
         configs.jdbc.update("UPDATE sys_ai_configuration SET running_test_id=NULL WHERE running_test_id IN (SELECT test_id FROM sys_ai_configuration_test WHERE status='INTERRUPTED')");
     }
     @PreDestroy public void close() { workers.shutdownNow(); leases.shutdownNow(); }
-    public TestRun start(long configId,TestStart request) { return start(configId,request,false); }
-    TestRun startSettings(long configId,TestStart request) { return start(configId,request,true); }
-    private TestRun start(long configId,TestStart request,boolean settings) {
+    public TestRun start(long configId,TestStart request) { return start(configId,request,false,null); }
+    public TestRun start(long configId,TestStart request,TrustedActor actor) { return start(configId,request,false,actor); }
+    TestRun startSettings(long configId,TestStart request) { return start(configId,request,true,null); }
+    TestRun startSettings(long configId,TestStart request,TrustedActor actor) { return start(configId,request,true,actor); }
+    private TestRun start(long configId,TestStart request,boolean settings,TrustedActor actor) {
+        if(callLogs!=null&&(actor==null||actor.servicePrincipalRef()!=null))throw AiConfigurationService.fail(403,"可信发起人缺失");
         if(!request.confirmedCosts()) throw AiConfigurationService.fail(400,"请先确认测试搭配数及可能费用");
         long run=transactions.execute(tx->{
             var h=configs.head(configId,true); AiConfigurationService.checkRevision(h,request.revision());
@@ -55,6 +61,7 @@ public class AiConfigurationTests {
             var s=configs.snapshot(configId,h.draft());
             if(s.models().isEmpty()||s.keys().isEmpty()) throw AiConfigurationService.fail(409,"请先配置模型和Key");
             long test=configs.insert("INSERT INTO sys_ai_configuration_test(config_id,version_id,status) VALUES(?,?,'QUEUED')",configId,h.draft());
+            if(actor!=null&&callLogs!=null)configs.jdbc.update("UPDATE sys_ai_configuration_test SET initiator_subject_ref=?,initiator_tenant_ref=? WHERE test_id=?",actor.subjectId(),actor.tenantId(),test);
             var old=h.active()==null?null:configs.snapshot(configId,h.active());
             boolean rotation=settings && old!=null && configs.pureKeyRotation(old,s);
             for(var m:s.models()) for(var k:s.keys()) {
@@ -97,6 +104,9 @@ public class AiConfigurationTests {
                 if(configs.jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_configuration_test_pair WHERE test_id=? AND model_ref=? AND key_ref=?",Integer.class,run,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()))==0) continue;
                 if(cancelled(run)) { finalState="CANCELLED"; return; }
                 configs.jdbc.update("UPDATE sys_ai_configuration_test_pair SET status='RUNNING' WHERE test_id=? AND model_ref=? AND key_ref=?",run,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()));
+                String callId=null;
+                if(callLogs!=null){Long pair=configs.jdbc.queryForObject("SELECT pair_id FROM sys_ai_configuration_test_pair WHERE test_id=? AND model_ref=? AND key_ref=?",Long.class,run,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()));
+                    callId=callLogs.beginConfigurationPair(run,pair,m.modelRef(),m.modelCode(),s.providerCode(),k.label());}
                 ExecutionOutcome result;
                 String actualProof=configs.proof(s,m,k,"UNAVAILABLE");
                 try {
@@ -112,6 +122,7 @@ public class AiConfigurationTests {
                     ErrorCode error=failure instanceof AiRuntimeException classified?classified.code():ErrorCode.CREDENTIAL_UNAVAILABLE;
                     result=new ExecutionOutcome(ExecutionStatus.FAILED,error,false,false,null,null,0);
                 }
+                if(callLogs!=null)callLogs.completeConfigurationPair(callId,result);
                 configs.jdbc.update("UPDATE sys_ai_configuration_test_pair SET status=?,error_code=?,elapsed_ms=?,proof_hash=?,checked_at=CURRENT_TIMESTAMP WHERE test_id=? AND model_ref=? AND key_ref=?",
                         result.status()==ExecutionStatus.SUCCEEDED?"SUCCESS":"FAILED",result.errorCode()==null?null:result.errorCode().name(),result.elapsedMs(),actualProof,run,AiConfigurationService.id(m.modelRef()),AiConfigurationService.id(k.keyRef()));
                 configs.jdbc.update("UPDATE sys_ai_configuration_test SET update_time=CURRENT_TIMESTAMP WHERE test_id=?",run);

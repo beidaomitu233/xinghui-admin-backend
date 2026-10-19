@@ -101,3 +101,8 @@ SceneQueryHttpSecurityTest
 SqlTemporalDecodingTest
 ModelHubRuntimeTest
 AiModelCatalogPersistenceTest
+AiCallTelemetryTransportTest
+AiCallLogServiceTest
+AiCallLogHttpTest
+AiCallLogEntryTest
+AiCallLogMethodSecurityTest
