@@ -106,3 +106,4 @@ AiCallLogServiceTest
 AiCallLogHttpTest
 AiCallLogEntryTest
 AiCallLogMethodSecurityTest
+AiCallTelemetryFailureReasonTest
