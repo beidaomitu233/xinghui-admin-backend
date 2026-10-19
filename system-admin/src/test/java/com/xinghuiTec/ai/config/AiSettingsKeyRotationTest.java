@@ -11,6 +11,7 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -81,14 +82,36 @@ class AiSettingsKeyRotationTest {
         long test = Long.parseLong(start.testId());
         Instant limit = Instant.now().plusSeconds(6);
         while (Instant.now().isBefore(limit)) {
-            if (!"PENDING".equals(fixture.jdbc.queryForObject(
+            boolean terminal=!List.of("QUEUED", "RUNNING").contains(fixture.tests.get(id, test).status());
+            if (terminal && !"PENDING".equals(fixture.jdbc.queryForObject(
                     "SELECT activation_status FROM sys_ai_settings_test_intent WHERE test_id=?", String.class, test)))
                 return settings.testResult(id, test);
-            if (!List.of("QUEUED", "RUNNING").contains(fixture.tests.get(id, test).status()))
-                settings.completed(id, test);
             Thread.sleep(5);
         }
         throw new AssertionError("controlled rotation did not finish");
+    }
+    @Test
+    void terminalEvidenceAndRunningMarkerArePublishedAtomicallyBeforeActivation() throws Exception {
+        var terminalWritten=new CountDownLatch(1);var release=new CountDownLatch(1);
+        var observed=spy(fixture.jdbc);fixture.jdbc=observed;
+        ReflectionTestUtils.setField(fixture.service,"jdbc",observed);
+        doAnswer(call->{
+            Object result=call.callRealMethod();terminalWritten.countDown();
+            assertTrue(release.await(6,TimeUnit.SECONDS),"test publication barrier was not released");return result;
+        }).when(observed).update(eq("UPDATE sys_ai_configuration_test SET status=?,update_time=CURRENT_TIMESTAMP WHERE test_id=? AND status IN ('QUEUED','RUNNING')"),eq("COMPLETED"),anyLong());
+        var created=settings.create(new AiSettingsDtos.Change(null,"Atomic publication","openrouter",null,OLD,AiSettingsService.DEFAULT_MODELS));long id=Long.parseLong(created.configId());
+        var start=settings.startTest(id,new AiSettingsDtos.Test(true,true),actor);long test=Long.parseLong(start.testId());
+        try {
+            assertTrue(terminalWritten.await(6,TimeUnit.SECONDS),"worker did not reach terminal publication");
+            // Another connection must not observe only half of the worker's terminal publication.
+            settings.completed(id,test);
+            assertEquals("PENDING",fixture.jdbc.queryForObject("SELECT activation_status FROM sys_ai_settings_test_intent WHERE test_id=?",String.class,test));
+            assertEquals("RUNNING",fixture.tests.get(id,test).status());
+            assertNull(fixture.service.head(id,false).active());
+        } finally { release.countDown(); }
+        var result=finish(id,start);assertTrue(result.active());
+        assertEquals("APPLIED",fixture.jdbc.queryForObject("SELECT activation_status FROM sys_ai_settings_test_intent WHERE test_id=?",String.class,test));
+        assertNull(fixture.service.head(id,false).runningTest());
     }
     private AiSettingsDtos.View replace(long id) {
         var current = settings.get(id);

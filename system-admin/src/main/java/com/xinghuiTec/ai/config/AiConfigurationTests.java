@@ -139,8 +139,13 @@ public class AiConfigurationTests {
                 }
             }
             stopHeartbeat(run);
-            configs.jdbc.update("UPDATE sys_ai_configuration_test SET status=?,update_time=CURRENT_TIMESTAMP WHERE test_id=? AND status IN ('QUEUED','RUNNING')",finalState,run);
-            configs.jdbc.update("UPDATE sys_ai_configuration SET running_test_id=NULL WHERE config_id=? AND running_test_id=?",configId,run);
+            // Publish terminal evidence and release its running marker atomically. Completion may also
+            // be observed by startSettings/reconcile; it must never see COMPLETED with a stale marker.
+            String completedState=finalState;
+            transactions.executeWithoutResult(status->{
+                configs.jdbc.update("UPDATE sys_ai_configuration_test SET status=?,update_time=CURRENT_TIMESTAMP WHERE test_id=? AND status IN ('QUEUED','RUNNING')",completedState,run);
+                configs.jdbc.update("UPDATE sys_ai_configuration SET running_test_id=NULL WHERE config_id=? AND running_test_id=?",configId,run);
+            });
             if(completionObservers!=null){var observer=completionObservers.getIfUnique();if(observer!=null)observer.completed(configId,run);}
         }
     }
