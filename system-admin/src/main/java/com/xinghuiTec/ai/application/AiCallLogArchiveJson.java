@@ -12,7 +12,7 @@ import java.util.*;
 /** Unknown upstream extensions stay exact without expanding an untrusted decimal exponent. */
 final class AiCallLogArchiveJson {
     private static final ObjectMapper JSON=new ObjectMapper(JsonFactory.builder().streamReadConstraints(
-            StreamReadConstraints.builder().maxNestingDepth(32).maxStringLength(262144).maxNumberLength(1024).build()).build())
+            StreamReadConstraints.builder().maxNestingDepth(64).maxStringLength(262144).maxNumberLength(1024).build()).build())
             .enable(DeserializationFeature.USE_BIG_INTEGER_FOR_INTS,DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS,
                     DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private AiCallLogArchiveJson(){}

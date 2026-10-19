@@ -56,9 +56,11 @@ class AiCallLogServiceTest {
         logs=new AiCallLogService(queries,store,requestLogs,requests,runtime,sql,tests);
     }
     @Test void exactTelemetryPersistsOnceAndListStatisticsExportNeverLoadBodies(){
+        var observed=spy(store);journal.callLogs(observed);
         long request=request(own,"lowcode.record");var attempt=attempt(request,own);var outcome=success(telemetry());
         assertTrue(journal.complete(request,attempt.attemptId(),outcome));
         assertFalse(journal.complete(request,attempt.attemptId(),new ExecutionOutcome(ExecutionStatus.FAILED,ErrorCode.INTERNAL_FAILURE,false,false,null,null,0)));
+        verify(observed,times(1)).completeAttempt(eq(request),eq(attempt.attemptId()),any());
         var filter=filter(AiRequestLogService.Scope.OWN);
         assertEquals(1,logs.page(own,false,filter,1,20).total());assertEquals(1,logs.export(own,false,filter).size());
         var stats=logs.statistics(own,false,filter);assertEquals(1,stats.calls());assertEquals(1,stats.succeeded());assertEquals(0L,stats.knownInputTokens());assertEquals(3L,stats.knownOutputTokens());
@@ -152,6 +154,10 @@ class AiCallLogServiceTest {
         assertEquals("9223372036854775808",usage.get("vendor_big_counter"));assertEquals("0.12345678901234567890123456789",usage.get("precise"));
         assertEquals("1E+999999",usage.get("huge_exponent"));assertEquals(List.of(0L,Long.MAX_VALUE),usage.get("nested"));
         assertEquals(3L,logs.statistics(own,false,filter(AiRequestLogService.Scope.OWN)).knownOutputTokens());
+        String nested="true";for(int i=0;i<48;i++)nested="{\"nested\":"+nested+"}";
+        jdbc.update("UPDATE sys_ai_call_response SET usage_json=? WHERE call_id=?",nested,id(request));
+        Object value=logs.detail(own,false,filter(AiRequestLogService.Scope.OWN),id(request)).response().usage();
+        for(int i=0;i<48;i++)value=((Map<?,?>)value).get("nested");assertEquals(true,value);
     }
     @Test void extremeReportedCostIsNotExpandedOrInvented(){
         long request=request(own,"lowcode.record");var t=telemetry();
