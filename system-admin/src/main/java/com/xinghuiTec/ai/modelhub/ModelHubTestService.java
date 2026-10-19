@@ -66,4 +66,11 @@ public class ModelHubTestService {
         },id(requestId));
         return new ModelHubDtos.TestView(r.requestId(),r.status().name(),r.errorCode(),r.attemptCount(),r.deadline(),attempts);
     }
+
+    /** Same owner/model/action gate as the private test view, without loading any response. */
+    public void authorizeCallLog(String requestId,TrustedActor actor){
+        id(requestId);check(actor!=null&&actor.servicePrincipalRef()==null&&actor.authorities().contains("ai:config:test"),403,"FORBIDDEN");
+        Long matches=jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_business_model_request WHERE request_id=? AND owner_scope=? AND test_request=TRUE",Long.class,id(requestId),actor.subjectId()+"@"+actor.tenantId());
+        check(matches!=null&&matches==1L,404,"NOT_FOUND");requests.owned(id(requestId),new AiRequestStore.Owner(actor.subjectId(),actor.tenantId()));
+    }
 }

@@ -31,6 +31,7 @@ class AiRequestExecutorTest {
     private TestProvider provider;
     private TestTemplate template;
     private TestEvents events;
+    private AiRequestJournal journal;
 
     @BeforeEach
     void setup() throws Exception {
@@ -42,7 +43,7 @@ class AiRequestExecutorTest {
         requests = new AiRequestStore(jdbc);
         events = new TestEvents();
         lifecycle = new AiRequestLifecycle(requests, events, manager);
-        var journal = new AiRequestJournal(jdbc, requests, manager);
+        journal = new AiRequestJournal(jdbc, requests, manager);
         provider = new TestProvider(); template = new TestTemplate();
         var beans = new StaticListableBeanFactory();
         beans.addBean("provider", provider); beans.addBean("template", template);
@@ -207,6 +208,24 @@ class AiRequestExecutorTest {
         secondInstance.execute(cancelled);
         assertEquals(AiRequestStatus.CANCELLED, result(cancelled).status());
         assertEquals(1, provider.calls.size());
+    }
+
+    @Test void telemetrySurvivesSuccessEmptyOutputAndPartialOutputReclassification(){
+        var captured=org.mockito.Mockito.spy(journal);var beans=new StaticListableBeanFactory();beans.addBean("provider",provider);beans.addBean("template",template);
+        var instrumented=new AiRequestExecutor(requests,applications,captured,lifecycle,new AiSharedModelCursor(jdbc),events,
+                beans.getBeanProvider(AiProviderRuntime.class),beans.getBeanProvider(AiTemplateRuntime.class),jdbc,transaction.getTransactionManager());
+        provider.add("m1","k1");var measured=AiCallLogServiceTest.telemetry();
+        for(int mode=0;mode<3;mode++){
+            final int variant=mode;provider.action=(request,observer)->{
+                if(variant!=1)observer.onDelta("controlled output");
+                return new ExecutionOutcome(variant==2?ExecutionStatus.FAILED:ExecutionStatus.SUCCEEDED,variant==2?ErrorCode.INVALID_RESPONSE:null,false,false,null,"fixture-id",27,measured);
+            };
+            var policy=policy(AiApplicationPolicy.ModelMode.FIXED,false,1,64,binding("m1"));instrumented.execute(work(application(policy),policy));
+        }
+        var outcomes=org.mockito.ArgumentCaptor.forClass(ExecutionOutcome.class);
+        org.mockito.Mockito.verify(captured,org.mockito.Mockito.times(3)).complete(org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyString(),outcomes.capture());
+        assertEquals(List.of(ExecutionStatus.SUCCEEDED,ExecutionStatus.FAILED,ExecutionStatus.INCOMPLETE),outcomes.getAllValues().stream().map(ExecutionOutcome::status).toList());
+        outcomes.getAllValues().forEach(outcome->assertSame(measured,outcome.telemetry()));
     }
 
     private AiApplicationPolicy policy(AiApplicationPolicy.ModelMode mode, boolean fallback, int attempts, int tokens, ModelBinding... bindings) {

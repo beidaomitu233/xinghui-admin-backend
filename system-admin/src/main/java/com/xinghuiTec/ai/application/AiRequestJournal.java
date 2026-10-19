@@ -26,6 +26,9 @@ public class AiRequestJournal {
     private final JdbcTemplate jdbc;
     private final AiRequestStore requests;
     private final TransactionTemplate transaction;
+    private AiCallLogStore callLogs;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void callLogs(AiCallLogStore store){this.callLogs=store;}
 
     public AiRequestJournal(JdbcTemplate jdbc, AiRequestStore requests, PlatformTransactionManager manager) {
         this.jdbc = jdbc;
@@ -38,7 +41,7 @@ public class AiRequestJournal {
         if (maximumAttempts < 1 || maximumAttempts > 8 || reason == null || outputTokenLimit < 1 || outputTokenLimit > 4096) {
             throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
         }
-        return transaction.execute(status -> {
+        Attempt attempt=transaction.execute(status -> {
             var request = requests.currentOwned(requestId, owner);
             if (request.status() != AiRequestStatus.RUNNING) throw new AiRuntimeException(ErrorCode.CANCELLED);
             if (!Instant.now().isBefore(request.deadline())) throw new AiRuntimeException(ErrorCode.DEADLINE_EXCEEDED);
@@ -75,15 +78,20 @@ public class AiRequestJournal {
                     target.key().keyRef(), target.key().keyVersion());
             return new Attempt(keys.getKey().toString(), number);
         });
+        if(callLogs!=null)callLogs.beginAttempt(requestId,attempt.attemptId());
+        return attempt;
     }
 
     public boolean complete(long requestId, String attemptId, ExecutionOutcome outcome) {
-        return jdbc.update("UPDATE sys_ai_request_attempt SET status=?,error_code=?,input_tokens=?,output_tokens=?,"
+        boolean updated=jdbc.update("UPDATE sys_ai_request_attempt SET status=?,error_code=?,input_tokens=?,output_tokens=?,"
                         + "provider_request_id=?,finish_time=? WHERE attempt_id=? AND request_id=? AND status='RUNNING'",
                 outcome.status().name(), outcome.errorCode() == null ? null : outcome.errorCode().name(),
                 outcome.usage() == null ? null : outcome.usage().inputTokens(),
                 outcome.usage() == null ? null : outcome.usage().outputTokens(),
                 safeProviderRequestId(outcome.providerRequestId()), Timestamp.from(Instant.now()), AiApplicationService.positiveId(attemptId), requestId) == 1;
+        // Only the terminal CAS winner may archive its receipt; a duplicate cannot race in a different outcome.
+        if(updated&&callLogs!=null)callLogs.completeAttempt(requestId,attemptId,outcome);
+        return updated;
     }
 
     public Usage usage(long requestId) {
