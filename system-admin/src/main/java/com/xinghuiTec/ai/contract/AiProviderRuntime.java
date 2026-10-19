@@ -66,7 +66,11 @@ public interface AiProviderRuntime {
 
     enum ExecutionStatus { SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, INCOMPLETE }
     record ExecutionOutcome(ExecutionStatus status, ErrorCode errorCode, boolean retryable,
-                            boolean outputStarted, Usage usage, String providerRequestId, long elapsedMs) {
+                            boolean outputStarted, Usage usage, String providerRequestId, long elapsedMs,AiCallTelemetry telemetry) {
+        public ExecutionOutcome(ExecutionStatus status,ErrorCode errorCode,boolean retryable,boolean outputStarted,
+                                Usage usage,String providerRequestId,long elapsedMs){
+            this(status,errorCode,retryable,outputStarted,usage,providerRequestId,elapsedMs,null);
+        }
         public ExecutionOutcome {
             Objects.requireNonNull(status);
             if (elapsedMs < 0 || (status == ExecutionStatus.SUCCEEDED && (errorCode != null || retryable))
@@ -75,5 +79,6 @@ public interface AiProviderRuntime {
                     || ((status == ExecutionStatus.CANCELLED || status == ExecutionStatus.INCOMPLETE) && retryable))
                 throw new IllegalArgumentException("Inconsistent execution outcome");
         }
+        @Override public String toString(){return "ExecutionOutcome[REDACTED]";}
     }
 }
