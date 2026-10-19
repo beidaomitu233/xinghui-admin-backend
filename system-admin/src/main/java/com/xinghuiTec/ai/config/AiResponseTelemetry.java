@@ -34,6 +34,7 @@ final class AiResponseTelemetry {
     private JsonNode nonstreamBody;
     private boolean complete,truncated,redacted,failed,invalidJson,unsupportedCost;
     private String partialLine;
+    private String failureKind;
     AiResponseTelemetry(boolean streaming,String key){this.streaming=streaming;this.secrets=secretForms(key);}
     void sent(){started=Instant.now();startNanos=System.nanoTime();}
     private long now(){return Math.max(0,(System.nanoTime()-startNanos)/1_000_000);}
@@ -43,6 +44,25 @@ final class AiResponseTelemetry {
         }catch(Exception captureFailure){failed=true;}
     }
     void unavailableHeaders(int status){httpStatus=status>=100&&status<=599?status:null;if(headersMs==null)headersMs=now();failed=true;}
+    /** Fixed diagnostics only; never retain the Throwable, its message, stack, URL or dynamic class name. */
+    void failure(Throwable failure,com.xinghuiTec.ai.contract.AiTypes.ErrorCode code){
+        if(code==com.xinghuiTec.ai.contract.AiTypes.ErrorCode.CANCELLED){failureKind="CANCELLED";return;}
+        var visited=Collections.newSetFromMap(new IdentityHashMap<Throwable,Boolean>());String fallback="OTHER_ERROR";
+        try{
+            Throwable current=failure;
+            for(int depth=0;current!=null&&depth<6&&visited.add(current);depth++,current=current.getCause()){
+                if(current instanceof java.net.http.HttpConnectTimeoutException){failureKind="CONNECT_TIMEOUT";return;}
+                if(current instanceof java.net.http.HttpTimeoutException||current instanceof java.net.SocketTimeoutException||current instanceof java.util.concurrent.TimeoutException){failureKind="HTTP_TIMEOUT";return;}
+                if(current instanceof javax.net.ssl.SSLException){failureKind="TLS_ERROR";return;}
+                if(current instanceof java.net.ConnectException||current instanceof java.net.NoRouteToHostException){failureKind="CONNECT_ERROR";return;}
+                if(current instanceof java.net.UnknownHostException||current instanceof java.nio.channels.UnresolvedAddressException){failureKind="DNS_ERROR";return;}
+                if(current instanceof java.util.concurrent.CancellationException){failureKind=code==com.xinghuiTec.ai.contract.AiTypes.ErrorCode.DEADLINE_EXCEEDED?"HTTP_TIMEOUT":"CANCELLED";return;}
+                if(current instanceof InterruptedException){failureKind="INTERRUPTED";return;}
+                if(current instanceof IOException)fallback="IO_ERROR";
+            }
+        }catch(RuntimeException invalidCause){/* Malformed custom cause chains cannot interfere with the request. */}
+        failureKind=fallback;
+    }
     InputStream receive(InputStream source){return new FilterInputStream(source){
         @Override public int read()throws IOException{int value=in.read();if(value>=0)bytes(new byte[]{(byte)value},0,1);return value;}
         @Override public int read(byte[] value,int offset,int length)throws IOException{int count=in.read(value,offset,length);if(count>0)bytes(value,offset,count);return count;}
@@ -197,9 +217,10 @@ final class AiResponseTelemetry {
                 archived=bytes(headerJson)+bytes(usageJson)+bytes(body);
                 status=failed?"FAILED":truncated||invalidJson||partial?"PARTIAL":"COMPLETE";
                 reason=failed?"ARCHIVE_FAILED":truncated?"CAPTURE_LIMIT":invalidJson?"INVALID_JSON":partial?"CANCELLED".equals(outcome)?"CANCELLED":"TRANSPORT_PARTIAL":null;
-                if(received==0&&headers==null){status="NOT_CAPTURED";reason="NO_RESPONSE";body=null;format=null;archived=bytes(usageJson);}
+                if(received==0&&httpStatus==null&&headersMs==null){status="NOT_CAPTURED";reason="NO_RESPONSE";body=null;format=null;archived=bytes(usageJson);}
             }
             BigDecimal reported=cost();if(unsupportedCost&&reason==null)reason="UNSUPPORTED_COST";
+            if(failureKind!=null&&("NO_RESPONSE".equals(reason)||"NO_UPSTREAM".equals(reason)))reason=reason+"_"+failureKind;
             return new AiCallTelemetry(1,streaming,started,started==null?null:end,httpStatus,elapsed,headersMs,firstByte,firstOutput,firstText,lastOutput,firstKind,returnedModel,finishReason,
                     token("/prompt_tokens","/input_tokens"),token("/completion_tokens","/output_tokens"),token("/total_tokens"),
                     token("/prompt_tokens_details/cached_tokens","/input_tokens_details/cached_tokens","/cache_read_input_tokens","/prompt_cache_hit_tokens"),

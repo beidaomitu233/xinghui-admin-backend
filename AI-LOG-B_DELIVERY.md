@@ -46,3 +46,15 @@ OpenAI 流式 usage 尾帧需显式选项，非流不加；OpenRouter 当前自�
 ## 待验收与未验证
 
 未运行完整 Maven、C 持久化/权限 API 组合验证、真实数据库或真实厂商调用；受控 HTTP 不冒充真实上游证据。不推上游、不合主干，未引入 Agent/Pi/Java SDK。PM 按既有 Gitflow 统一组合、验收与发布。
+
+## 追加验收修复：无响应失败的安全分类
+
+状态：本地实现与限定检查完成，待 PM 合并及正式 gate。此前 721a949 的 15+24 项结果仍是原提交证据，不代替本补丁检查。
+
+- 只在既有 `telemetry.captureReason` 中追加固定原因；未加共享 DTO 或 HTTP 字段。
+- 原因白名单为 `HTTP_TIMEOUT / CONNECT_TIMEOUT / TLS_ERROR / CONNECT_ERROR / DNS_ERROR / IO_ERROR / CANCELLED / INTERRUPTED / OTHER_ERROR`，按实际阶段前缀 `NO_RESPONSE_` 或 `NO_UPSTREAM_`。仅原本缺少响应的情况使用该分类；HTTP 响应、部分、截断及归档错误的原原因优先。
+- 最多检查 6 个 cause，并以对象身份防循环；不保留 Throwable、异常 message、stack、动态类名、URL 或出站内容。取消及超时的业务判断、错误码、重试、预算和取消流程均未改。
+- 实际修改：`AiResponseTelemetry.failure()` 固定映射，`OpenRouterTransport` catch 中挂接，以及新增 `AiCallTelemetryFailureReasonTest`。
+- 限定 Java 17 单 128 MiB main/test javac 均 exit 0；新增 4/4 项成功，0 跳过、0 失败，1863 ms。覆盖 future 多层包装的 HttpTimeout/ConnectTimeout/TLS/Connect/DNS/IO/未知异常、消息含 Key/私有 URL 不泄露、原 `NETWORK_ERROR` 与 retryable 不变、取消、cause 循环/深度、HTTP/部分/截断原因优先。
+- 证据：同 QA 目录 `ai-log-reason-main.log`、`ai-log-reason-tests-compile.log`、`ai-log-reason-junit.log`。
+- 未重跑旧大套或完整 Maven；未发送外部请求、未重启服务。该固定 5 秒异常尚未因此被确认原因。窗口已释放，无 B JVM；新类 4 项请 PM/C 统一登记。

@@ -146,6 +146,7 @@ public class OpenRouterTransport {
                     failure instanceof com.fasterxml.jackson.core.JsonProcessingException?ErrorCode.INVALID_RESPONSE:
                     failure instanceof IOException||failure instanceof ExecutionException?ErrorCode.NETWORK_ERROR:ErrorCode.INVALID_RESPONSE; }
             catch(RuntimeException unavailable) { code=ErrorCode.DEPENDENCY_UNAVAILABLE; }
+            state.capture.failure(failure,code);
             // JSON fragments are withheld until a complete single object is validated and scrubbed.
             // An invalid/truncated object is never delivered as a successful structured result.
             if(!state.jsonObject) try { state.flush(); } catch(RuntimeException ignored) { /* No retry after observer failure. */ }
