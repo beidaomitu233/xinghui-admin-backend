@@ -14,6 +14,8 @@ public class AiModelCatalogService {
     private final AiConfigurationService configs;
     private final AiModelCatalogTransport transport;
     private final AiModelCatalogStore store;
+    private com.xinghuiTec.ai.application.AiCallLogStore callLogs;
+    @Autowired(required=false) public void callLogs(com.xinghuiTec.ai.application.AiCallLogStore logs){this.callLogs=logs;}
 
     /** Nonpersistent local-test seam. Spring always requires the database-backed store. */
     public AiModelCatalogService(AiConfigurationService configs, AiModelCatalogTransport transport) {
@@ -27,8 +29,11 @@ public class AiModelCatalogService {
     }
 
     public Page catalog(String search, int pageNum, int pageSize) {
+        return catalog(search,pageNum,pageSize,null);
+    }
+    public Page catalog(String search,int pageNum,int pageSize,TrustedActor actor) {
         String query = query(search, pageNum, pageSize);
-        return page(transport.fetch("openrouter", null), query, pageNum, pageSize, "PUBLIC", "openrouter", null, null, null);
+        return page(fetch("openrouter",null,actor), query, pageNum, pageSize, "PUBLIC", "openrouter", null, null, null);
     }
 
     public Page draftScan(DraftScan request) {
@@ -41,7 +46,7 @@ public class AiModelCatalogService {
         var preset=preset(request.provider());
         if(request.endpointUrl()!=null&&!request.endpointUrl().equals(preset.chatEndpoint()))throw failure(422,"ENDPOINT_UNSUPPORTED");
         if(store!=null)owner(actor);
-        var models=transport.fetch(request.provider(),request.apiKey());String source=source(request.provider());
+        var models=fetch(request.provider(),request.apiKey(),actor);String source=source(request.provider());
         var receipt=store==null?null:store.create(owner(actor),preset.code(),preset.chatEndpoint(),credential(preset.code(),preset.chatEndpoint(),request.apiKey()),source,models);
         return page(models,query,request.pageNum(),request.pageSize(),source,request.provider(),null,null,null,
                 receipt==null?Instant.now():receipt.refreshedAt(),receipt==null?null:receipt.id());
@@ -75,7 +80,7 @@ public class AiModelCatalogService {
         if (secret == null || secret.isBlank()) throw failure(503, "CREDENTIAL_UNAVAILABLE");
         // Recheck before sending credentials and after receiving the remote result.
         same(head, head(configId));
-        var models = transport.fetch(preset.code(), secret);
+        var models = fetch(preset.code(),secret,actor);
         same(head, head(configId));
         var receipt=store==null?null:store.create(owner(actor),preset.code(),preset.chatEndpoint(),credential(preset.code(),preset.chatEndpoint(),secret),source(preset.code()),models);
         if(receipt!=null)attach(new Attach(request.configId(),request.keyId(),head.revision(),receipt.id()),actor);
@@ -151,6 +156,12 @@ public class AiModelCatalogService {
                 page(combined,query,pageNum,pageSize,"SAVED_CATALOG",snapshot.providerCode(),configId,keyId,current.revision(),refreshed,null),sources);
     }
     private AiProviderPresets.Preset preset(String provider){try{return AiProviderPresets.require(provider);}catch(RuntimeException invalid){throw failure(422,"PROVIDER_UNSUPPORTED");}}
+    private AiModelCatalogTransport.Catalog fetch(String provider,String secret,TrustedActor actor){
+        if(callLogs!=null&&actor==null)throw failure(403,"FORBIDDEN");
+        String call=callLogs==null?null:callLogs.beginDiscovery(actor,provider);long start=System.nanoTime();boolean success=false;
+        try{var result=transport.fetch(provider,secret);success=true;return result;}
+        finally{if(callLogs!=null)callLogs.completeDiscovery(call,success,java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start));}
+    }
     private String source(String provider){return "openrouter".equals(provider)?"USER_FILTERED":"PROVIDER_KEY";}
     private String owner(TrustedActor actor){if(actor==null||actor.servicePrincipalRef()!=null)throw failure(403,"FORBIDDEN");return configs.settingsFingerprint("ai:catalog-owner:v1",List.of(actor.subjectId(),actor.tenantId()));}
     private String credential(String provider,String endpoint,String secret){if(secret==null||secret.isBlank())throw failure(503,"CREDENTIAL_UNAVAILABLE");return configs.settingsFingerprint("ai:catalog-credential:v1",List.of(provider,endpoint,secret));}

@@ -150,6 +150,14 @@ public class SqlAssistanceService {
         return new SqlAssistanceDtos.View(request.requestId(),status,approved,current.scopeDescription(),current.fingerprint(),diagnostics,error,request.deadline());
     }
 
+    /** Read authorization only: log polling must not reconcile status or execute generated SQL. */
+    public void authorizeCallLog(long id,TrustedActor actor) {
+        permissions(actor);var saved=row(id,actor);
+        QueryContext context=parse((String)saved.get("context_json"),QueryContext.class);
+        var current=schema(actor,context,SceneManagementService.control(5));
+        require(current.fingerprint().equals(saved.get("schema_fingerprint")),409,"SCHEMA_CHANGED");
+    }
+
     public SqlAssistanceDtos.View cancel(long id,TrustedActor actor) {
         get(id,actor); // Same owner, current permissions and schema gate as polling.
         jdbc.update("UPDATE sys_ai_sql_assistance SET validation_state='CANCELLED',approved_query_json=NULL,error_code='CANCELLED',update_time=CURRENT_TIMESTAMP WHERE request_id=? AND owner_scope=? AND validation_state='PENDING'",id,owner(actor).scope());

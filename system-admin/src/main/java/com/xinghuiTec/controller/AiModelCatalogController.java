@@ -40,7 +40,7 @@ public class AiModelCatalogController {
     public Result<Page> catalog(@RequestParam(name="search", required=false) String search,
                                 @RequestParam(name="pageNum", defaultValue="1") int pageNum,
                                 @RequestParam(name="pageSize", defaultValue="20") int pageSize) {
-        return Result.ok(catalogs.catalog(search, pageNum, pageSize));
+        return Result.ok(catalogs.catalog(search,pageNum,pageSize,identity.current()));
     }
 
     @PostMapping("/scan")

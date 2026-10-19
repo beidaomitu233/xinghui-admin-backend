@@ -18,6 +18,7 @@ import static com.xinghuiTec.ai.config.AiConfigurationDtos.*;
 public class AiConfigurationController {
     private final AiConfigurationService configs;
     private final AiConfigurationTests tests;
+    private final com.xinghuiTec.ai.application.AiInvocationIdentity identity=new com.xinghuiTec.ai.application.AiInvocationIdentity();
     public AiConfigurationController(AiConfigurationService configs,AiConfigurationTests tests) { this.configs=configs;this.tests=tests; }
     @ModelAttribute public void noCache(HttpServletResponse response) { response.setHeader("Cache-Control","no-store"); }
     @GetMapping
@@ -44,7 +45,7 @@ public class AiConfigurationController {
     public Result<?> impact(@PathVariable String id) { return Result.ok(configs.impact(AiConfigurationService.id(id))); }
     @PostMapping("/{id}/test-runs")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and (hasAuthority('ai:config:test') or hasAuthority('ai:model:test'))")
-    public Result<TestRun> test(@PathVariable String id,@RequestBody TestStart request) { return Result.ok(tests.start(AiConfigurationService.id(id),request)); }
+    public Result<TestRun> test(@PathVariable String id,@RequestBody TestStart request) { return Result.ok(tests.start(AiConfigurationService.id(id),request,identity.current())); }
     @GetMapping("/{id}/test-runs/{testId}")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and (hasAuthority('ai:config:test') or hasAuthority('ai:model:test'))")
     public Result<TestRun> testResult(@PathVariable String id,@PathVariable String testId) { return Result.ok(tests.get(AiConfigurationService.id(id),AiConfigurationService.id(testId))); }

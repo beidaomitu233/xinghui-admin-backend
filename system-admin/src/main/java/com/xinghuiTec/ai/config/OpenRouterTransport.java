@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.xinghuiTec.ai.contract.AiProviderRuntime.*;
+import com.xinghuiTec.ai.contract.AiCallTelemetry;
 import com.xinghuiTec.ai.contract.AiRuntimeException;
 import com.xinghuiTec.ai.model.AiModelConfigRules;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -104,6 +105,8 @@ public class OpenRouterTransport {
             outbound.addAll(messages.stream().map(m->Map.of("role",m.role().name().toLowerCase(Locale.ROOT),"content",m.content())).toList());
             body.put("model",modelCode); body.put("messages",outbound);
             body.put("stream",requirements.streaming());
+            // OpenAI otherwise omits the final usage chunk; other supported providers report it without this opt-in.
+            if("openai".equals(provider)&&requirements.streaming())body.put("stream_options",Map.of("include_usage",true));
             // OpenAI Chat Completions uses max_completion_tokens, including reasoning tokens.
             // https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
             body.put("openai".equals(provider)?"max_completion_tokens":"max_tokens",maxTokens);
@@ -123,12 +126,14 @@ public class OpenRouterTransport {
                     .timeout(Duration.ofMillis(Math.max(1,Duration.between(Instant.now(),deadline).toMillis())))
                     .header("Authorization","Bearer "+key).header("Content-Type","application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(encoded,StandardCharsets.UTF_8)).build();
+            state.capture.sent();
             var future=client.sendAsync(request,HttpResponse.BodyHandlers.ofInputStream()); pending.set(future);
             var response=future.get(Math.max(1,Duration.between(Instant.now(),deadline).toMillis()),TimeUnit.MILLISECONDS);
-            stream.set(response.body());
-            if(response.statusCode()!=200) return outcome(ExecutionStatus.FAILED,httpError(response.statusCode()),retryable(httpError(response.statusCode())),state,start);
-            if(requirements.streaming()) parseStream(response.body(),state,modelCode,control);
-            else parseJson(response.body(),state,modelCode,control);
+            try{state.capture.response(response.statusCode(),response.headers().map());}catch(RuntimeException unavailableHeaders){state.capture.unavailableHeaders(response.statusCode());}
+            InputStream received=state.capture.receive(response.body());stream.set(received);
+            if(response.statusCode()!=200){try{readError(received,state,control);}catch(IOException partialErrorBody){control.check();}return outcome(ExecutionStatus.FAILED,httpError(response.statusCode()),retryable(httpError(response.statusCode())),state,start);}
+            if(requirements.streaming()) parseStream(received,state,modelCode,control);
+            else parseJson(received,state,modelCode,control);
             if(!state.finished||!state.done||state.characters==0) throw new AiRuntimeException(ErrorCode.INVALID_RESPONSE);
             if(state.jsonObject) state.prepareJsonObject();
             control.check();
@@ -141,6 +146,7 @@ public class OpenRouterTransport {
                     failure instanceof com.fasterxml.jackson.core.JsonProcessingException?ErrorCode.INVALID_RESPONSE:
                     failure instanceof IOException||failure instanceof ExecutionException?ErrorCode.NETWORK_ERROR:ErrorCode.INVALID_RESPONSE; }
             catch(RuntimeException unavailable) { code=ErrorCode.DEPENDENCY_UNAVAILABLE; }
+            state.capture.failure(failure,code);
             // JSON fragments are withheld until a complete single object is validated and scrubbed.
             // An invalid/truncated object is never delivered as a successful structured result.
             if(!state.jsonObject) try { state.flush(); } catch(RuntimeException ignored) { /* No retry after observer failure. */ }
@@ -157,12 +163,20 @@ public class OpenRouterTransport {
     }
     private ExecutionOutcome outcome(ExecutionStatus status,ErrorCode error,boolean retry,ParseState s,long start) {
         boolean started=s.started();
-        return new ExecutionOutcome(status,error,retry&&status!=ExecutionStatus.CANCELLED&&!started,started,s.usage,s.providerId,(System.nanoTime()-start)/1_000_000);
+        long elapsed=(System.nanoTime()-start)/1_000_000;
+        AiCallTelemetry telemetry=s.capture.finish(status.name());
+        return new ExecutionOutcome(status,error,retry&&status!=ExecutionStatus.CANCELLED&&!started,started,s.usage,s.providerId,elapsed,telemetry);
     }
     private static void close(InputStream stream) { if(stream!=null) try { stream.close(); } catch(IOException ignored) {} }
     private static ErrorCode httpError(int status) {
         return status==401?ErrorCode.AUTH_FAILED:status==403?ErrorCode.CONTENT_REJECTED:status==429?ErrorCode.RATE_LIMITED:
                 status==408||status==504?ErrorCode.DEADLINE_EXCEEDED:status>=500?ErrorCode.PROVIDER_UNAVAILABLE:ErrorCode.INVALID_INPUT;
+    }
+    private void readError(InputStream stream,ParseState state,InvocationControl control)throws IOException{
+        // Archive an error response under the existing receive bound, without treating it as model output.
+        byte[] block=new byte[8192];int total=0,count;
+        while(total<1_048_576&&(count=stream.read(block,0,Math.min(block.length,1_048_576-total)))!=-1){control.check();total+=count;}
+        if(total<1_048_576)state.capture.bodyComplete();
     }
     private void parseJson(InputStream stream,ParseState state,String model,InvocationControl control) throws IOException {
         var bytes=new ByteArrayOutputStream(); byte[] block=new byte[8192]; int read;
@@ -178,6 +192,7 @@ public class OpenRouterTransport {
             }
         }
         control.check();
+        state.capture.bodyComplete();state.capture.observe(bytes.toString(StandardCharsets.UTF_8));
         JsonNode data=state.jsonObject?STRICT_JSON.readTree(bytes.toByteArray()):json.readTree(bytes.toByteArray());
         state.unclassifiedBody=false;
         inspect(data,state,model,false);
@@ -187,15 +202,18 @@ public class OpenRouterTransport {
         // Read character-by-character with explicit line/event/total bounds; readLine could allocate without limit.
         var reader=new InputStreamReader(stream,StandardCharsets.UTF_8);
         var line=new StringBuilder(); var event=new StringBuilder(); int count=0,ch;
+        try{
         while((ch=reader.read())!=-1) {
             state.unclassifiedBody=true;
             control.check(); if(++count>1_048_576) throw new AiRuntimeException(ErrorCode.OUTPUT_LIMIT);
             if(ch=='\r') continue;
             if(ch!='\n') { line.append((char)ch); if(line.length()>65536) throw new AiRuntimeException(ErrorCode.OUTPUT_LIMIT); continue; }
+            state.capture.line(line.toString());
             if(line.isEmpty()) {
                 if(!event.isEmpty()) {
                     String payload=event.toString().stripTrailing(); event.setLength(0);
-                    if("[DONE]".equals(payload)) { state.unclassifiedBody=false; state.done=true; return; }
+                    if("[DONE]".equals(payload)) { state.unclassifiedBody=false; state.done=true;state.capture.bodyComplete(); return; }
+                    state.capture.observe(payload);
                     JsonNode frame=state.jsonObject?STRICT_JSON.readTree(payload):json.readTree(payload);
                     state.unclassifiedBody=false;
                     inspect(frame,state,model,true);
@@ -206,6 +224,7 @@ public class OpenRouterTransport {
             }
             line.setLength(0);
         }
+        }finally{state.capture.partial(line.toString());}
         // EOF without the protocol terminator is incomplete even after a finish_reason frame.
     }
     private void inspect(JsonNode data,ParseState state,String model,boolean streaming) {
@@ -222,7 +241,7 @@ public class OpenRouterTransport {
         String returned=data.path("model").asText("");
         if(!returned.isEmpty()&&!returned.replace(":free","").equals(model.replace(":free",""))) throw new AiRuntimeException(ErrorCode.INVALID_RESPONSE);
         String providerId=data.path("id").asText("");
-        if(providerId.matches("[A-Za-z0-9._:-]{1,128}")&&!providerId.contains(state.key)) state.providerId=providerId;
+        if(providerId.matches("[A-Za-z0-9._:-]{1,128}")&&state.capture.safeMetadata(providerId,128)!=null) state.providerId=providerId;
         var usage=data.get("usage");
         if(usage!=null&&usage.isObject()) {
             state.usage=new Usage(number(usage,"prompt_tokens"),number(usage,"completion_tokens"),number(usage,"total_tokens"));
@@ -240,9 +259,10 @@ public class OpenRouterTransport {
     }
     private static final class ParseState {
         final String key; final StreamObserver observer; final boolean streaming,jsonObject;
+        final AiResponseTelemetry capture;
         final StringBuilder buffer=new StringBuilder();
         boolean receivedContent,unclassifiedBody,output,finished,done; int characters; Usage usage=new Usage(null,null,null); String providerId;
-        ParseState(String key,StreamObserver observer,boolean streaming,boolean jsonObject) { this.key=key;this.observer=observer;this.streaming=streaming;this.jsonObject=jsonObject; }
+        ParseState(String key,StreamObserver observer,boolean streaming,boolean jsonObject) { this.key=key;this.observer=observer;this.streaming=streaming;this.jsonObject=jsonObject;this.capture=new AiResponseTelemetry(streaming,key); }
         boolean started() { return receivedContent||unclassifiedBody||output; }
         void emit(String value) {
             if(!value.isEmpty()) receivedContent=true;

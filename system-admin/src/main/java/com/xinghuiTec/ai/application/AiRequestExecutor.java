@@ -172,6 +172,7 @@ public class AiRequestExecutor {
                 var usage = new AtomicReference<Usage>();
                 var buffer = new OutputBuffer(id, owner, control, outputTouched,work.privateOutput());
                 ExecutionOutcome outcome;
+                com.xinghuiTec.ai.contract.AiCallTelemetry telemetry=null;
                 try {
                     outcome = provider.execute(new ExecutionRequest(work.invocation(), attempt.attemptId(), target,
                             work.messages(), policy.requirements(), allocation), new StreamObserver() {
@@ -179,24 +180,27 @@ public class AiRequestExecutor {
                         @Override public void onUsage(Usage measured) { usage.set(measured); }
                     }, attemptControl);
                     if (outcome == null) throw new AiRuntimeException(ErrorCode.INVALID_RESPONSE);
+                    telemetry=outcome.telemetry();
                     if (outcome.status() != ExecutionStatus.CANCELLED && outcome.status() != ExecutionStatus.TIMED_OUT) buffer.flush();
                     boolean started = outputTouched.get() || outcome.outputStarted();
                     Usage measured = outcome.usage() == null ? usage.get() : outcome.usage();
                     if (outcome.status() == ExecutionStatus.SUCCEEDED && !outputTouched.get()) {
                         outcome = new ExecutionOutcome(ExecutionStatus.FAILED, ErrorCode.INVALID_RESPONSE, false, started,
-                                measured, outcome.providerRequestId(), outcome.elapsedMs());
+                                measured, outcome.providerRequestId(), outcome.elapsedMs(),telemetry);
                     } else if (started && outcome.status() != ExecutionStatus.SUCCEEDED && outcome.status() != ExecutionStatus.CANCELLED) {
                         outcome = new ExecutionOutcome(ExecutionStatus.INCOMPLETE, outcome.errorCode(), false, true,
-                                measured, outcome.providerRequestId(), outcome.elapsedMs());
+                                measured, outcome.providerRequestId(), outcome.elapsedMs(),telemetry);
                     } else {
                         outcome = new ExecutionOutcome(outcome.status(), outcome.errorCode(), outcome.retryable() && !started,
-                                started, measured, outcome.providerRequestId(), outcome.elapsedMs());
+                                started, measured, outcome.providerRequestId(), outcome.elapsedMs(),telemetry);
                     }
                 } catch (AiRuntimeException safe) {
                     outcome = failure(safe.code(), outputTouched.get(), usage.get());
                 } catch (RuntimeException unexpected) {
                     outcome = failure(ErrorCode.INTERNAL_FAILURE, outputTouched.get(), usage.get());
                 }
+                if(outcome.telemetry()==null&&telemetry!=null)outcome=new ExecutionOutcome(outcome.status(),outcome.errorCode(),outcome.retryable(),
+                        outcome.outputStarted(),outcome.usage(),outcome.providerRequestId(),outcome.elapsedMs(),telemetry);
                 journal.complete(id, attempt.attemptId(), outcome);
                 if (outcome.status() == ExecutionStatus.SUCCEEDED) {
                     lifecycle.finish(id, owner, AiRequestStatus.SUCCEEDED, null, journal.usage(id));

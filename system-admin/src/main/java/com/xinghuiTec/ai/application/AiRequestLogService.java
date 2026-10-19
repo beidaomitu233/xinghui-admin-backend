@@ -31,7 +31,7 @@ public class AiRequestLogService {
     public record Detail(Row request, List<Attempt> attempts, List<Stage> stages) {}
     public record Statistics(long requests, long businessRequests, long testRequests, long modelAttempts,
                              Long knownInputTokens, Long knownOutputTokens, long unknownInputAttempts, long unknownOutputAttempts) {}
-    private record Where(String sql, List<Object> args, boolean empty) {}
+    record Where(String sql, List<Object> args, boolean empty) {}
     private final JdbcTemplate jdbc;
     private final AiApplicationStore applications;
     private final AiApplicationService versions;
@@ -95,7 +95,7 @@ public class AiRequestLogService {
         return List.copyOf(jdbc.query(select() + where.sql() + " ORDER BY r.request_id DESC LIMIT 5000", this::row, where.args().toArray()));
     }
 
-    private Where where(TrustedActor actor, boolean platform, Filters filter, String action) {
+    Where where(TrustedActor actor, boolean platform, Filters filter, String action) {
         if (!actor.authorities().contains("ai:request:" + action)) throw new AiRuntimeException(ErrorCode.FORBIDDEN);
         if (filter == null || filter.scope() == null) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
         if (filter.scope() == Scope.AUDIT && (!platform || !actor.authorities().contains("ai:request:audit"))) {
