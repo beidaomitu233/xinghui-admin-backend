@@ -55,6 +55,16 @@ BLOCKED/IN_PROGRESS的归档、空库事实确认和受控恢复仍由PM独立�
 
 本地核查：4个离线gate测试方法通过（含5种原有模拟发布状态和旧端口policy拒绝）；Python/JSON解析与check-nginx.sh的bash-n通过；6个运行/配置文件与基线逐字节比较仅18080→18180。原compose资源、SSH、backend探针/Dockerfile、package/workflows和历史交付未改。初次沙箱TEMP权限错误后，仅提升权限重跑mock gates，不改ACL。未运行Docker/完整583项应用测试/CI或服务器操作。
 
+### AI-SERVER-TMPFS：Compose挂载列表修复
+
+PM实际配对启动时，后端healthy，web因`invalid mount path: 'nodev' mount path must be absolute`创建失败。原`tmpfs: [/tmp:rw,nosuid,nodev,size=64m]`在YAML flow list中被解析为四项，之前直接`docker run --tmpfs`的fixture未经过Compose，未覆盖该错误。
+
+本次从`origin/dev=14bc84aace62b574e2d064b0407766d5041efc09`建立`fix/AI-SERVER-TMPFS`，只将整条挂载字符串加引号：`tmpfs: ["/tmp:rw,nosuid,nodev,size=64m"]`。四个选项、只读根目录、128MiB/CPU上限、18180端口和其他安全约束均保留。检查当前部署文件中的同类flow list：仅此tmpfs项将逗号作为单条挂载内部选项；cap_drop/security_opt/日志mapping及Dockerfile JSON argv不作无关改写。历史handoff和hash收据不重写。
+
+现有`Server configuration check`在构建/直接启动fixture之前，新增真实`docker compose config --no-env-resolution --no-interpolate --format json`解析，并用`check-compose.py`断言`services.web.tmpfs`恰为一条完整字符串；不读取服务器`backend.env`、不拉镜像或启动服务即可检测本次回归。离线gate同时拒绝四项拆分、额外挂载、缺失nosuid/nodev/size与错误数据类型。实际云端检查等待PM推进Gitflow，本轮不push/PR或重建业务，不把语法/模型验证称为服务器挂载验收。失败标记由PM保留，本分支不清理或重试服务器。
+
+本地真实结果：5个离线gate测试方法通过；实际Compose config JSON重现旧四项列表并被新断言拒绝，修复后恰为一项；对两个真实解析模型比较，除web.tmpfs外完全相同。Python/YAML语法、CI断言接线及Git空白检查通过。未运行镜像/容器或583项业务测试。PM已在目标服务器独立确认旧模型及错误，服务器修复/恢复由PM审查精确提交字节后处理。
+
 后端 Java 17、Spring Boot 3.3.6，实际可执行包为 `system-admin/target/system-admin.jar`，没有 Actuator。原应用端口 7799 在此部署中显式改为 17799，无 context-path。原始 Authorization 头照常透传，不擅自改成 Bearer。
 
 前端为 `apps/web-ele/dist/`，生产 API 必须 `/api`；`scripts/build-quality.mjs` 对运行时 `_app.config.js` 做现有校验。文档 `apps/docs/.vitepress/dist/`，`DOCS_BASE=/docs/`。Pages 的 `site/`、demo、dist-demo、外部 mock API 不作为生产制品。

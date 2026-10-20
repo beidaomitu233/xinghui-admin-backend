@@ -17,6 +17,11 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - name: Validate actual Compose JSON tmpfs mount
+        run: >-
+          docker compose -f deploy/server/compose.yaml config
+          --no-env-resolution --no-interpolate --format json
+          | python3 -B deploy/server/check-compose.py
       - name: Compile and start the actual web image under production filesystem restrictions
         env:
           # Official registry amd64 manifest verified in A's 2026-10-20 public metadata receipt.

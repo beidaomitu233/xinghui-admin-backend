@@ -20,11 +20,24 @@ def load(name, filename):
 
 gate = load("ci_gate", "verify-ci.py")
 server = load("server_deploy", "deploy.py")
+compose_gate = load("compose_gate", "check-compose.py")
 SHA = "a" * 40
 DIGEST = "b" * 64
 
 
 class PromotionGate(unittest.TestCase):
+    def test_compose_rejects_split_or_weakened_tmpfs(self):
+        def model(mounts):
+            return {"services": {"web": {"tmpfs": mounts}}}
+
+        compose_gate.validate(model(["/tmp:rw,nosuid,nodev,size=64m"]))
+        for invalid in (["/tmp:rw", "nosuid", "nodev", "size=64m"], [],
+                        ["/tmp:rw,nosuid,nodev,size=64m", "/extra"],
+                        ["/tmp:rw,nodev,size=64m"], ["/tmp:rw,nosuid,size=64m"],
+                        ["/tmp:rw,nosuid,nodev"], "/tmp:rw,nosuid,nodev,size=64m"):
+            with self.subTest(tmpfs=invalid), self.assertRaises(ValueError):
+                compose_gate.validate(model(invalid))
+
     def test_both_real_ci_profiles_and_required_job_rejections(self):
         for component, (repo, branch, names) in gate.PROFILES.items():
             run = dict(id=123, status="completed", conclusion="success", event="push",
