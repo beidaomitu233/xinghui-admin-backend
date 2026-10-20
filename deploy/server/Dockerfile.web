@@ -9,6 +9,6 @@ COPY web/ /usr/share/nginx/html/
 COPY docs/ /usr/share/nginx/html/docs/
 COPY release.json /usr/share/nginx/html/__release.json
 USER 101:101
-EXPOSE 18080
+EXPOSE 18180
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -q --spider http://127.0.0.1:18080/ || exit 1
+  CMD wget -q --spider http://127.0.0.1:18180/ || exit 1

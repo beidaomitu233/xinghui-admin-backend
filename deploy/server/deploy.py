@@ -93,7 +93,7 @@ def deploy(args):
         assert len(args) == 4 and args[0] in ("backend", "web"), "remote bootstrap forbidden"
     os.umask(0o077)
     policy = json.loads(POLICY.read_text())
-    assert policy["port"] == 18080, "port must match reviewed host-network nginx.conf"
+    assert policy["port"] == 18180, "port must match reviewed host-network nginx.conf"
     STATE.mkdir(mode=0o700, exist_ok=True)
     (STATE / "releases").mkdir(mode=0o700, exist_ok=True)
     with LOCK.open("w") as lock:

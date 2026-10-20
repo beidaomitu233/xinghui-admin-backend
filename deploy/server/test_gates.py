@@ -75,7 +75,7 @@ class PromotionGate(unittest.TestCase):
                 root = Path(directory)
                 state = root / "state"
                 state.mkdir()
-                policy = dict(port=18080, backend=dict(repository="ghcr.io/owner/backend"),
+                policy = dict(port=18180, backend=dict(repository="ghcr.io/owner/backend"),
                               web=dict(repository="ghcr.io/owner/web"))
                 (root / "policy.json").write_text(json.dumps(policy))
                 old = {component: dict(image=policy[component]["repository"] + "@sha256:" + DIGEST,
@@ -129,6 +129,24 @@ class PromotionGate(unittest.TestCase):
                     self.assertEqual(calls[-1][0], old)
                 if outcome == "backend-fails":
                     self.assertEqual(len(calls), 2)  # no automatic backend rollback
+
+    def test_old_port_policy_stops_before_any_docker_or_release_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "policy.json").write_text(json.dumps({"port": 18080}))
+            fake_fcntl = types.SimpleNamespace(LOCK_EX=2, flock=lambda *args: None)
+            old_umask = os.umask(0o077)
+            try:
+                with patch.dict(sys.modules, fcntl=fake_fcntl), \
+                     patch.object(server.os, "geteuid", return_value=0, create=True), \
+                     patch.multiple(server, STATE=root / "state", POLICY=root / "policy.json"), \
+                     patch.object(server, "command") as command:
+                    with self.assertRaisesRegex(AssertionError, "port must match"):
+                        server.deploy(["bootstrap", str(root / "unused.json")])
+                    command.assert_not_called()
+                    self.assertFalse((root / "state").exists())
+            finally:
+                os.umask(old_umask)
 
 
 if __name__ == "__main__":

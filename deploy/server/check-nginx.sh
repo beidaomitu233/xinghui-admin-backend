@@ -32,8 +32,8 @@ for attempt in $(seq 1 30); do
   sleep 2
 done
 [[ $(docker inspect -f '{{.State.Health.Status}}' "$name") == healthy ]]
-curl --noproxy '*' -fsS http://127.0.0.1:18080/ | grep -Fx 'application fixture'
-curl --noproxy '*' -fsS http://127.0.0.1:18080/docs/ | grep -Fx 'documentation fixture'
-curl --noproxy '*' -fsS http://127.0.0.1:18080/__release.json | grep -F '"sha":"fixture"'
-docker exec "$name" wget -q --spider http://127.0.0.1:18080/
+curl --noproxy '*' -fsS http://127.0.0.1:18180/ | grep -Fx 'application fixture'
+curl --noproxy '*' -fsS http://127.0.0.1:18180/docs/ | grep -Fx 'documentation fixture'
+curl --noproxy '*' -fsS http://127.0.0.1:18180/__release.json | grep -F '"sha":"fixture"'
+docker exec "$name" wget -q --spider http://127.0.0.1:18180/
 printf 'Nginx configuration, read-only startup, static routes and image healthcheck passed.\n'

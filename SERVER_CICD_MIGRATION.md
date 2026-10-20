@@ -11,7 +11,7 @@ PM 转交的服务器输出：OpenCloudOS 9.6、Linux 6.6、x86_64；Docker 28.0
 待 PM 收齐后才能定稿和激活：
 
 - 域名/公网入口、现有 TLS 站点归属与配置文件位置、SSH 地址及可信公钥指纹。
-- `17799` 和 `18080` 均空闲；若不空闲，成套修改 Compose、两个健康检查、Nginx、policy 和本文端口后重新评审。
+- 部署前复核 `17799` 和 `18180` 空闲；端口修订及历史快照边界见下节。Compose 使用 host network，不设置 ports 映射。
 - python3 实际版本（要求 3.9+）、Docker/Compose 命令可用性、SELinux 对现有 Nginx 反代的限制。遇拒绝时定位日志，不能直接关闭 SELinux。
 - MySQL 版本、目标 schema、旧 7798 是否使用同一 schema；现有数据备份及恢复演练、Flyway 历史与权限。未经确认不能让新后端迁移旧库。
 - Redis 实际认证/逻辑库及与旧服务的键空间兼容性，MinIO bucket/权限/endpoint（开启 OSS 时），配置加密主密钥来源。敏感值留在服务器，不回传聊天。
@@ -23,14 +23,37 @@ PM 转交的服务器输出：OpenCloudOS 9.6、Linux 6.6、x86_64；Docker 28.0
 
 ```text
 浏览器 HTTPS → 现有宿主 Nginx（确认的站点）
-                      → 127.0.0.1:18080 新 web 容器
+                      → 127.0.0.1:18180 新 web 容器
                          /         真实 web-ele 生产应用
                          /docs/    同一前端提交的 VitePress 文档
                          /api/* → 127.0.0.1:17799 新后端（去除 /api 前缀）
                                                → 现有 MySQL/Redis/MinIO
 ```
 
-采用 **Linux host network**，原因是宿主 Redis 只绑回环；`host-gateway` 无法使容器访问宿主 loopback。Java 强制 `SERVER_ADDRESS=127.0.0.1`、`SERVER_PORT=17799`；容器 Nginx 强制 `listen 127.0.0.1:18080`，不使用宿主 80/443/7798/7799。host network 共享宿主网络命名空间，容器能访问宿主其他回环服务，因此仅运行审查后的可信镜像，不能把此模式视为网络隔离。保留 Redis bind 和认证。部署前核对监听地址；既有 MinIO 的公网暴露属于现状，不在本任务中改动。
+采用 **Linux host network**，原因是宿主 Redis 只绑回环；`host-gateway` 无法使容器访问宿主 loopback。Java 强制 `SERVER_ADDRESS=127.0.0.1`、`SERVER_PORT=17799`；容器 Nginx 强制 `listen 127.0.0.1:18180`，不使用宿主 80/443/7798/7799/18080。host network 共享宿主网络命名空间，容器能访问宿主其他回环服务，因此仅运行审查后的可信镜像，不能把此模式视为网络隔离。保留 Redis bind 和认证。部署前核对监听地址；既有 MinIO 的公网暴露属于现状，不在本任务中改动。
+
+### AI-SERVER-PORT：已有安装的端口修订
+
+PM 恢复前实查：其他项目新增 FlyMind Java 服务占用 `127.0.0.1:18080`，MemAvailable 当时为744MiB；本项目失败后端已停止，专用库仍0表，旧BLOCKED/IN_PROGRESS未归档或删除。本次仅从`origin/dev=b439d1330f05043a7e3f52fcefcda18316653e40`准备web端口`18180`源码修订，backend仍`17799`。PM已询问用户资源选择；本变更不改内存/CPU上限，不停止或操作FlyMind，不执行服务器动作。
+
+| 关联 | 本次处理 |
+| --- | --- |
+| `nginx.conf` | 容器/host network监听127.0.0.1:18180；API上游17799不变 |
+| `Dockerfile.web` | EXPOSE与wget健康检查成套改18180，健康条件/权限不变 |
+| `deploy.py` + policy example | 固定端口约束与HTTP探测改18180；旧18080 policy在Docker/状态写入前被拒绝 |
+| host Nginx location example | 仅本项目域名上游改127.0.0.1:18180 |
+| `check-nginx.sh` + `test_gates.py` | 定向检查访问18180；保留原模拟状态/安全门禁并验证旧policy拒绝 |
+| `compose.yaml` | host network无端口映射，保持原样；后端/资源/只读与cap_drop约束不变 |
+| publisher/package/SSH/backend probe | 无固定web端口项，不改工作流、规则或后端探针 |
+| 283旧工具、handoff与既有哈希收据 | 保留历史，不更新为新端口，不把旧收据当成新版验证 |
+
+**升级依赖**：需要包含本修订的新reviewed tooling完整SHA，并用它构建/发布新web镜像取得新digest；旧`60649fb9...`web镜像内仍监听/检查18080，不能改policy后直接复用。新SHA/digest由后续PM推进Gitflow/Actions后记录，本次不虚构或触发发布。原583项应用测试不因端口修订重跑。
+
+已有服务器不能重跑旧handoff初始化器来覆盖目录。PM按用户资源答复落实容量后，审查旧/新Git blob及bytes/hash，先在新私有备份位置保存旧工具/policy/本项目站点配置与状态证据，再制定仅本项目工具的原地升级：新`deploy.py`、policy端口18180、已审核的新web digest、本项目域名反代18180；不覆盖backend.env、数据库/密钥/SSH身份，不改其他站点。镜像内配置随新web镜像更新，不能只改宿主文件冒充镜像升级。两仓DEPLOY_TOOLING_SHA的更新由PM统一处理，SSH开关仍false。
+
+BLOCKED/IN_PROGRESS的归档、空库事实确认和受控恢复仍由PM独立审查执行，本补丁不自动清理。恢复后核对18180的应用/docs/API与release JSON及真实镜像digest；18080归其他项目，不作为本项目健康地址。实际容器/Nginx定向检查待后续允许Actions时执行，本次仅语法、离线gates和范围审查。
+
+本地核查：4个离线gate测试方法通过（含5种原有模拟发布状态和旧端口policy拒绝）；Python/JSON解析与check-nginx.sh的bash-n通过；6个运行/配置文件与基线逐字节比较仅18080→18180。原compose资源、SSH、backend探针/Dockerfile、package/workflows和历史交付未改。初次沙箱TEMP权限错误后，仅提升权限重跑mock gates，不改ACL。未运行Docker/完整583项应用测试/CI或服务器操作。
 
 后端 Java 17、Spring Boot 3.3.6，实际可执行包为 `system-admin/target/system-admin.jar`，没有 Actuator。原应用端口 7799 在此部署中显式改为 17799，无 context-path。原始 Authorization 头照常透传，不擅自改成 Bearer。
 
