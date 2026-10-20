@@ -1,0 +1,22 @@
+ARG JDK_IMAGE
+ARG JRE_IMAGE
+FROM ${JDK_IMAGE} AS probe
+WORKDIR /probe
+COPY HealthProbe.java .
+RUN javac --release 17 HealthProbe.java
+
+FROM ${JRE_IMAGE}
+ARG SOURCE_SHA
+ARG CI_RUN_ID
+ARG JAR_SHA256
+LABEL org.opencontainers.image.source="https://github.com/beidaomitu233/xinghui-admin-backend" \
+      org.opencontainers.image.revision="${SOURCE_SHA}" \
+      io.xinghui.ci-run="${CI_RUN_ID}" io.xinghui.jar-sha256="${JAR_SHA256}"
+WORKDIR /app
+COPY --from=probe /probe/HealthProbe.class /opt/probe/HealthProbe.class
+COPY --chown=10001:10001 system-admin.jar /app/system-admin.jar
+USER 10001:10001
+EXPOSE 17799
+HEALTHCHECK --interval=15s --timeout=8s --start-period=90s --retries=4 \
+  CMD ["java", "-Xms8m", "-Xmx32m", "-cp", "/opt/probe", "HealthProbe"]
+ENTRYPOINT ["java", "-jar", "/app/system-admin.jar"]

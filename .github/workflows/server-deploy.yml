@@ -1,0 +1,103 @@
+# Reviewed backend publisher. SSH deploy stays disabled unless the repository switch is true.
+# DEPLOY_TOOLING_SHA must be a reviewed 40-character backend commit, never a branch/tag.
+name: Publish and deploy backend
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [master]
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: server-backend
+  cancel-in-progress: false
+env:
+  COMPONENT: backend
+  SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+  CI_RUN_ID: ${{ github.event.workflow_run.id }}
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == 'beidaomitu233/xinghui-admin-backend' &&
+      github.event.workflow_run.head_branch == 'master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    outputs:
+      digest: ${{ steps.package.outputs.digest }}
+    steps:
+      - name: Require fixed tooling revision
+        env:
+          TOOLING_SHA: ${{ vars.DEPLOY_TOOLING_SHA }}
+        run: '[[ $TOOLING_SHA =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: beidaomitu233/xinghui-admin-backend
+          ref: ${{ vars.DEPLOY_TOOLING_SHA }}
+          path: tooling
+          persist-credentials: false
+      - name: Verify exact successful CI and current protected head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tooling/deploy/server/verify-ci.py "$COMPONENT" "$CI_RUN_ID" "$SOURCE_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Authenticate image publisher
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - id: package
+        working-directory: source
+        env:
+          JDK_IMAGE: ${{ vars.SERVER_JDK_IMAGE }}
+          JRE_IMAGE: ${{ vars.SERVER_JRE_IMAGE }}
+          NGINX_IMAGE: ${{ vars.SERVER_NGINX_IMAGE }}
+        run: bash ../tooling/deploy/server/package.sh
+      - if: always()
+        run: docker logout ghcr.io
+  deploy:
+    if: ${{ vars.SERVER_DEPLOY_ENABLED == 'true' }}
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require fixed tooling revision
+        env:
+          TOOLING_SHA: ${{ vars.DEPLOY_TOOLING_SHA }}
+        run: '[[ $TOOLING_SHA =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: beidaomitu233/xinghui-admin-backend
+          ref: ${{ vars.DEPLOY_TOOLING_SHA }}
+          path: tooling
+          persist-credentials: false
+      - name: Recheck head after publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tooling/deploy/server/verify-ci.py "$COMPONENT" "$CI_RUN_ID" "$SOURCE_SHA"
+      - name: Send restricted component receipt
+        env:
+          DIGEST: ${{ needs.publish.outputs.digest }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: bash tooling/deploy/server/notify-server.sh

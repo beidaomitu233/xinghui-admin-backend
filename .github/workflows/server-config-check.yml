@@ -1,0 +1,24 @@
+name: Server configuration check
+on:
+  push:
+    branches: [master, dev, "feature/AI-PI-server-deploy"]
+    paths: ["deploy/server/**", ".github/workflows/server-config-check.yml"]
+  pull_request:
+    branches: [dev, master]
+    paths: ["deploy/server/**", ".github/workflows/server-config-check.yml"]
+permissions:
+  contents: read
+jobs:
+  nginx:
+    name: Read-only Nginx configuration and startup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Compile and start the actual web image under production filesystem restrictions
+        env:
+          # Official registry amd64 manifest verified in A's 2026-10-20 public metadata receipt.
+          NGINX_IMAGE: docker.io/nginxinc/nginx-unprivileged@sha256:e2a8fca8aa356d66159aaf8a877a9c126773635adf210503eefaaeaffeed6ad7
+        run: bash deploy/server/check-nginx.sh

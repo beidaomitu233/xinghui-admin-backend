@@ -1,0 +1,16 @@
+# Merge into the CONFIRMED existing TLS server block only after domain/owner review.
+# Do not replace existing sites or bind a new listener on occupied 80/443/7799.
+# TLS certificates and server_name remain managed by the existing host ingress owner.
+location / {
+    proxy_pass http://127.0.0.1:18080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 180s;
+    proxy_send_timeout 180s;
+    client_max_body_size 1000m;
+}
