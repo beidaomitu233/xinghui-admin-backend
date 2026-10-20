@@ -2,7 +2,7 @@
 # Do not replace existing sites or bind a new listener on occupied 80/443/7799.
 # TLS certificates and server_name remain managed by the existing host ingress owner.
 location / {
-    proxy_pass http://127.0.0.1:18080;
+    proxy_pass http://127.0.0.1:18180;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
