@@ -27,6 +27,7 @@ ContentServiceTest
 ContentMethodSecurityTest
 JwtSigningKeyTest
 MailStartupConfigurationTest
+RedissonPasswordStartupTest
 LoginFilterTest
 SecretCipherTest
 BusinessConfigServiceTest
