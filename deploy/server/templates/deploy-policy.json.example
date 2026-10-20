@@ -1,0 +1,5 @@
+{
+  "port": 18080,
+  "backend": {"repository": "ghcr.io/beidaomitu233/xinghui-admin-backend", "source": "https://github.com/beidaomitu233/xinghui-admin-backend"},
+  "web": {"repository": "ghcr.io/beidaomitu233/xinghui-admin-vue3-web", "source": "https://github.com/beidaomitu233/xinghui-admin-vue3"}
+}
