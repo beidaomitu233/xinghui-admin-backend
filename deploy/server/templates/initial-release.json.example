@@ -1,0 +1,4 @@
+{
+  "backend": {"image": "ghcr.io/beidaomitu233/xinghui-admin-backend@sha256:REPLACE_64_HEX", "sha": "REPLACE_40_HEX", "ciRun": "REPLACE_VERIFIED_CI_RUN_ID"},
+  "web": {"image": "ghcr.io/beidaomitu233/xinghui-admin-vue3-web@sha256:REPLACE_64_HEX", "sha": "REPLACE_40_HEX", "ciRun": "REPLACE_VERIFIED_CI_RUN_ID"}
+}

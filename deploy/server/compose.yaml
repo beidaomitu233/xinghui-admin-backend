@@ -1,0 +1,43 @@
+name: xinghui-server
+services:
+  backend:
+    image: ${BACKEND_IMAGE:?immutable backend image required}
+    restart: unless-stopped
+    mem_limit: 768m
+    cpus: 1.0
+    network_mode: host
+    env_file:
+      - path: /etc/xinghui/backend.env
+        format: raw
+    environment:
+      SERVER_PORT: "17799"
+      SERVER_ADDRESS: 127.0.0.1
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "false"
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: "true"
+      SPRING_FLYWAY_CLEAN_DISABLED: "true"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - backend-tmp:/tmp
+    stop_grace_period: 45s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "5"}
+  web:
+    image: ${WEB_IMAGE:?immutable production web image required}
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.5
+    # Host ingress terminates HTTPS after its domain/certificate have been confirmed.
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp:rw,nosuid,nodev,size=64m]
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "5"}
+volumes:
+  backend-tmp: {}
