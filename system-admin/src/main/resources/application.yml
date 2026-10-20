@@ -46,7 +46,7 @@ spring:
       host: 127.0.0.1
       port: ${REDIS_PORT}
       database: ${REDIS_DATABASE}
-      password: ${REDIS_PASSWORD}
+      password: ${REDIS_PASSWORD:}
 
   # Servlet 文件上传配置（必须位于 spring: 节点下才生效）
   servlet:

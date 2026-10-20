@@ -1,6 +1,5 @@
 package com.xinghuiTec.config;
 
-import org.redisson.api.RedissonClient;
 import org.redisson.spring.starter.RedissonAutoConfigurationCustomizer;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -19,6 +18,12 @@ public class RedissonConfig {
      */
     @Bean
     public RedissonAutoConfigurationCustomizer redissonCustomizer() {
-        return config -> config.setUseScriptCache(true);
+        return config -> {
+            config.setUseScriptCache(true);
+            // Starter 3.40.2 passes an empty Boot password through; Redisson AUTH is disabled only by null.
+            if (config.isSingleConfig() && "".equals(config.useSingleServer().getPassword())) {
+                config.useSingleServer().setPassword(null);
+            }
+        };
     }
 }
