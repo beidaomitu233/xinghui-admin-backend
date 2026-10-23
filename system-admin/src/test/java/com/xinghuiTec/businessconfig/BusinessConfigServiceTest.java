@@ -63,4 +63,45 @@ class BusinessConfigServiceTest {
         assertFalse(json.writeValueAsString(change(0,Map.of("secretKey","hidden"),List.of())).contains("hidden"));
         assertThrows(Exception.class,()->json.readValue("{\"enabled\":false,\"revision\":0,\"unknown\":true}",BusinessConfigService.Change.class));
     }
+    @Test void changingSmsProviderDropsOldKeysAndRequiresNewCredentialsWhenEnabled() {
+        service=new BusinessConfigService(jdbc,json,new SecretCipher(()->"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),mock(WechatConfigService.class),oss,new RuntimeSmsService(null));
+        service.save("sms",new BusinessConfigService.Change(true,Map.of("provider","alibaba","signature","fixture","templateId","code","region","cn-hangzhou"),Map.of("accessKeyId","ali-fixture","accessKeySecret","ali-secret"),List.of(),0));
+        assertThrows(com.xinghuiTec.exception.ServiceException.class,()->service.save("sms",new BusinessConfigService.Change(true,Map.of("provider","tencent","signature","fixture","templateId","code","sdkAppId","123"),Map.of(),List.of(),1)));
+        assertEquals("alibaba",service.get("sms").parameters().get("provider"));
+        service.save("sms",new BusinessConfigService.Change(false,Map.of("provider","tencent","sdkAppId","123"),Map.of(),List.of(),1));
+        assertTrue(service.current("sms").orElseThrow().secrets().isEmpty());
+        assertEquals("",service.get("sms").parameters().get("region"));
+    }
+    @Test void mailIsEncryptedLiveRevisionedAndProviderIsolated() throws Exception {
+        var qq=Map.of("provider","qq","host","smtp.qq.com","port","465","security","SSL","user","fixture@qq.com","from","fixture@qq.com");
+        var first=service.save("mail",new BusinessConfigService.Change(true,qq,Map.of("password","fixture-authorization-code"),List.of(),0));
+        assertEquals("ADAPTED_SEND_UNVERIFIED",first.effectiveState());
+        assertFalse(json.writeValueAsString(first).contains("fixture-authorization-code"));
+        var snapshot=service.current("mail").orElseThrow();
+        var account=com.xinghuiTec.mail.config.RuntimeMailService.configuration(snapshot);
+        assertEquals("smtp.qq.com",account.getHost());assertEquals(465,account.getPort());
+        assertTrue(account.isSslEnable());assertFalse(account.isStarttlsEnable());
+        service.save("mail",new BusinessConfigService.Change(true,qq,Map.of("password",""),List.of(),1));
+        assertEquals("fixture-authorization-code",service.current("mail").orElseThrow().secrets().get("password"));
+        var other=Map.of("provider","163","host","smtp.163.com","port","465","security","SSL","user","fixture@163.com","from","fixture@163.com");
+        assertThrows(com.xinghuiTec.exception.ServiceException.class,()->service.save("mail",new BusinessConfigService.Change(true,other,Map.of(),List.of(),2)));
+        assertEquals(2,service.get("mail").revision());
+        service.save("mail",new BusinessConfigService.Change(false,other,Map.of(),List.of(),2));
+        assertFalse(service.get("mail").secretsConfigured().get("password"));
+    }
+    @Test void smtpHostAndAccountChangesNeverReusePriorCredentials() {
+        var original=new java.util.LinkedHashMap<>(Map.of("provider","smtp","host","smtp.fixture.test","port","587","security","STARTTLS","user","first@fixture.test","from","first@fixture.test"));
+        service.save("mail",new BusinessConfigService.Change(true,original,Map.of("password","first-fixture-secret"),List.of(),0));
+        var changed=new java.util.LinkedHashMap<>(original);changed.put("host","new-smtp.fixture.test");
+        assertThrows(com.xinghuiTec.exception.ServiceException.class,()->service.save("mail",new BusinessConfigService.Change(true,changed,Map.of(),List.of(),1)));
+        assertEquals(1,service.get("mail").revision());
+        changed.put("host",original.get("host"));changed.put("user","second@fixture.test");
+        service.save("mail",new BusinessConfigService.Change(false,changed,Map.of(),List.of(),1));
+        assertTrue(service.current("mail").orElseThrow().secrets().isEmpty());
+        service.save("mail",new BusinessConfigService.Change(true,changed,Map.of("password","second-fixture-secret"),List.of(),2));
+        assertEquals("second-fixture-secret",service.current("mail").orElseThrow().secrets().get("password"));
+        var runtime=com.xinghuiTec.mail.config.RuntimeMailService.configuration(service.current("mail").orElseThrow());
+        assertTrue(runtime.isStarttlsEnable());assertFalse(runtime.isSslEnable());
+        assertEquals(true,runtime.getSmtpProps().get("mail.smtp.starttls.required"));
+    }
 }

@@ -59,6 +59,13 @@ public class WechatStateStore {
         byte[] bytes = new byte[32]; RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
+    /** Service-account OAuth documents restrict state to ASCII letters and digits. */
+    public static String alphanumericState() {
+        String alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        var result=new StringBuilder(43);
+        for(int i=0;i<43;i++) result.append(alphabet.charAt(RANDOM.nextInt(alphabet.length())));
+        return result.toString();
+    }
     static String hash(String value) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
         catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(e); }

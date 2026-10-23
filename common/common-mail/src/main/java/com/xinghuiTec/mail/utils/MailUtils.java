@@ -18,7 +18,9 @@ import java.util.Map;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class MailUtils {
 
-    private static final MailAccount ACCOUNT = SpringUtils.getBean(MailAccount.class);
+    private static MailAccount account() {
+        return SpringUtils.getBean(com.xinghuiTec.mail.config.RuntimeMailService.class).current();
+    }
 
     /** 发送文本邮件 */
     public static String sendText(String to, String subject, String content) {
@@ -42,7 +44,7 @@ public class MailUtils {
 
     /** 发送邮件 */
     public static String send(String to, String subject, String content, boolean isHtml, File... files) {
-        return JakartaMail.create(ACCOUNT)
+        return JakartaMail.create(account())
             .setTos(to.split("[,;]"))
             .setTitle(subject)
             .setContent(content)
@@ -53,7 +55,7 @@ public class MailUtils {
 
     /** 发送 HTML 邮件（带内嵌图片，cid:xxx 引用） */
     public static String sendHtml(String to, String subject, String content, Map<String, InputStream> imageMap) {
-        JakartaMail mail = JakartaMail.create(ACCOUNT)
+        JakartaMail mail = JakartaMail.create(account())
             .setTos(to.split("[,;]"))
             .setTitle(subject)
             .setContent(content)

@@ -45,4 +45,10 @@ class WechatConfigServiceTest {
         assertTrue(query.contains("state="+state)); assertTrue(query.contains("redirect_uri=https://login.example.com/auth/wechat/callback"));
         assertFalse(url.contains("secret"));
     }
+    @Test void legacyCallbackMetadataCanonicalizesToTheDeployedApiGateway() {
+        assertEquals("https://app.example.com/api/auth/wechat/callback",WechatConfigService.canonicalCallback("https://app.example.com/auth/wechat/callback"));
+        assertDoesNotThrow(()->service(false).validateMpCallback("https://app.example.com/api/auth/wechat/mp-callback"));
+        assertThrows(WechatFailure.class,()->service(false).validateMpCallback("https://app.example.com/auth/wechat/mp-callback"));
+        assertTrue(WechatStateStore.alphanumericState().matches("[A-Za-z0-9]{43}"));
+    }
 }
