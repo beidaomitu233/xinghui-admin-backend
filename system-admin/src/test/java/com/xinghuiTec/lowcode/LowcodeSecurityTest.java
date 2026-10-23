@@ -99,6 +99,7 @@ class LowcodeSecurityTest {
         context.register(MethodSecurity.class);
         context.registerBean("platformAccess", PlatformAccessService.class, () -> new PlatformAccessService(enabled));
         context.registerBean(LowcodeService.class, () -> mock(LowcodeService.class));
+        context.registerBean(LowcodeSharingService.class, () -> mock(LowcodeSharingService.class));
         context.register(LowcodeFormController.class, LowcodeRecordController.class);
         context.refresh();
         return context;

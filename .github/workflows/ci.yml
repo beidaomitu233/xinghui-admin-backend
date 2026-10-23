@@ -140,6 +140,15 @@ jobs:
         run: >-
           mvn -B -ntp -pl system-admin -am test
           -Dtest=AiSceneSqlDruidMySqlIT -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Exercise lowcode sharing isolation and idempotency on migrated MySQL
+        env:
+          CI: "true"
+          DB_URL: jdbc:mysql://127.0.0.1:3306/xinghui_oss04_ci?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+          DB_USERNAME: oss04_ci
+          DB_PASSWORD: oss04_ci_database_fixture
+        run: >-
+          mvn -B -ntp -pl system-admin -am test
+          -Dtest=LowcodeSharingMySqlIT -Dsurefire.failIfNoSpecifiedTests=false
       - name: Reject missing or skipped service regressions
         shell: pwsh
         run: ./scripts/quality/Verify-Build.ps1 -TestsOnly -RequiredList scripts/quality/required-service-tests.txt
