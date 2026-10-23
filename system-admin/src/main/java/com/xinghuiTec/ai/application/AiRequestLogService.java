@@ -41,12 +41,19 @@ public class AiRequestLogService {
     }
 
     public Page page(TrustedActor actor, boolean platform, Filters filters, int pageNum, int pageSize) {
+        return page(actor,platform,filters,pageNum,pageSize,null,null);
+    }
+    public Page page(TrustedActor actor, boolean platform, Filters filters, int pageNum, int pageSize,String orderBy,String order) {
         if (pageNum < 1 || pageNum > 100_000 || pageSize < 1 || pageSize > 100) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
         Where where = where(actor, platform, filters, "list");
+        String ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,Map.of(
+                "requestId","r.request_id","status","r.status","stage","r.stage","attemptCount","r.attempt_count",
+                "inputTokens","r.input_tokens","outputTokens","r.output_tokens","createdAt","r.create_time"),
+                "r.request_id DESC","r.request_id",()->new AiRuntimeException(ErrorCode.INVALID_INPUT));
         if (where.empty()) return new Page(List.of(), 0, pageNum, pageSize);
         long total = count(where);
         var args = new ArrayList<>(where.args()); args.add(pageSize); args.add((pageNum - 1) * pageSize);
-        var rows = jdbc.query(select() + where.sql() + " ORDER BY r.request_id DESC LIMIT ? OFFSET ?", this::row, args.toArray());
+        var rows = jdbc.query(select() + where.sql() + ordering + " LIMIT ? OFFSET ?", this::row, args.toArray());
         return new Page(List.copyOf(rows), total, pageNum, pageSize);
     }
 

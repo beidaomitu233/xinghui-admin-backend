@@ -39,7 +39,7 @@ class AiConfigurationMethodSecurityTest {
         try(var c=context()) {
             actor("000001","ai:config:list","ai:config:query","ai:config:add","ai:config:edit","ai:config:test","ai:config:enable","ai:config:archive");
             var api=c.getBean(AiConfigurationController.class);
-            assertThrows(AccessDeniedException.class,()->api.page(1,10,null,null,null,null));
+            assertThrows(AccessDeniedException.class,()->api.page(1,10,null,null,null,null, null, null));
             assertThrows(AccessDeniedException.class,()->api.get("1"));
             assertThrows(AccessDeniedException.class,()->api.create(new Create(null,"1")));
             assertThrows(AccessDeniedException.class,()->api.draft("1",null));
@@ -57,7 +57,7 @@ class AiConfigurationMethodSecurityTest {
             var api=c.getBean(AiConfigurationController.class);
             assertThrows(AccessDeniedException.class,()->api.get("1"));
             actor("000000","ai:model:list");
-            assertDoesNotThrow(()->api.page(1,10,null,null,null,null));
+            assertDoesNotThrow(()->api.page(1,10,null,null,null,null, null, null));
             assertThrows(AccessDeniedException.class,()->api.test("1",new TestStart(0,"1",true)));
             actor("000000","ai:config:test");
             assertDoesNotThrow(()->api.testResult("1","1"));

@@ -34,10 +34,16 @@ public class SceneStore {
         require(rows.size()==1,404,"NOT_FOUND");return rows.get(0);
     }
     List<Head> page(int page,int size,String search) {
+        return page(page,size,search,null,null);
+    }
+    List<Head> page(int page,int size,String search,String orderBy,String order) {
+        String ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,java.util.Map.of(
+                "name","name","updatedAt","update_time","enabled","enabled","kind","scene_kind"),
+                "update_time DESC,scene_key ASC","scene_key",()->new SceneFailure(400,"INVALID_INPUT"));
         paging(page,size);require(search==null || search.length()<=128,400,"INVALID_INPUT");
         String where=search==null || search.isBlank()?"":" WHERE LOCATE(?,name)>0";
         var args=new ArrayList<Object>();if(!where.isEmpty())args.add(search);args.add(size);args.add((page-1L)*size);
-        return List.copyOf(jdbc.query("SELECT * FROM sys_ai_scene"+where+" ORDER BY update_time DESC,scene_key LIMIT ? OFFSET ?",(rs,n)->head(rs),args.toArray()));
+        return List.copyOf(jdbc.query("SELECT * FROM sys_ai_scene"+where+ordering+" LIMIT ? OFFSET ?",(rs,n)->head(rs),args.toArray()));
     }
     long count(String search) {
         String where=search==null || search.isBlank()?"":" WHERE LOCATE(?,name)>0";

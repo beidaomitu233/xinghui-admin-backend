@@ -40,10 +40,22 @@ public class AiCallLogService {
         this.jdbc=jdbc;this.store=store;this.requestLogs=requestLogs;this.requests=requests;this.runtime=runtime;this.sql=sql;this.modelTests=modelTests;
     }
     public Page page(TrustedActor actor,boolean platform,Filters filters,int page,int size){
+        return page(actor,platform,filters,page,size,null,null);
+    }
+    public Page page(TrustedActor actor,boolean platform,Filters filters,int page,int size,String orderBy,String order){
         if(page<1||page>100_000||size<1||size>100)throw failure(ErrorCode.INVALID_INPUT);
-        var where=where(actor,platform,filters,"list",null);if(where.empty())return new Page(List.of(),0,page,size);
+        var where=where(actor,platform,filters,"list",null);
+        String ordering;
+        try{ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,Map.of(
+                "startedAt","c.started_at","entryType","c.entry_type","status","c.status",
+                "inputTokens","c.input_tokens","outputTokens","c.output_tokens",
+                "elapsedMs","CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(c.metadata_json,'$.elapsedMs')),'null') AS DECIMAL(20,0))",
+                "firstOutputMs","CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(c.metadata_json,'$.firstOutputMs')),'null') AS DECIMAL(20,0))"),
+                "c.started_at DESC,c.call_id DESC","c.call_id");}
+        catch(com.xinghuiTec.exception.ServiceException invalid){throw failure(ErrorCode.INVALID_INPUT);}
+        if(where.empty())return new Page(List.of(),0,page,size);
         var args=new ArrayList<>(where.args());args.add(size);args.add((page-1)*size);
-        var rows=jdbc.query(select()+where.sql()+" ORDER BY c.started_at DESC,c.call_id DESC LIMIT ? OFFSET ?",this::row,args.toArray());
+        var rows=jdbc.query(select()+where.sql()+ordering+" LIMIT ? OFFSET ?",this::row,args.toArray());
         return new Page(decorate(rows,actor,platform,filters.scope()),count(where),page,size);
     }
     public List<Map<String,Object>> export(TrustedActor actor,boolean platform,Filters filters){

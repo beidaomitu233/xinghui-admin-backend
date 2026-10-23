@@ -36,7 +36,10 @@ public class SceneManagementService {
         this.mapper=mapper.copy().enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
     }
     public SceneDtos.Page page(int page,int size,String search) {
-        return new SceneDtos.Page(scenes.page(page,size,search).stream().map(this::summary).toList(),Long.toString(scenes.count(search)),page,size);
+        return page(page,size,search,null,null);
+    }
+    public SceneDtos.Page page(int page,int size,String search,String orderBy,String order) {
+        return new SceneDtos.Page(scenes.page(page,size,search,orderBy,order).stream().map(this::summary).toList(),Long.toString(scenes.count(search)),page,size);
     }
     public SceneDtos.Workspace workspace(int page,int size,String search,String selected,TrustedActor actor) {
         return references.withReferenceGuard(()->new SceneDtos.Workspace(page(page,size,search),selected==null?null:detail(selected,actor)));

@@ -106,14 +106,26 @@ public class TemplateDataService implements AiTemplateRuntime, AiTemplatePreview
     }
     private boolean enabledValue(Object value) { return Boolean.TRUE.equals(value) || "1".equals(String.valueOf(value)); }
     public Page page(boolean resource, int page, int size) {
+        return page(resource,page,size,null,null);
+    }
+    public Page page(boolean resource, int page, int size,String orderBy,String order) {
+        String ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,Map.of(
+                "name","name","revision","revision","enabled","enabled","create_time","create_time","update_time","update_time"),
+                "id DESC","id",()->invalid("排序参数无效"));
         if (page < 1 || page > 1000000 || size < 1 || size > 100) throw invalid("分页无效");
         var rows = jdbc.queryForList("SELECT id,name,revision,enabled," + (resource ? "state," : "")
-                + "create_time,update_time FROM " + table(resource) + " ORDER BY id DESC LIMIT ? OFFSET ?", size, (page - 1L) * size);
+                + "create_time,update_time FROM " + table(resource) + ordering + " LIMIT ? OFFSET ?", size, (page - 1L) * size);
         return new Page(rows.stream().map(this::safeIds).toList(), String.valueOf(jdbc.queryForObject("SELECT COUNT(*) FROM " + table(resource), Long.class)), page, size);
     }
     public Page legacyScenes(int page, int size) {
+        return legacyScenes(page,size,null,null);
+    }
+    public Page legacyScenes(int page, int size,String orderBy,String order) {
+        String ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,Map.of(
+                "app_key","app_key","scene_key","scene_key","published_revision","published_revision"),
+                "scene_id DESC","scene_id",()->invalid("排序参数无效"));
         if (page < 1 || page > 1000000 || size < 1 || size > 100) throw invalid("分页无效");
-        var rows = jdbc.queryForList("SELECT scene_id,app_key,scene_key,published_model_id,published_revision,enabled FROM sys_ai_prompt_scene ORDER BY scene_id DESC LIMIT ? OFFSET ?", size, (page - 1L) * size);
+        var rows = jdbc.queryForList("SELECT scene_id,app_key,scene_key,published_model_id,published_revision,enabled FROM sys_ai_prompt_scene"+ordering+" LIMIT ? OFFSET ?", size, (page - 1L) * size);
         var records = rows.stream().map(row -> {
             var result = safeIds(row); result.put("compatibilityOnly", true); result.put("templateVersionId", null);
             result.put("versionMeaning", "旧场景当前快照；不代表不可变模板版本"); return result;

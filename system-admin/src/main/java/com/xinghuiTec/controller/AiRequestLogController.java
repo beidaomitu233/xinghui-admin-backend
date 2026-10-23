@@ -25,7 +25,11 @@ public class AiRequestLogController {
         this.logs = logs; this.identity = identity; this.platform = platform;
     }
     public record Query(String scope, String appId, String requestId, String businessId, String modelRef, String status,
-                        String tenantRef, String subjectRef, String from, String to, Integer pageNum, Integer pageSize,String sceneKey,String requestKind) {
+                        String tenantRef, String subjectRef, String from, String to, Integer pageNum, Integer pageSize,String sceneKey,String requestKind,String orderBy,String order) {
+        public Query(String scope, String appId, String requestId, String businessId, String modelRef, String status,
+                     String tenantRef, String subjectRef, String from, String to, Integer pageNum, Integer pageSize,String sceneKey,String requestKind){
+            this(scope,appId,requestId,businessId,modelRef,status,tenantRef,subjectRef,from,to,pageNum,pageSize,sceneKey,requestKind,null,null);
+        }
         public AiRequestLogService.Filters filters() {
             try {
                 return new AiRequestLogService.Filters(scope == null ? AiRequestLogService.Scope.OWN : AiRequestLogService.Scope.valueOf(scope),
@@ -40,7 +44,7 @@ public class AiRequestLogController {
     @PreAuthorize("hasAuthority('ai:request:list')")
     public Result<AiRequestLogService.Page> list(@ModelAttribute Query query) {
         return Result.ok(logs.page(identity.current(), platform.isPlatformIdentity(), query.filters(),
-                query.pageNum() == null ? 1 : query.pageNum(), query.pageSize() == null ? 20 : query.pageSize()));
+                query.pageNum() == null ? 1 : query.pageNum(), query.pageSize() == null ? 20 : query.pageSize(),query.orderBy(),query.order()));
     }
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('ai:request:query')")

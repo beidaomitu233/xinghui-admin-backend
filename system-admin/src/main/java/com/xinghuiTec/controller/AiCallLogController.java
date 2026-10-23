@@ -21,7 +21,11 @@ public class AiCallLogController {
     private final PlatformAccessService platform;
     public AiCallLogController(AiCallLogService logs,AiInvocationIdentity identity,PlatformAccessService platform){this.logs=logs;this.identity=identity;this.platform=platform;}
     public record Query(String scope,String from,String to,String requestId,String modelRef,String providerCode,String status,
-                        String entryType,String tenantRef,String subjectRef,String appId,String sceneKey,Integer pageNum,Integer pageSize){
+                        String entryType,String tenantRef,String subjectRef,String appId,String sceneKey,Integer pageNum,Integer pageSize,String orderBy,String order){
+        public Query(String scope,String from,String to,String requestId,String modelRef,String providerCode,String status,
+                     String entryType,String tenantRef,String subjectRef,String appId,String sceneKey,Integer pageNum,Integer pageSize){
+            this(scope,from,to,requestId,modelRef,providerCode,status,entryType,tenantRef,subjectRef,appId,sceneKey,pageNum,pageSize,null,null);
+        }
         public AiCallLogService.Filters filters(){try{return new AiCallLogService.Filters(scope==null?AiRequestLogService.Scope.OWN:AiRequestLogService.Scope.valueOf(scope),
                 blank(from)?null:Instant.parse(from),blank(to)?null:Instant.parse(to),requestId,modelRef,providerCode,
                 blank(status)?null:AiRequestStatus.valueOf(status),blank(entryType)?null:AiCallLogService.EntryType.valueOf(entryType),tenantRef,subjectRef,appId,sceneKey);
@@ -29,7 +33,7 @@ public class AiCallLogController {
         private static boolean blank(String value){return value==null||value.isBlank();}
     }
     @GetMapping @PreAuthorize("hasAuthority('ai:request:list')")
-    public Result<AiCallLogService.Page> list(@ModelAttribute Query query){return Result.ok(logs.page(identity.current(),platform.isPlatformIdentity(),query.filters(),query.pageNum()==null?1:query.pageNum(),query.pageSize()==null?20:query.pageSize()));}
+    public Result<AiCallLogService.Page> list(@ModelAttribute Query query){return Result.ok(logs.page(identity.current(),platform.isPlatformIdentity(),query.filters(),query.pageNum()==null?1:query.pageNum(),query.pageSize()==null?20:query.pageSize(),query.orderBy(),query.order()));}
     @GetMapping("/statistics") @PreAuthorize("hasAuthority('ai:request:list')")
     public Result<AiCallLogService.Statistics> statistics(@ModelAttribute Query query){return Result.ok(logs.statistics(identity.current(),platform.isPlatformIdentity(),query.filters()));}
     @GetMapping("/export") @PreAuthorize("hasAuthority('ai:request:export')")

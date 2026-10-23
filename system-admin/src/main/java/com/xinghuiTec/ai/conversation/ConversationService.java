@@ -66,12 +66,16 @@ public class ConversationService {
     }
     public ConversationDtos.Page page(TrustedActor actor, boolean platform, String scope, String sceneKey, String kind,
             String search, int page, int size) {
+        return page(actor,platform,scope,sceneKey,kind,search,page,size,null,null);
+    }
+    public ConversationDtos.Page page(TrustedActor actor, boolean platform, String scope, String sceneKey, String kind,
+            String search, int page, int size,String orderBy,String order) {
         boolean audit = audit(scope, actor, platform);
         require(actor.authorities().contains("ai:request:list")
                 || (!audit && actor.authorities().contains("ai:scene:invoke")), 403, "FORBIDDEN");
         store.reconcile();
         var owner = new AiRequestStore.Owner(actor.subjectId(), actor.tenantId());
-        var rows = store.page(owner, audit, sceneKey, kind, search, page, size);
+        var rows = store.page(owner, audit, sceneKey, kind, search, page, size,orderBy,order);
         // OWN must not leak a last-message preview after the underlying business access
         // has been revoked.
         var visible = rows.stream().filter(h -> audit || visible(h, actor)).map(h -> summary(h, actor, platform, audit))

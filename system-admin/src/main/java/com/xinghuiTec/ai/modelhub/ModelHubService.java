@@ -42,6 +42,12 @@ public class ModelHubService {
         check(values.size()==1,404,"MODEL_NOT_FOUND");return stored(values.get(0),lock);
     }
     public Page page(int page,int size,String search){
+        return page(page,size,search,null,null);
+    }
+    public Page page(int page,int size,String search,String orderBy,String order){
+        String ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,Map.of(
+                "name","JSON_UNQUOTE(JSON_EXTRACT(definition_json,'$.name'))","slug","slug","updateTime","update_time"),
+                "model_id ASC","model_id",()->new SceneFailure(400,"INVALID_INPUT"));
         check(page>=1&&page<=100000&&size>=1&&size<=100&&(search==null||search.length()<=128),400,"INVALID_INPUT");
         String term=search==null?"":search.toLowerCase(Locale.ROOT).strip();
         String where=" WHERE deleted=FALSE";var args=new ArrayList<Object>();
@@ -51,7 +57,7 @@ public class ModelHubService {
         }
         Long count=jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_business_model"+where,Long.class,args.toArray());
         args.add(size);args.add((long)(page-1)*size);
-        var selected=jdbc.query("SELECT * FROM sys_ai_business_model"+where+" ORDER BY model_id LIMIT ? OFFSET ?",(r,n)->readStored(r),args.toArray());
+        var selected=jdbc.query("SELECT * FROM sys_ai_business_model"+where+ordering+" LIMIT ? OFFSET ?",(r,n)->readStored(r),args.toArray());
         var context=healthContext(selected,new Requirements(OutputFormat.TEXT,true,false));
         return new Page(selected.stream().map(s->view(s,context)).toList(),Long.toString(Objects.requireNonNull(count)),page,size);
     }
