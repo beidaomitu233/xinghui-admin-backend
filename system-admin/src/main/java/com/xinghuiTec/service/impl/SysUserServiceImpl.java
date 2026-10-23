@@ -109,32 +109,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
         // 1.校验用户名、手机号、用户状态、创建时间范围是否为空，不为空则添加到查询条件中
         LambdaQueryWrapper<SysUser> userListWrapper = buildUserFilters(sysUserQueryDTO);
-        // 3. 处理排序
-        // 步骤 A: 确定排序方向（升序还是降序）
-        // 逻辑：取出前端传来的 order 字段，忽略大小写判断是否等于 "asc"。
-        // 结果：
-        // - 如果前端传 "asc" -> isAsc = true (升序，旧的在前)
-        // - 如果前端传 "desc"、null 或其他 -> isAsc = false (降序，新的在前)
-        boolean isAsc = "asc".equalsIgnoreCase(sysUserQueryDTO.getOrder());
-        // 步骤 B: 确定排序字段（按哪个列排）
-        // 逻辑：判断前端传来的 sortBy 字段是否为 "updateTime"
-        if ("updateTime".equals(sysUserQueryDTO.getOrderBy())) {
-            // 情况 1: 如果指定了按更新时间排，则使用 getUpdateTime 字段
-            // 参数含义: (条件是否生效, 是否升序, 数据库列对应的Lambda引用)
-            // 第一个 true 表示这个排序条件始终执行
-            userListWrapper.orderBy(true, isAsc, SysUser::getUpdateTime);
-        } else {
-            // 情况 2 (默认情况):
-            // - 如果前端传的是 "createTime"
-            // - 或者前端什么都没传 (null)
-            // - 或者传了不认识的字段
-            // 统统走进这个 else 分支，使用 getCreateTime (创建时间/注册时间)
-            userListWrapper.orderBy(true, isAsc, SysUser::getCreateTime);
-        }
-
-        Page<SysUser> SysUserPage = this.page(page, userListWrapper);
-
-        return SysUserPage;
+        // 列表和导出共用白名单次序，在分页之前排序，相同值按 ID 稳定排列。
+        return this.page(page, applyExportOrdering(userListWrapper, sysUserQueryDTO));
     }
 
     private LambdaQueryWrapper<SysUser> buildUserFilters(SysUserQueryDTO query) {
@@ -734,10 +710,18 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     private LambdaQueryWrapper<SysUser> applyExportOrdering(LambdaQueryWrapper<SysUser> wrapper,
             SysUserQueryDTO query) {
         boolean ascending = "asc".equalsIgnoreCase(query.getOrder());
-        if ("updateTime".equals(query.getOrderBy())) {
-            return wrapper.orderBy(true, ascending, SysUser::getUpdateTime).orderByAsc(SysUser::getUserId);
+        String field = query.getOrderBy() == null ? "createTime" : query.getOrderBy();
+        switch (field) {
+            case "username" -> wrapper.orderBy(true, ascending, SysUser::getUsername);
+            case "nickname" -> wrapper.orderBy(true, ascending, SysUser::getNickname);
+            case "mobile" -> wrapper.orderBy(true, ascending, SysUser::getMobile);
+            case "email" -> wrapper.orderBy(true, ascending, SysUser::getEmail);
+            case "status" -> wrapper.orderBy(true, ascending, SysUser::getStatus);
+            case "updateTime" -> wrapper.orderBy(true, ascending, SysUser::getUpdateTime);
+            case "createTime" -> wrapper.orderBy(true, ascending, SysUser::getCreateTime);
+            default -> throw new IllegalArgumentException("不支持的用户排序字段");
         }
-        return wrapper.orderBy(true, ascending, SysUser::getCreateTime).orderByAsc(SysUser::getUserId);
+        return wrapper.orderByAsc(SysUser::getUserId);
     }
 
     private List<SysUserExcel> buildExportRows(List<SysUser> users) {
