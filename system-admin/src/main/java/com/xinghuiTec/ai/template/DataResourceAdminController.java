@@ -13,7 +13,7 @@ public class DataResourceAdminController {
     private final TemplateDataService service;
     public DataResourceAdminController(TemplateDataService service) { this.service = service; }
     @GetMapping @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:data:list')")
-    public Result<Page> page(@RequestParam(defaultValue="1") int pageNum, @RequestParam(defaultValue="20") int pageSize) { return Result.ok(service.page(true, pageNum, pageSize)); }
+    public Result<Page> page(@RequestParam(defaultValue="1") int pageNum, @RequestParam(defaultValue="20") int pageSize,@RequestParam(required=false) String orderBy,@RequestParam(required=false) String order) { return Result.ok(service.page(true, pageNum, pageSize,orderBy,order)); }
     @GetMapping("/sources") @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:data:query')")
     public Result<?> sources() { return Result.ok(List.of(Map.of("key", "lowcode.record", "name", "低代码表单记录", "parameters", List.of("formId", "recordId"), "requiredAuthority", "lowcode:record:query",
             "inputSchema", Map.of("type", "object", "additionalProperties", false, "required", List.of("formId", "recordId"), "properties", Map.of("formId", Map.of("type", "string", "pattern", "[1-9][0-9]{0,18}"), "recordId", Map.of("type", "string", "pattern", "[1-9][0-9]{0,18}")))))); }

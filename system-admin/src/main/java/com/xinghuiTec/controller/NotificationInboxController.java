@@ -37,8 +37,9 @@ public class NotificationInboxController {
     @GetMapping
     public Result<Page> page(@RequestParam(defaultValue = "1") int pageNum,
                              @RequestParam(defaultValue = "20") int pageSize,
-                             @RequestParam(defaultValue = "false") boolean unreadOnly) {
-        return Result.ok(inbox.page(pageNum, pageSize, unreadOnly));
+                             @RequestParam(defaultValue = "false") boolean unreadOnly,
+                             @RequestParam(required = false) String orderBy, @RequestParam(required = false) String order) {
+        return Result.ok(inbox.page(pageNum, pageSize, unreadOnly, orderBy, order));
     }
 
     @GetMapping("/unread-count")

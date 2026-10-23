@@ -54,8 +54,9 @@ public class AiModelCatalogController {
     @GetMapping("/channels/{configId}")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and (hasAuthority('ai:config:query') or hasAuthority('ai:model:query'))")
     public Result<StoredCatalog> stored(@PathVariable(name="configId") String configId,@RequestParam(name="keyId",required=false) String keyId,@RequestParam(name="search",required=false) String search,
-                                      @RequestParam(name="pageNum",defaultValue="1") int pageNum,@RequestParam(name="pageSize",defaultValue="20") int pageSize) {
-        return Result.ok(catalogs.stored(configId,keyId,search,pageNum,pageSize));
+                                      @RequestParam(name="pageNum",defaultValue="1") int pageNum,@RequestParam(name="pageSize",defaultValue="20") int pageSize,
+                                      @RequestParam(required=false) String orderBy,@RequestParam(required=false) String order) {
+        return Result.ok(catalogs.stored(configId,keyId,search,pageNum,pageSize,orderBy,order));
     }
 
     @GetMapping("/scans/{scanId}")

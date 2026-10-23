@@ -169,6 +169,46 @@ class LowcodeServiceTest {
         assertThrows(ServiceException.class, () -> schemas.validateValue(number, schemas.data("1e9999"), true));
     }
 
+    @Test
+    void formSortingPrecedesPagingWithStableTiesAndRejectsSqlFragments() {
+        var first = service.create(new LowcodeService.Draft("Zulu", "sort_z", "draft", 0, schema("text", "值")));
+        var earlier = service.create(new LowcodeService.Draft("Alpha", "sort_a1", "draft", 0, schema("text", "值")));
+        var middle = service.create(new LowcodeService.Draft("Mike", "sort_m", "draft", 0, schema("text", "值")));
+        var later = service.create(new LowcodeService.Draft("Alpha", "sort_a2", "draft", 0, schema("text", "值")));
+        assertEquals(List.of(later, earlier), service.forms(1, 2, null, "name", "asc").records().stream().map(row -> row.get("id")).toList());
+        assertEquals(List.of(middle, first), service.forms(2, 2, null, "name", "asc").records().stream().map(row -> row.get("id")).toList());
+        assertEquals(List.of(first, middle), service.forms(1, 2, null, "name", "desc").records().stream().map(row -> row.get("id")).toList());
+        assertEquals("4", service.forms(2, 2, null, "name", "asc").total());
+        for (String key : List.of("name desc; DELETE FROM sys_lowcode_form", "tenant_id", "data.field_1"))
+            assertThrows(ServiceException.class, () -> service.forms(1, 10, null, key, "asc"));
+        assertThrows(ServiceException.class, () -> service.forms(1, 10, null, "name", "DESC; SELECT 1"));
+        assertEquals("4", service.forms(1, 10, null).total());
+    }
+
+    @Test
+    void recordMetadataSortingCoversAllPagesAndRetainsTenantPartition() {
+        long form = Long.parseLong(service.create(draft(schema("text", "姓名"), 0, "draft")));
+        service.publish(form, 0);
+        var ids = new java.util.ArrayList<String>();
+        for (int index = 0; index < 25; index++)
+            ids.add((String) service.addRecord(form, submission(1, 0, "{\"field_1\":\"row" + index + "\"}")).get("id"));
+        when(identity.tenant()).thenReturn("tenant_b");
+        service.addRecord(form, submission(1, 0, "{\"field_1\":\"foreign\"}"));
+        when(identity.tenant()).thenReturn("tenant_a");
+        var found = new java.util.ArrayList<Object>();
+        for (int page = 1; page <= 3; page++) {
+            var result = service.records(form, page, 10, null, null, "schemaVersion", "asc");
+            assertEquals("25", result.total());
+            found.addAll(result.records().stream().map(row -> row.get("id")).toList());
+        }
+        java.util.Collections.reverse(ids);
+        assertEquals(ids, found);
+        assertEquals(25, new java.util.HashSet<>(found).size());
+        assertThrows(ServiceException.class, () -> service.records(form, 1, 10, null, null, "data.unknown", "asc"));
+        assertThrows(ServiceException.class, () -> service.records(form, 1, 10, null, null, "schemaVersion", "random"));
+        assertThrows(ServiceException.class, () -> service.records(form, 1, 10, null, null, "id; SELECT 1", "asc"));
+    }
+
     private static LowcodeSchema.Schema schema(String type,String label) {
         return new LowcodeSchema.Schema(List.of(new LowcodeSchema.Field("field_1",label,type,true,null,List.of(),"",200,null,null,true,true)));
     }

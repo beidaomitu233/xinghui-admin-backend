@@ -19,7 +19,7 @@ public class ModelHubController {
     public ModelHubController(ModelHubService models,ModelHubTestService tests,AiInvocationIdentity identity,AiRuntimeBodyCodec codec){this.models=models;this.tests=tests;this.identity=identity;this.codec=codec;}
     @GetMapping
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:config:query')")
-    public Result<ModelHubDtos.Page> page(@RequestParam(defaultValue="1")int pageNum,@RequestParam(defaultValue="100")int pageSize,@RequestParam(required=false)String search){return Result.ok(models.page(pageNum,pageSize,search));}
+    public Result<ModelHubDtos.Page> page(@RequestParam(defaultValue="1")int pageNum,@RequestParam(defaultValue="100")int pageSize,@RequestParam(required=false)String search,@RequestParam(required=false)String orderBy,@RequestParam(required=false)String order){return Result.ok(models.page(pageNum,pageSize,search,orderBy,order));}
     @GetMapping("/summary")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:config:query')")
     public Result<ModelHubDtos.Summary> summary(){return Result.ok(models.summary());}

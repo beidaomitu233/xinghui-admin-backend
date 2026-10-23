@@ -73,6 +73,34 @@ class AiCallLogServiceTest {
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_call_response",Integer.class));
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_request_attempt",Integer.class));
     }
+    @Test void numericAndNullSortingIsGlobalStableAcrossPagesAndKeepsOwnScope(){
+        var ids=new ArrayList<String>();var tokens=new HashMap<String,Long>();
+        var sameTime=Timestamp.from(Instant.now().minusSeconds(50));
+        for(int index=0;index<27;index++){
+            var actor=index<25?own:new TrustedActor("101","tenant-b",actions,null);
+            long request=request(actor,"lowcode.record");
+            journal.complete(request,attempt(request,actor).attemptId(),success(telemetry()));
+            String id=id(request);Long value=index%7==0?null:(long)((index*13)%5);
+            jdbc.update("UPDATE sys_ai_call_log SET input_tokens=?,started_at=? WHERE call_id=?",value,sameTime,id);
+            if(index<25){ids.add(id);tokens.put(id,value);}
+        }
+        var expected=ids.stream().sorted(Comparator.comparing((String id)->tokens.get(id),Comparator.nullsFirst(Long::compareTo))
+                .thenComparing(String::compareTo)).toList();
+        var actual=new ArrayList<String>();
+        for(int page=1;page<=3;page++){
+            var result=logs.page(own,false,filter(AiRequestLogService.Scope.OWN),page,10,"inputTokens","asc");
+            assertEquals(25,result.total());
+            actual.addAll(result.records().stream().map(row->(String)row.get("callId")).toList());
+        }
+        assertEquals(expected,actual);assertEquals(25,new HashSet<>(actual).size());
+        assertEquals(27,logs.page(audit,true,filter(AiRequestLogService.Scope.AUDIT),1,100,"inputTokens","desc").total());
+        var defaultIds=ids.stream().sorted(Comparator.reverseOrder()).limit(10).toList();
+        assertEquals(defaultIds,logs.page(own,false,filter(AiRequestLogService.Scope.OWN),1,10).records().stream().map(row->(String)row.get("callId")).toList());
+        for(String field:List.of("response_body","headers_json","started_at DESC")){
+            assertEquals(ErrorCode.INVALID_INPUT,assertThrows(AiRuntimeException.class,()->logs.page(own,false,filter(AiRequestLogService.Scope.OWN),1,10,field,"asc")).code());
+        }
+        assertEquals(ErrorCode.INVALID_INPUT,assertThrows(AiRuntimeException.class,()->logs.page(own,false,filter(AiRequestLogService.Scope.OWN),1,10,"inputTokens","DESC")).code());
+    }
     @Test void tenantAndSubjectCannotSpoofScopeAndAuditRequiresPlatformPlusAction(){
         long request=request(own,"lowcode.record");journal.complete(request,attempt(request,own).attemptId(),success(telemetry()));
         var other=new TrustedActor("102","tenant-a",actions,null);var otherTenant=new TrustedActor("101","tenant-b",actions,null);

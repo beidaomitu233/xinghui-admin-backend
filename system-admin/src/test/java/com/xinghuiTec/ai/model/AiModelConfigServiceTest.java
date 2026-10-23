@@ -83,6 +83,39 @@ class AiModelConfigServiceTest {
     }
 
     @Test
+    void sortsAllRowsBeforePagingAndKeepsStableTiesWithoutExposingCredentialSorts() {
+        var ids = new java.util.ArrayList<Long>();
+        var timeouts = new java.util.HashMap<Long, Integer>();
+        for (int index = 0; index < 27; index++) {
+            long id = service.create(request("openai", "sort-" + index, null, true));
+            int timeout = (index * 7) % 4 + 10;
+            jdbc.update("UPDATE sys_ai_model_config SET timeout_seconds=? WHERE model_id=?", timeout, id);
+            ids.add(id);
+            timeouts.put(id, timeout);
+        }
+        var expected = ids.stream().sorted(java.util.Comparator
+                .comparingInt((Long id) -> timeouts.get(id)).thenComparingLong(Long::longValue)).toList();
+        var actual = new java.util.ArrayList<Long>();
+        for (int page = 1; page <= 3; page++) {
+            var result = service.page(page, 10, "openai", null, true, "timeoutSeconds", "asc");
+            assertEquals(27, result.total());
+            actual.addAll(result.records().stream().map(AiModelConfigService.View::id).toList());
+        }
+        assertEquals(expected, actual);
+        assertEquals(27, new java.util.HashSet<>(actual).size());
+        var descending = service.page(1, 10, "openai", null, true, "timeoutSeconds", "desc");
+        var reversed = new java.util.ArrayList<>(expected);
+        java.util.Collections.reverse(reversed);
+        assertEquals(reversed.subList(0, 10), descending.records().stream().map(AiModelConfigService.View::id).toList());
+        assertEquals(ids.get(26).longValue(), service.page(1, 10, null, null, null).records().get(0).id());
+        for (String field : java.util.List.of("credentialEnvName", "credential_ciphertext", "timeout_seconds DESC")) {
+            assertThrows(ServiceException.class, () -> service.page(1, 10, null, null, null, field, "asc"));
+        }
+        assertThrows(ServiceException.class, () -> service.page(1, 10, null, null, null, "timeoutSeconds", "DESC"));
+        assertThrows(ServiceException.class, () -> service.page(1, 10, null, null, null, null, "asc"));
+    }
+
+    @Test
     void enabledModelsCannotBeDeletedAndFutureSceneReferencesAreDatabaseRestricted() {
         long enabledId = service.create(request("openai", "enabled-model", null, true));
         assertThrows(ServiceException.class, () -> service.delete(enabledId, 0));

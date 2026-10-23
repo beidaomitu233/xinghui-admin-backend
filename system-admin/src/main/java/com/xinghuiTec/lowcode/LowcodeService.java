@@ -44,6 +44,10 @@ public class LowcodeService {
     }
 
     public Page forms(int pageNum, int pageSize, String name) {
+        return forms(pageNum, pageSize, name, null, null);
+    }
+
+    public Page forms(int pageNum, int pageSize, String name, String orderBy, String order) {
         paging(pageNum, pageSize);
         String keyword = text(name, 100, false, "名称");
         List<Object> args = new ArrayList<>();
@@ -53,9 +57,12 @@ public class LowcodeService {
             args.add(like(keyword));
         }
         Long total = jdbc.queryForObject("SELECT COUNT(*) FROM sys_lowcode_form" + where, Long.class, args.toArray());
+        String sort = metadataOrder(orderBy, order, Map.of(
+                "id", "id", "name", "name", "formKey", "form_key", "status", "status",
+                "publishedVersion", "published_version", "createTime", "create_time", "updateTime", "update_time"));
         args.add(pageSize);
         args.add((pageNum - 1L) * pageSize);
-        var rows = jdbc.queryForList("SELECT * FROM sys_lowcode_form" + where + " ORDER BY id DESC LIMIT ? OFFSET ?", args.toArray());
+        var rows = jdbc.queryForList("SELECT * FROM sys_lowcode_form" + where + " ORDER BY " + sort + " LIMIT ? OFFSET ?", args.toArray());
         return new Page(rows.stream().map(row -> formMap(row, false)).toList(), String.valueOf(total), pageNum, pageSize);
     }
 
@@ -161,6 +168,10 @@ public class LowcodeService {
     }
 
     public Page records(long formId, int pageNum, int pageSize, String filterField, String filterValue) {
+        return records(formId, pageNum, pageSize, filterField, filterValue, null, null);
+    }
+
+    public Page records(long formId, int pageNum, int pageSize, String filterField, String filterValue, String orderBy, String order) {
         paging(pageNum, pageSize);
         var runtime = runtime(formId);
         String tenant = identity.tenant();
@@ -201,10 +212,52 @@ public class LowcodeService {
             }
         }
         Long total = jdbc.queryForObject("SELECT COUNT(*) FROM sys_lowcode_record" + where, Long.class, args.toArray());
+        String sort = recordOrder((LowcodeSchema.Schema) runtime.get("schema"), orderBy, order, args);
         args.add(pageSize);
         args.add((pageNum - 1L) * pageSize);
-        var rows = jdbc.queryForList("SELECT * FROM sys_lowcode_record" + where + " ORDER BY id DESC LIMIT ? OFFSET ?", args.toArray());
+        var rows = jdbc.queryForList("SELECT * FROM sys_lowcode_record" + where + " ORDER BY " + sort + " LIMIT ? OFFSET ?", args.toArray());
         return new Page(rows.stream().map(row -> recordMap(row, false)).toList(), String.valueOf(total), pageNum, pageSize);
+    }
+
+    private static String direction(String order) {
+        if (order == null || order.isBlank()) return "DESC";
+        return switch (order) {
+            case "asc" -> "ASC";
+            case "desc" -> "DESC";
+            default -> throw invalid("排序方向须为asc或desc");
+        };
+    }
+
+    private static String metadataOrder(String orderBy, String order, Map<String, String> columns) {
+        String field = orderBy == null || orderBy.isBlank() ? "id" : orderBy;
+        String column = columns.get(field);
+        if (column == null) throw invalid("不支持此排序字段");
+        String dir = direction(order);
+        return column + " " + dir + ("id".equals(column) ? "" : ",id DESC");
+    }
+
+    private static String recordOrder(LowcodeSchema.Schema schema, String orderBy, String order, List<Object> args) {
+        if (orderBy == null || !orderBy.startsWith("data.")) {
+            return metadataOrder(orderBy, order, Map.of("id", "id", "schemaVersion", "schema_version",
+                    "createTime", "create_time", "updateTime", "update_time"));
+        }
+        String key = orderBy.substring(5);
+        var field = schema.fields().stream().filter(candidate -> candidate.fieldKey().equals(key)
+                && candidate.listVisible() && !candidate.type().equals("multiselect")).findFirst()
+                .orElseThrow(() -> invalid("字段未配置为可排序列"));
+        // JSON paths are bound parameters derived only from the validated published schema.
+        // Explicit JSON null and missing keys both become SQL NULL, while the text "null" stays text.
+        String path = "$." + field.fieldKey();
+        String value = "CASE WHEN JSON_TYPE(JSON_EXTRACT(data_json, ?))='NULL' THEN NULL "
+                + "ELSE JSON_UNQUOTE(JSON_EXTRACT(data_json, ?)) END";
+        args.add(path); args.add(path);
+        String expression = switch (field.type()) {
+            case "number" -> "CAST((" + value + ") AS DECIMAL(20,6))";
+            case "switch" -> "CASE (" + value + ") WHEN 'true' THEN 1 WHEN 'false' THEN 0 ELSE NULL END";
+            case "text", "textarea", "select", "date" -> "(" + value + ")";
+            default -> throw invalid("此类型暂不支持排序");
+        };
+        return expression + " " + direction(order) + ",id DESC";
     }
 
     public Map<String, Object> record(long formId, long recordId) {

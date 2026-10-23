@@ -25,8 +25,9 @@ public class AiConfigurationController {
     @PreAuthorize("@platformAccess.isPlatformIdentity() and (hasAuthority('ai:config:list') or hasAuthority('ai:model:list'))")
     public Result<Page> page(@RequestParam(defaultValue="1") int pageNum,@RequestParam(defaultValue="20") int pageSize,
                              @RequestParam(required=false) String name,@RequestParam(required=false) String providerCode,
-                             @RequestParam(required=false) String environment,@RequestParam(required=false) String status) {
-        return Result.ok(configs.page(pageNum,pageSize,name,providerCode,environment,status));
+                             @RequestParam(required=false) String environment,@RequestParam(required=false) String status,
+                             @RequestParam(required=false) String orderBy,@RequestParam(required=false) String order) {
+        return Result.ok(configs.page(pageNum,pageSize,name,providerCode,environment,status,orderBy,order));
     }
     @GetMapping("/{id}")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and (hasAuthority('ai:config:query') or hasAuthority('ai:model:query'))")

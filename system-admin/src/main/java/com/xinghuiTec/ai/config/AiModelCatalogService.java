@@ -122,6 +122,9 @@ public class AiModelCatalogService {
     }
 
     public StoredCatalog stored(String configId,String keyId,String search,int pageNum,int pageSize) {
+        return stored(configId,keyId,search,pageNum,pageSize,null,null);
+    }
+    public StoredCatalog stored(String configId,String keyId,String search,int pageNum,int pageSize,String orderBy,String order) {
         if(store==null)throw failure(503,"UNAVAILABLE");
         String query=query(search,pageNum,pageSize);long config=decimalId(configId);if(keyId!=null)decimalId(keyId);
         var current=head(config);if(current.draft()==null)throw failure(409,"CONFIG_UNAVAILABLE");
@@ -153,7 +156,7 @@ public class AiModelCatalogService {
         var after=head(config);if(after.revision()!=current.revision()||!Objects.equals(after.draft(),current.draft()))throw failure(409,"CONFIG_CHANGED");
         var combined=new AiModelCatalogTransport.Catalog(List.copyOf(models.values()),scanned,filtered,Map.copyOf(reasons));
         return new StoredCatalog(configId,current.revision(),snapshot.providerCode(),snapshot.endpointUrl(),state,
-                page(combined,query,pageNum,pageSize,"SAVED_CATALOG",snapshot.providerCode(),configId,keyId,current.revision(),refreshed,null),sources);
+                page(combined,query,pageNum,pageSize,"SAVED_CATALOG",snapshot.providerCode(),configId,keyId,current.revision(),refreshed,null,orderBy,order),sources);
     }
     private AiProviderPresets.Preset preset(String provider){try{return AiProviderPresets.require(provider);}catch(RuntimeException invalid){throw failure(422,"PROVIDER_UNSUPPORTED");}}
     private AiModelCatalogTransport.Catalog fetch(String provider,String secret,TrustedActor actor){
@@ -200,8 +203,25 @@ public class AiModelCatalogService {
     }
     private Page page(AiModelCatalogTransport.Catalog catalog,String query,int pageNum,int pageSize,String source,String provider,
                       String configId,String keyId,Integer revision,Instant refreshedAt,String scanId) {
+        return page(catalog,query,pageNum,pageSize,source,provider,configId,keyId,revision,refreshedAt,scanId,null,null);
+    }
+    private Page page(AiModelCatalogTransport.Catalog catalog,String query,int pageNum,int pageSize,String source,String provider,
+                      String configId,String keyId,Integer revision,Instant refreshedAt,String scanId,String orderBy,String order) {
         var filtered = catalog.models().stream().filter(model -> model.code().toLowerCase(Locale.ROOT).contains(query)
                 || model.name().toLowerCase(Locale.ROOT).contains(query)).toList();
+        if ((orderBy!=null&&!orderBy.isBlank()) || (order!=null&&!order.isBlank())) {
+            if (!("asc".equals(order)||"desc".equals(order)) || orderBy==null) throw failure(400,"INVALID_INPUT");
+            Comparator<Model> comparator=switch(orderBy) {
+                case "code" -> Comparator.comparing(Model::code);
+                case "name" -> Comparator.comparing(Model::name);
+                case "contextLength" -> Comparator.comparing(Model::contextLength,Comparator.nullsFirst(Long::compareTo));
+                case "maxCompletionTokens" -> Comparator.comparing(Model::maxCompletionTokens,Comparator.nullsFirst(Long::compareTo));
+                default -> throw failure(400,"INVALID_INPUT");
+            };
+            comparator=comparator.thenComparing(Model::code);
+            if("desc".equals(order))comparator=comparator.reversed();
+            filtered=filtered.stream().sorted(comparator).toList();
+        }
         long offset = (long) (pageNum - 1) * pageSize;
         var records = offset >= filtered.size() ? List.<Model>of()
                 : filtered.subList((int) offset, Math.min(filtered.size(), (int) offset + pageSize));

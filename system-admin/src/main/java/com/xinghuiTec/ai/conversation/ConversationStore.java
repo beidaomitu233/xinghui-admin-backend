@@ -237,6 +237,13 @@ public class ConversationStore implements AiConversationRuntime {
     }
     public List<Head> page(AiRequestStore.Owner owner, boolean audit, String sceneKey, String kind, String search,
             int page, int size) {
+        return page(owner,audit,sceneKey,kind,search,page,size,null,null);
+    }
+    public List<Head> page(AiRequestStore.Owner owner, boolean audit, String sceneKey, String kind, String search,
+            int page, int size,String orderBy,String order) {
+        String ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,Map.of(
+                "title","c.title","updatedAt","c.update_time","createdAt","c.create_time"),
+                "c.update_time DESC,c.conversation_id DESC","c.conversation_id",()->new ConversationFailure(400,"INVALID_INPUT"));
         require(page >= 1 && page <= 100000 && size >= 1 && size <= 100, 400, "INVALID_INPUT");
         var args = new ArrayList<Object>();
         String where = where(owner, audit, sceneKey, kind, search, args);
@@ -244,7 +251,7 @@ public class ConversationStore implements AiConversationRuntime {
         args.add((page - 1L) * size);
         return jdbc.query(
                 "SELECT c.*,r.status AS active_status FROM sys_ai_conversation c LEFT JOIN sys_ai_request r ON r.request_id=COALESCE(c.active_request_id,c.legacy_request_id)"
-                        + where + " ORDER BY c.update_time DESC,c.conversation_id DESC LIMIT ? OFFSET ?",
+                        + where + ordering + " LIMIT ? OFFSET ?",
                 (r, n) -> head(r), args.toArray());
     }
     public long count(AiRequestStore.Owner owner, boolean audit, String sceneKey, String kind, String search) {

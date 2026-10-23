@@ -75,6 +75,17 @@ public class AiModelConfigService {
 
     public Page page(Integer requestedPage, Integer requestedSize,
                      String requestedProvider, String requestedModel, Boolean enabled) {
+        return page(requestedPage, requestedSize, requestedProvider, requestedModel, enabled, null, null);
+    }
+
+    public Page page(Integer requestedPage, Integer requestedSize,
+                     String requestedProvider, String requestedModel, Boolean enabled,
+                     String orderBy, String order) {
+        String ordering = com.xinghuiTec.ai.AiListOrder.clause(orderBy, order, java.util.Map.of(
+                "providerCode", "provider_code", "modelCode", "model_code",
+                "timeoutSeconds", "timeout_seconds", "enabled", "enabled",
+                "createTime", "create_time", "updateTime", "update_time"),
+                "model_id DESC", "model_id");
         int pageNum = requestedPage == null ? 1 : requestedPage;
         int pageSize = requestedSize == null ? 20 : requestedSize;
         if (pageNum < 1 || pageNum > 100_000) {
@@ -112,7 +123,7 @@ public class AiModelConfigService {
         pageArgs.add(pageSize);
         pageArgs.add((pageNum - 1) * pageSize);
         List<View> records = jdbc.query("SELECT " + COLUMNS + from
-                        + " ORDER BY model_id DESC LIMIT ? OFFSET ?", rowMapper(), pageArgs.toArray());
+                        + ordering + " LIMIT ? OFFSET ?", rowMapper(), pageArgs.toArray());
         return new Page(records, total == null ? 0 : total, pageNum, pageSize);
     }
 

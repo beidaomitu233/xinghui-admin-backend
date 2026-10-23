@@ -118,6 +118,13 @@ public class AiConfigurationService {
                 str(h.latestTest()),h.updated(),str(h.legacyId()));
     }
     public Page page(int pageNum,int pageSize,String name,String provider,String environment,String status) {
+        return page(pageNum,pageSize,name,provider,environment,status,null,null);
+    }
+    public Page page(int pageNum,int pageSize,String name,String provider,String environment,String status,String orderBy,String order) {
+        String ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,Map.of(
+                "name","config_name","providerCode","provider_code","environment","environment_name",
+                "status","status","revision","revision","updateTime","update_time"),
+                "config_id DESC","config_id",()->fail(400,"排序参数无效"));
         if(pageNum<1||pageNum>100000||pageSize<1||pageSize>100) throw fail(400,"分页参数无效");
         var where=new StringBuilder(); var args=new ArrayList<Object>();
         for(var entry:List.of(new String[]{"config_name",name},new String[]{"provider_code",provider},
@@ -126,7 +133,7 @@ public class AiConfigurationService {
         }
         long total=Objects.requireNonNull(jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_configuration"+where,Long.class,args.toArray()));
         args.add(pageSize); args.add((pageNum-1)*pageSize);
-        var ids=jdbc.query("SELECT config_id FROM sys_ai_configuration"+where+" ORDER BY config_id DESC LIMIT ? OFFSET ?",(rs,n)->rs.getLong(1),args.toArray());
+        var ids=jdbc.query("SELECT config_id FROM sys_ai_configuration"+where+ordering+" LIMIT ? OFFSET ?",(rs,n)->rs.getLong(1),args.toArray());
         var rows=ids.stream().map(configId->{
             var h=head(configId,false); var view=get(configId);
             var enabled="ACTIVE".equals(h.status())&&h.active()!=null?pairs(h.active()):List.<AdmittedPair>of();

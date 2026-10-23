@@ -31,7 +31,7 @@ class LowcodeSecurityTest {
             try (var context = context(enabled)) {
                 var controller = context.getBean(LowcodeFormController.class);
                 var operations = List.of(
-                        new Operation("lowcode:form:list", () -> controller.list(1, 10, null)),
+                        new Operation("lowcode:form:list", () -> controller.list(1, 10, null, null, null)),
                         new Operation("lowcode:form:query", () -> controller.get(1)),
                         new Operation("lowcode:form:add", () -> controller.create(null)),
                         new Operation("lowcode:form:edit", () -> controller.update(1, null)),
@@ -59,7 +59,7 @@ class LowcodeSecurityTest {
         try (var context = context(true)) {
             var controller = context.getBean(LowcodeRecordController.class);
             var operations = List.of(
-                    new Operation("lowcode:record:list", () -> controller.list(1, 1, 10, null, null)),
+                    new Operation("lowcode:record:list", () -> controller.list(1, 1, 10, null, null, null, null)),
                     new Operation("lowcode:record:query", () -> controller.get(1, 1)),
                     new Operation("lowcode:record:add", () -> controller.create(1, null)),
                     new Operation("lowcode:record:edit", () -> controller.update(1, 1, null)),
