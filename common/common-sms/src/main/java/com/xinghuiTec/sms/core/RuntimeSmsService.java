@@ -22,7 +22,7 @@ public class RuntimeSmsService {
         var p=snapshot.parameters();
         BaseConfig config;
         if("alibaba".equals(p.get("provider"))) {
-            var aliyun=new AlibabaConfig();aliyun.setRegionId(p.getOrDefault("region","cn-hangzhou"));config=aliyun;
+            var aliyun=new AlibabaConfig();aliyun.setRegionId(p.getOrDefault("region","").isBlank()?"cn-hangzhou":p.get("region"));config=aliyun;
         } else if("tencent".equals(p.get("provider"))) {
             var tencent=new TencentConfig();tencent.setSdkAppId(p.getOrDefault("sdkAppId",""));config=tencent;
         } else throw new ServiceException("请选择支持的短信供应商");

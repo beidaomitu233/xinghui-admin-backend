@@ -109,3 +109,7 @@ AiCallLogEntryTest
 AiCallLogMethodSecurityTest
 AiCallTelemetryFailureReasonTest
 IndependentHomeNavigationMigrationTest
+WechatLoginFlowServiceTest
+WechatLoginFlowControllerTest
+WechatAccountServiceTest
+RuntimeMailServiceTest

@@ -16,6 +16,12 @@ import org.springframework.context.annotation.Bean;
 public class MailConfig {
 
     @Bean
+    public RuntimeMailService runtimeMailService(org.springframework.beans.factory.ObjectProvider<com.xinghuiTec.config.BusinessConfigSource> source,
+                                                org.springframework.beans.factory.ObjectProvider<MailAccount> deployment) {
+        return new RuntimeMailService(source,deployment);
+    }
+
+    @Bean
     @ConditionalOnProperty(value = "mail.enabled", havingValue = "true")
     public MailAccount mailAccount(MailProperties props) {
         if (props.getHost() == null || props.getHost().isBlank()
