@@ -15,6 +15,31 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class NotificationInboxServiceTest {
+    @Test
+    void remoteTitleSortSpansThreePagesWithoutLeakingOtherRecipients() {
+        var fixture = new NotificationDeliveryServiceTest.Fixture();
+        fixture.user(1, "000000", 1, 0);
+        fixture.user(2, "000000", 1, 0);
+        for (int index = 0; index < 24; index++) {
+            int rank = index * 7 % 24;
+            fixture.delivery.deliverOne(fixture.request("000000", 1, "sample.created", "sort-" + index, String.format("N%02d", rank)));
+        }
+        fixture.delivery.deliverOne(fixture.request("000000", 2, "sample.created", "foreign-sort", "A-foreign"));
+        login(1, "000000");
+        var inbox = new NotificationInboxService(fixture.jdbc, false);
+        var titles = new java.util.ArrayList<String>();
+        for (int page = 1; page <= 3; page++) {
+            var response = inbox.page(page, 10, false, "title", "asc");
+            assertEquals(24, response.total());
+            titles.addAll(response.items().stream().map(NotificationInboxService.Item::title).toList());
+        }
+        assertEquals(java.util.stream.IntStream.range(0, 24).mapToObj(index -> String.format("N%02d", index)).toList(), titles);
+        assertEquals(List.of("N23", "N22", "N21"), inbox.page(1, 3, false, "title", "desc").items().stream().map(NotificationInboxService.Item::title).toList());
+        assertThrows(ServiceException.class, () -> inbox.page(1, 10, false, "recipient_user_id", "asc"));
+        assertThrows(ServiceException.class, () -> inbox.page(1, 10, false, "title", "asc; SELECT 1"));
+        assertEquals(24, inbox.unreadCount());
+    }
+
     @AfterEach
     void clearLogin() { SecurityContextHolder.clearContext(); }
 

@@ -32,8 +32,18 @@ public class SysNoticeServiceImpl extends ServiceImpl<SysNoticeMapper, SysNotice
                 .eq(queryDTO.getNoticeType() != null, SysNotice::getNoticeType,
                         String.valueOf(queryDTO.getNoticeType()))
                 .eq(StringUtils.hasText(queryDTO.getCreateBy()), SysNotice::getCreateBy, queryDTO.getCreateBy())
-                .eq(StringUtils.hasText(queryDTO.getStatus()), SysNotice::getStatus, queryDTO.getStatus())
-                .orderByDesc(SysNotice::getCreateTime);
+                .eq(StringUtils.hasText(queryDTO.getStatus()), SysNotice::getStatus, queryDTO.getStatus());
+        String key = StringUtils.hasText(queryDTO.getOrderBy()) ? queryDTO.getOrderBy() : "createTime";
+        String direction = StringUtils.hasText(queryDTO.getOrder()) ? queryDTO.getOrder() : "desc";
+        if (!java.util.Set.of("asc", "desc").contains(direction)) throw new com.xinghuiTec.exception.ServiceException("排序方向须为asc或desc");
+        java.util.Map<String, com.baomidou.mybatisplus.core.toolkit.support.SFunction<SysNotice, ?>> sortable = java.util.Map.of(
+                "noticeId", SysNotice::getNoticeId, "noticeTitle", SysNotice::getNoticeTitle,
+                "noticeType", SysNotice::getNoticeType, "status", SysNotice::getStatus,
+                "createTime", SysNotice::getCreateTime, "startTime", SysNotice::getStartTime, "endTime", SysNotice::getEndTime);
+        var column = sortable.get(key);
+        if (column == null) throw new com.xinghuiTec.exception.ServiceException("不支持此排序字段");
+        wrapper.orderBy(true, "asc".equals(direction), column);
+        if (!"noticeId".equals(key)) wrapper.orderByDesc(SysNotice::getNoticeId);
 
         Page<SysNotice> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
         Page<SysNotice> result = this.page(page, wrapper);

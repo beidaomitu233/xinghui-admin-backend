@@ -51,8 +51,9 @@ public class LowcodeRecordController {
     @PreAuthorize("hasAuthority('lowcode:record:list')")
     public Result<LowcodeService.Page> list(@PathVariable long formId, @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "10") int pageSize, @RequestParam(required = false) String filterField,
-            @RequestParam(required = false) String filterValue) {
-        return Result.ok(service.records(formId, pageNum, pageSize, filterField, filterValue));
+            @RequestParam(required = false) String filterValue,
+            @RequestParam(required = false) String orderBy, @RequestParam(required = false) String order) {
+        return Result.ok(service.records(formId, pageNum, pageSize, filterField, filterValue, orderBy, order));
     }
 
     @GetMapping("/records/{recordId}")

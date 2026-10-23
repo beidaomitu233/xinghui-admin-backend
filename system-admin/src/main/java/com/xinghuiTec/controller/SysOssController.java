@@ -94,8 +94,19 @@ public class SysOssController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) String originalName,
-            @RequestParam(required = false) String fileSuffix) {
+            @RequestParam(required = false) String fileSuffix,
+            @RequestParam(required = false) String orderBy, @RequestParam(required = false) String order) {
         
+        if (pageNum == null || pageNum < 1 || pageNum > 10000 || pageSize == null || pageSize < 1 || pageSize > 100)
+            throw new com.xinghuiTec.exception.ServiceException("页码或每页数量无效");
+        String key = orderBy == null || orderBy.isBlank() ? "createTime" : orderBy;
+        String direction = order == null || order.isBlank() ? "desc" : order;
+        if (!java.util.Set.of("asc", "desc").contains(direction)) throw new com.xinghuiTec.exception.ServiceException("排序方向须为asc或desc");
+        java.util.Map<String, com.baomidou.mybatisplus.core.toolkit.support.SFunction<SysOss, ?>> sortable = java.util.Map.of(
+                "ossId", SysOss::getOssId, "originalName", SysOss::getOriginalName,
+                "size", SysOss::getSize, "fileSuffix", SysOss::getFileSuffix, "createTime", SysOss::getCreateTime);
+        var sortColumn = sortable.get(key);
+        if (sortColumn == null) throw new com.xinghuiTec.exception.ServiceException("不支持此排序字段");
         Page<SysOss> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<SysOss> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StringUtils.hasText(originalName), SysOss::getOriginalName, originalName);
@@ -104,7 +115,8 @@ public class SysOssController {
         if (TenantHelper.isEnable()) {
             wrapper.eq(SysOss::getTenantId, TenantHelper.getTenantId());
         }
-        wrapper.orderByDesc(SysOss::getCreateTime);
+        wrapper.orderBy(true, "asc".equals(direction), sortColumn);
+        if (!"ossId".equals(key)) wrapper.orderByDesc(SysOss::getOssId);
 
         return Result.ok(sysOssService.page(page, wrapper));
     }
@@ -189,3 +201,4 @@ public class SysOssController {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Result.fail("文件下载失败"));
     }
 }
+

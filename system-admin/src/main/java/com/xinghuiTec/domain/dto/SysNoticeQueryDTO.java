@@ -52,4 +52,6 @@ public class SysNoticeQueryDTO {
      */
     @Pattern(regexp = "^(asc|desc)$", message = "排序方式只能是 asc 或 desc")
     private String order = "desc";
+
+    private String orderBy = "createTime";
 }
