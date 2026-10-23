@@ -42,7 +42,7 @@ API/权限标识/请求格式/Migration/数据库表均未修改。未连接生�
 
 1. 公共组件根Vitest：2/2通过。
 2. 应用定向8文件初跑：58/59通过，唯一失败为场景h1选择器；改h2后该文件19/19通过。
-3. PM指出重复新建入口后，移除侧栏入口，再跑SceneWorkspace：19/19通过。其余7文件初跑通过，最终覆盖合计59项（不是一次全量重跑）。包括模型中心、监控、对话及用户/角色/文件等实际存在的测试文件。
+3. PM指出重复新建入口后，移除侧栏入口，再跑SceneWorkspace：19/19通过。其余7文件初跑通过，最终覆盖合计59项（不是一次全量重跑）。实际8文件为公共页头、ModelHubWorkspace、SceneWorkspace、MonitorWorkspace、ConversationBoard及monitor/job、jobLog、operlog；用户/角色/index与文件/index不存在对应测试，筛选参数未产生这些测试，不计覆盖。
 4. 改动文件Prettier、ESLint、Stylelint最终均exit0；git diff --check通过。定向日志位于前端 `.qa-local/use02/{check-final,scene-test}.log`。
 5. PM独立浏览器在1440×900对字典、角色、AI配置、提示词、调用监控五页复核：h1均x248/y112、20px、无横向溢出、0pageerror。PM证据在主工作区 `.qa-local/20261023-usability/output/playwright/USE-PM-layout/`。
 6. B第一轮五页×1440×900/1920×1080/390×844×双主题，共30次真实截图及DOM测量完成：visualViewport.scale=1、devicePixelRatio=1，scrollWidth均等于viewport，0pageerror，新建场景仅1入口。截图保存在下列本机目录。窄屏h1 x16/y104；桌面随侧栏折叠为x84/y112，初始展开为x248/y112，字体均20px。部分采集发生在侧栏动画中，浮点x不作为最终对齐证据。
