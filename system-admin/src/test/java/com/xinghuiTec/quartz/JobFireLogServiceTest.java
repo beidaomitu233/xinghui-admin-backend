@@ -50,7 +50,7 @@ class JobFireLogServiceTest {
     void listAndDetailUseSafeSnapshotAfterLogicalJobDeletion() throws Exception {
         insert(1, "SUCCEEDED", 40, "snapshot name", "trace-1", "completed");
         insert(2, "FAILED", 2, "snapshot name", "trace-2", "handler failed: IllegalStateException");
-        var page = logs.list(1, 1, 1L, "snapshot name", "FAILED", "MANUAL");
+        var page = logs.list(1, 1, 1L, "snapshot name", "FAILED", "MANUAL", null, null);
         assertEquals(1, page.total());
         assertEquals(2L, page.records().get(0).fireId());
         assertEquals("snapshot name", logs.detail(2L).jobName());
@@ -60,8 +60,8 @@ class JobFireLogServiceTest {
         assertFalse(json.contains("claimToken"));
         assertFalse(json.contains("invokeTarget"));
         assertThrows(ServiceException.class, () -> logs.detail(999L));
-        assertThrows(ServiceException.class, () -> logs.list(1, 101, null, null, null, null));
-        assertThrows(ServiceException.class, () -> logs.list(1, 10, null, null, "INVALID", null));
+        assertThrows(ServiceException.class, () -> logs.list(1, 101, null, null, null, null, null, null));
+        assertThrows(ServiceException.class, () -> logs.list(1, 10, null, null, "INVALID", null, null, null));
     }
 
     @Test
@@ -72,10 +72,10 @@ class JobFireLogServiceTest {
         insert(4, "SKIPPED", 100, "name", "trace-4", "misfire skipped");
         assertThrows(ServiceException.class, () -> logs.remove(List.of(1L, 2L)));
         assertThrows(ServiceException.class, () -> logs.remove(List.of(3L)));
-        assertEquals(4, logs.list(1, 10, null, null, null, null).total());
+        assertEquals(4, logs.list(1, 10, null, null, null, null, null, null).total());
         assertEquals(1, logs.remove(List.of(1L)));
         assertEquals(1, logs.clean());
-        assertEquals(2, logs.list(1, 10, null, null, null, null).total());
+        assertEquals(2, logs.list(1, 10, null, null, null, null, null, null).total());
         assertEquals("CLAIMED", logs.detail(3L).status());
         assertThrows(ServiceException.class, () -> logs.detail(4L));
         assertEquals(0, logs.clean());
@@ -87,7 +87,7 @@ class JobFireLogServiceTest {
             insert(id, "SUCCEEDED", 100, "name", "trace-" + id, "completed");
         }
         assertEquals(500, logs.clean());
-        assertEquals(1, logs.list(1, 10, null, null, null, null).total());
+        assertEquals(1, logs.list(1, 10, null, null, null, null, null, null).total());
         assertEquals(1, logs.clean());
         assertEquals(0, logs.clean());
         assertThrows(ServiceException.class, () -> logs.remove(java.util.Collections.nCopies(101, 1L)));

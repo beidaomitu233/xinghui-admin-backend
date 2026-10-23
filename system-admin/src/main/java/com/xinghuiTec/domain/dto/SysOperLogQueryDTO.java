@@ -66,6 +66,7 @@ public class SysOperLogQueryDTO {
      * 排序字段
      * 默认按操作时间排序
      */
+    @Pattern(regexp = "^(title|businessType|operName|status|costTime|operTime)$", message = "不支持的操作日志排序字段")
     private String orderBy = "operTime";
 
     /**

@@ -30,17 +30,17 @@ class JobLogMethodSecurityTest {
         try (var context = context(true)) {
             var controller = context.getBean(SysJobLogController.class);
             var logs = context.getBean(JobFireLogService.class);
-            assertThrows(AccessDeniedException.class, () -> controller.list(1, 10, null, null, null, null));
+            assertThrows(AccessDeniedException.class, () -> controller.list(1, 10, null, null, null, null, null, null));
             authenticate("000001", "monitor:jobLog:list", "monitor:jobLog:query",
                     "monitor:jobLog:remove", "monitor:jobLog:clean");
-            assertThrows(AccessDeniedException.class, () -> controller.list(1, 10, null, null, null, null));
+            assertThrows(AccessDeniedException.class, () -> controller.list(1, 10, null, null, null, null, null, null));
             assertThrows(AccessDeniedException.class, () -> controller.detail(1L));
             assertThrows(AccessDeniedException.class, () -> controller.remove(List.of(1L)));
             assertThrows(AccessDeniedException.class, controller::clean);
             verifyNoInteractions(logs);
 
             authenticate("000000", "monitor:jobLog:list");
-            assertDoesNotThrow(() -> controller.list(1, 10, null, null, null, null));
+            assertDoesNotThrow(() -> controller.list(1, 10, null, null, null, null, null, null));
             assertThrows(AccessDeniedException.class, () -> controller.detail(1L));
             assertThrows(AccessDeniedException.class, () -> controller.remove(List.of(1L)));
             assertThrows(AccessDeniedException.class, controller::clean);
@@ -58,7 +58,7 @@ class JobLogMethodSecurityTest {
         try (var context = context(false)) {
             var controller = context.getBean(SysJobLogController.class);
             authenticate("000001", "monitor:jobLog:list");
-            assertDoesNotThrow(() -> controller.list(1, 10, null, null, null, null));
+            assertDoesNotThrow(() -> controller.list(1, 10, null, null, null, null, null, null));
             assertThrows(AccessDeniedException.class, controller::clean);
             authenticate("000001", "monitor:jobLog:clean");
             assertDoesNotThrow(controller::clean);
