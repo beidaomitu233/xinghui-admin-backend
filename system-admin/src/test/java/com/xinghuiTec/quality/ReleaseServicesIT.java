@@ -53,6 +53,34 @@ class ReleaseServicesIT {
     String login(String phone) throws Exception {
         return success(call("POST","/user/login","{\"phone\":\""+phone+"\",\"password\":\"admin123\"}",null,"application/json")).asText();
     }
+    void assertBusinessConfigContract(JsonNode sections,String storageUser,String storagePassword) {
+        Map<String,Set<String>> parameters=Map.of(
+                "wechat",Set.of("clientId","callbackUri","credentialMode","secretEnvName"),
+                "wechatMp",Set.of("clientId","callbackUri","scope"),
+                "sms",Set.of("provider","signature","templateId","region","sdkAppId"),
+                "mail",Set.of("provider","host","port","security","user","from"),
+                "oss",Set.of("provider","endpoint","bucket","basePath"));
+        Map<String,Set<String>> flags=Map.of("wechat",Set.of("appSecret"),"wechatMp",Set.of("appSecret"),
+                "sms",Set.of("accessKeyId","accessKeySecret"),"mail",Set.of("password"),"oss",Set.of("accessKey","secretKey"));
+        assertTrue(sections.isArray());assertEquals(5,sections.size());
+        Set<String> actual=new java.util.HashSet<>();
+        for(var section:sections) {
+            String name=section.path("section").asText();
+            assertTrue(parameters.containsKey(name),"Unexpected business configuration section");
+            assertTrue(actual.add(name),"Duplicate business configuration section");
+            assertEquals(Set.of("section","enabled","parameters","secretsConfigured","revision","updateTime","source","effectiveState","encryptionReady"),fieldNames(section));
+            assertEquals(parameters.get(name),fieldNames(section.path("parameters")));
+            section.path("parameters").forEach(value->assertTrue(value.isTextual(),"Public parameters must be strings"));
+            assertEquals(flags.get(name),fieldNames(section.path("secretsConfigured")));
+            section.path("secretsConfigured").forEach(value->assertTrue(value.isBoolean(),"Secret flags must contain booleans only"));
+        }
+        assertEquals(Set.of("wechat","wechatMp","sms","mail","oss"),actual);
+        assertFalse(sections.toString().contains(storageUser),"Storage credential ID must never be returned");
+        assertFalse(sections.toString().contains(storagePassword),"Storage secret must never be returned");
+    }
+    Set<String> fieldNames(JsonNode value) {
+        assertTrue(value.isObject());Set<String> names=new java.util.HashSet<>();value.fieldNames().forEachRemaining(names::add);return names;
+    }
     @Test void freshMigrationRealAuthenticationPermissionsSqlAndObjectRoundTrip() throws Exception {
         int dbPort=port("OSS04_DB_PORT"),redisPort=port("OSS04_REDIS_PORT"),minioPort=port("OSS04_MINIO_PORT");
         String dbPassword=required("OSS04_DB_PASSWORD"),redisPassword=required("OSS04_REDIS_PASSWORD"),storagePassword=required("OSS04_MINIO_PASSWORD");
@@ -120,7 +148,7 @@ class ReleaseServicesIT {
             }
             assertEquals(403,call("GET","/system/businessConfig",null,user,null).statusCode());
             assertEquals(403,call("GET","/lowcode/forms",null,user,null).statusCode());
-            assertEquals(3,success(call("GET","/system/businessConfig",null,admin,null)).size());
+            assertBusinessConfigContract(success(call("GET","/system/businessConfig",null,admin,null)),storageUser,storagePassword);
             var sms=context.getBean(com.xinghuiTec.sms.core.RuntimeSmsService.class);
             assertThrows(com.xinghuiTec.exception.ServiceException.class,()->sms.send("13900000441",new java.util.LinkedHashMap<>()));
             assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM sys_business_config WHERE section='oss'",Integer.class));
@@ -129,6 +157,7 @@ class ReleaseServicesIT {
             var saved=success(call("PUT","/system/businessConfig/oss",json.writeValueAsString(Map.of("enabled",true,"revision",0,"parameters",parameters,"secrets",Map.of("accessKey",storageUser,"secretKey",storagePassword))),admin,"application/json"));
             assertTrue(saved.path("secretsConfigured").path("secretKey").asBoolean());
             assertFalse(saved.toString().contains(storagePassword),"Storage secret must never be returned");
+            assertBusinessConfigContract(success(call("GET","/system/businessConfig",null,admin,null)),storageUser,storagePassword);
             String stored=jdbc.queryForObject("SELECT secrets_ciphertext FROM sys_business_config WHERE section='oss'",String.class);
             assertTrue(stored.startsWith("v1."));assertFalse(stored.contains(storagePassword));
             modelId=success(call("POST","/system/ai/models",json.writeValueAsString(Map.of("providerCode","openrouter","modelCode","oss04-ci/neutral:free","endpointUrl","https://openrouter.ai/api/v1","timeoutSeconds",10,"enabled",true)),admin,"application/json")).asLong();
@@ -167,6 +196,7 @@ class ReleaseServicesIT {
             context=(ServletWebServerApplicationContext)restarted.run();base="http://127.0.0.1:"+context.getWebServer().getPort();
             assertEquals(migrationCount,verifyMigrations(context.getBean(Flyway.class),jdbc));
             assertTrue(success(call("GET","/system/businessConfig/oss",null,admin,null)).path("secretsConfigured").path("secretKey").asBoolean());
+            assertBusinessConfigContract(success(call("GET","/system/businessConfig",null,admin,null)),storageUser,storagePassword);
             String encryptedKey=jdbc.queryForObject("SELECT credential_ciphertext FROM sys_ai_model_config WHERE model_id=?",String.class,modelId);
             assertTrue(neutralKey.equals(context.getBean(SecretCipher.class).decrypt("ai:model:"+modelId,encryptedKey)),"Reopened model key decryption failed");
             var oldDownload=call("GET","/system/oss/download/"+fileId,null,admin,null);assertEquals(200,oldDownload.statusCode());assertArrayEquals(content.getBytes(StandardCharsets.UTF_8),oldDownload.body());
