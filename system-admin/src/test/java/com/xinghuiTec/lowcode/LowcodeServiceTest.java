@@ -41,7 +41,11 @@ class LowcodeServiceTest {
     }
 
     private void applyMigration() throws Exception {
-        String sql = Files.readString(Path.of("src/main/resources/db/migration/V20261012_160__lowcode_forms.sql"));
+        String sql;
+        try (var resource = getClass().getResourceAsStream("/db/migration/V20261012_160__lowcode_forms.sql")) {
+            assertNotNull(resource);
+            sql = new String(resource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
         sql = sql.lines().filter(line -> !line.stripLeading().startsWith("--"))
                 .collect(java.util.stream.Collectors.joining("\n"));
         for (String statement : sql.split(";")) {

@@ -1,74 +1,50 @@
 package com.xinghuiTec.notification;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.PreparedStatementCreator;
-import org.springframework.jdbc.support.KeyHolder;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
 class NotificationEventServiceTest {
     @Test
-    void recordsTwoBusinessEventsAsPendingWithoutClaimingDelivery() {
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        NotificationTemplateService templates = mock(NotificationTemplateService.class);
-        when(templates.rules()).thenReturn(new NotificationTemplateRules(Set.of()));
-        when(templates.enabledByCode("sample_a.created")).thenReturn(
-                new NotificationTemplateService.View(1, "sample_a.created", "A", "创建 {name}",
-                        "正文", "/a/{name}", List.of("name"), true));
-        when(templates.enabledByCode("sample_b.reviewed")).thenReturn(
-                new NotificationTemplateService.View(2, "sample_b.reviewed", "B", "审核 {state}",
-                        "正文", "/b/{state}", List.of("state"), true));
-        doAnswer(invocation -> {
-            KeyHolder holder = invocation.getArgument(1);
-            holder.getKeyList().add(Map.of("request_id", (long) holder.getKeyList().size() + 1));
-            return 1;
-        }).when(jdbc).update(any(PreparedStatementCreator.class), any(KeyHolder.class));
-
-        NotificationEventService service = new NotificationEventService(jdbc, templates);
-        var first = service.submit(new NotificationEventPublisher.Event(
-                "000001", 101, "sample_a.created", "a-1", Map.of("name", "first")));
-        var second = service.submit(new NotificationEventPublisher.Event(
-                "000002", 202, "sample_b.reviewed", "b-1", Map.of("state", "ready")));
-        assertEquals("PENDING", first.status());
-        assertEquals("PENDING", second.status());
-        verify(jdbc, times(2)).update(any(PreparedStatementCreator.class), any(KeyHolder.class));
+    void acceptsTwoBusinessSnapshotsAndDeliversIdempotentlyWithoutTemplates() {
+        var f = new NotificationDeliveryServiceTest.Fixture();
+        f.user(1, "000000", 1, 0);
+        var service = new NotificationEventService(f.jdbc, new NotificationContentRules(""));
+        var a = service.submit(new NotificationEventPublisher.Event("000000", 1,
+                "orders.created", "o-1", "订单已创建", "编号1", "/system/user"));
+        var duplicate = service.submit(new NotificationEventPublisher.Event("000000", 1,
+                "orders.created", "o-1", "变更内容", "编号2", null));
+        var b = service.submit(new NotificationEventPublisher.Event("000000", 1,
+                "orders.reviewed", "o-1", "审核完成", "结果已保存", null));
+        assertEquals("PENDING", a.status());
+        assertEquals(0, f.count("SELECT COUNT(*) FROM sys_notification_inbox"));
+        assertTrue(f.delivery.deliverOne(a.requestId()));
+        assertTrue(f.delivery.deliverOne(duplicate.requestId()));
+        assertTrue(f.delivery.deliverOne(b.requestId()));
+        assertEquals(2, f.count("SELECT COUNT(*) FROM sys_notification_inbox"));
+        assertEquals("订单已创建", f.jdbc.queryForObject("SELECT title FROM sys_notification_inbox WHERE event_code='orders.created'", String.class));
     }
 
     @Test
-    void missingVariableIsRejectedAndOnlyFailureCodeIsRecorded() {
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        NotificationTemplateService templates = mock(NotificationTemplateService.class);
-        when(templates.rules()).thenReturn(new NotificationTemplateRules(Set.of()));
-        when(templates.enabledByCode("sample_a.created")).thenReturn(
-                new NotificationTemplateService.View(1, "sample_a.created", "A", "创建 {name}",
-                        "正文", null, List.of("name"), true));
-        NotificationEventService service = new NotificationEventService(jdbc, templates);
-        var event = new NotificationEventPublisher.Event(
-                "000001", 101, "sample_a.created", "a-2", Map.of());
-
-        NotificationContractException failure = assertThrows(NotificationContractException.class,
-                () -> service.submit(event));
-        assertEquals("VARIABLE_MISSING", failure.code());
-        verify(jdbc).update(contains("INSERT INTO sys_notification_event_request"),
-                eq("000001"), eq(101L), eq("sample_a.created"), eq("a-2"),
-                eq("REJECTED"), eq("VARIABLE_MISSING"));
-        verify(jdbc, never()).update(any(PreparedStatementCreator.class), any(KeyHolder.class));
+    void recordsOnlySafeFailureMetadataForInvalidContentAndTarget() {
+        var f = new NotificationDeliveryServiceTest.Fixture();
+        var service = new NotificationEventService(f.jdbc, new NotificationContentRules(""));
+        var invalid = new NotificationEventPublisher.Event("000000", 1, "orders.created", "o-2", "", "private body", null);
+        assertEquals("CONTENT_INVALID", assertThrows(NotificationContractException.class, () -> service.submit(invalid)).code());
+        var row = f.jdbc.queryForMap("SELECT * FROM sys_notification_event_request");
+        assertEquals("REJECTED", row.get("STATUS"));
+        assertNull(row.get("BODY"));
+        assertThrows(NotificationContractException.class, () -> service.submit(new NotificationEventPublisher.Event("000000", 1, "orders.created", "o-3", "title", "body", "//evil.example")));
+        assertEquals(0, f.count("SELECT COUNT(*) FROM sys_notification_event_request WHERE status='PENDING'"));
     }
 
     @Test
-    void failedDeliveryMarkerAppliesOnlyToPendingRequest() {
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        NotificationEventService service = new NotificationEventService(jdbc,
-                mock(NotificationTemplateService.class));
-        when(jdbc.update(contains("SET status='FAILED'"), eq("WORKER_ERROR"), eq(5L))).thenReturn(1);
-        assertDoesNotThrow(() -> service.markFailed(5, "WORKER_ERROR"));
-        assertThrows(IllegalArgumentException.class, () -> service.markFailed(5, "raw error detail"));
+    void failedMarkerAndCompensationCannotReopenRetiredWork() {
+        var f = new NotificationDeliveryServiceTest.Fixture();
+        var service = new NotificationEventService(f.jdbc, new NotificationContentRules(""));
+        long id = f.request("000000", 1, "orders.created", "retired", "title");
+        service.markFailed(id, "TEMPLATE_RETIRED");
+        assertFalse(f.delivery.requeueTransientFailure(id));
+        assertFalse(f.delivery.deliverOne(id));
+        assertThrows(IllegalArgumentException.class, () -> service.markFailed(id, "raw error"));
     }
 }

@@ -3,7 +3,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 
-/** Read-only NTF-01 schema check, pinned to the dedicated isolated database. */
+/** Read-only current notification schema check, pinned to the dedicated isolated database. */
 class VerifyNotificationMigration {
     public static void main(String[] args) throws Exception {
         if (!"xinghuiadmintest".equals(System.getenv("DB_NAME"))) {
@@ -21,10 +21,12 @@ class VerifyNotificationMigration {
             check(statement, "SELECT COUNT(*) FROM flyway_schema_history WHERE version='20260926.70' AND success=1", 1);
             check(statement, "SELECT COUNT(*) FROM flyway_schema_history WHERE version='20260926.80' AND success=1", 1);
             check(statement, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='xinghuiadmintest' "
-                    + "AND table_name IN ('sys_notice','sys_notification_template','sys_notification_event_request',"
-                    + "'sys_notification_inbox')", 4);
-            check(statement, "SELECT COUNT(*) FROM sys_menu WHERE menu_id IN (105,1030,1031)", 3);
-            System.out.println("NTF migrations verified in xinghuiadmintest: V60, V70, V80; notification and announcement tables retained");
+                    + "AND table_name IN ('sys_notice','sys_notification_event_request',"
+                    + "'sys_notification_inbox')", 3);
+            check(statement, "SELECT COUNT(*) FROM sys_menu WHERE menu_id IN (105,1030,1031)", 0);
+            check(statement, "SELECT COUNT(*) FROM flyway_schema_history WHERE version='20261023.330' AND success=1", 1);
+            check(statement, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('sys_notification_template','sys_news')", 0);
+            System.out.println("NTF migrations verified in xinghuiadmintest: V60, V70, V80, V330; notification and announcement tables retained");
         }
     }
 
