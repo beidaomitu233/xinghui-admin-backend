@@ -78,7 +78,7 @@ class NotificationDeliveryServiceTest {
         AtomicInteger claimed = new AtomicInteger();
         NotificationDeliveryService secondNode = new NotificationDeliveryService(
                 fixture.jdbc, new DataSourceTransactionManager(fixture.source), false,
-                new NotificationTemplateService(fixture.jdbc, ""));
+                new NotificationContentRules(""));
         Runnable firstWorker = () -> {
             ready.countDown();
             try {
@@ -172,7 +172,7 @@ class NotificationDeliveryServiceTest {
                     + "target varchar(1024),create_time timestamp(3) DEFAULT CURRENT_TIMESTAMP(3),"
                     + "read_time timestamp(3),UNIQUE(tenant_id,event_code,event_key,recipient_user_id))");
             delivery = new NotificationDeliveryService(jdbc, new DataSourceTransactionManager(source), false,
-                    new NotificationTemplateService(jdbc, ""));
+                    new NotificationContentRules(""));
         }
 
         void user(long id, String tenant, int status, int deleted) {

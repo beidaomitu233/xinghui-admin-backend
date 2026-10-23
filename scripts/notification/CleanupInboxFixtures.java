@@ -25,11 +25,8 @@ class CleanupInboxFixtures {
                         created, reviewed);
                 int requests = delete(connection, "DELETE FROM sys_notification_event_request WHERE event_code IN (?,?)",
                         created, reviewed);
-                int templates = delete(connection, "DELETE FROM sys_notification_template WHERE event_code IN (?,?)",
-                        created, reviewed);
                 connection.commit();
-                System.out.println("NTF-02 fixtures removed: inbox=" + inbox + ", requests=" + requests
-                        + ", templates=" + templates);
+                System.out.println("NTF-02 fixtures removed: inbox=" + inbox + ", requests=" + requests);
             } catch (Exception exception) {
                 connection.rollback();
                 throw exception;

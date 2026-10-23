@@ -43,7 +43,7 @@ public class VerifyMenuCleanup {
                 require(number(db,"SELECT COUNT(*) FROM flyway_schema_history WHERE success=1")==19,"Upgrade must start at 19 successful records");
                 before=checksums(db);
                 for(String table:REMOVED) require(number(db,"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='"+table+"'")==1,"Missing baseline table "+table);
-                for(String table:List.of("sys_user","sys_role","sys_config","sys_news","sys_oss")) preserved.put(table,number(db,"SELECT COUNT(*) FROM "+table));
+                for(String table:List.of("sys_user","sys_role","sys_config","sys_oss")) preserved.put(table,number(db,"SELECT COUNT(*) FROM "+table));
             } else {
                 require(mode.equals("empty"),"Unknown mode");
                 require(number(db,"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()")==0,"Empty schema required");

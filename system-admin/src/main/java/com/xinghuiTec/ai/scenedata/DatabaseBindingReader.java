@@ -628,7 +628,6 @@ public class DatabaseBindingReader {
 
     private static boolean knownPermission(String table, TrustedActor actor) {
         String permission = switch (table.toLowerCase(Locale.ROOT)) {
-            case "sys_news" -> "system:news:";
             case "sys_dict_type", "sys_dict_data" -> "system:dict:";
             default -> null;
         };
@@ -637,7 +636,7 @@ public class DatabaseBindingReader {
     }
     private static boolean allowedTable(String name) {
         String n = name.toLowerCase(Locale.ROOT);
-        return !n.startsWith("sys_ai_") && !n.startsWith("sys_lowcode_") && !n.startsWith("sys_user") && !n.startsWith("sys_role") && !n.startsWith("sys_menu") && !n.startsWith("sys_tenant") && !n.startsWith("sys_oss") && !n.startsWith("sys_config") && !n.startsWith("sys_business_config") && !n.startsWith("sys_oper_log") && !n.startsWith("sys_log") && !n.startsWith("sys_notification") && !n.startsWith("sys_notice") && !n.startsWith("sys_wechat") && !n.startsWith("sys_job") && !n.contains("session") && !n.startsWith("flyway") && !secret(n, "");
+        return !n.equals("sys_news") && !n.startsWith("sys_ai_") && !n.startsWith("sys_lowcode_") && !n.startsWith("sys_user") && !n.startsWith("sys_role") && !n.startsWith("sys_menu") && !n.startsWith("sys_tenant") && !n.startsWith("sys_oss") && !n.startsWith("sys_config") && !n.startsWith("sys_business_config") && !n.startsWith("sys_oper_log") && !n.startsWith("sys_log") && !n.startsWith("sys_notification") && !n.startsWith("sys_notice") && !n.startsWith("sys_wechat") && !n.startsWith("sys_job") && !n.contains("session") && !n.startsWith("flyway") && !secret(n, "");
     }
 
     private boolean readable(Column col) {

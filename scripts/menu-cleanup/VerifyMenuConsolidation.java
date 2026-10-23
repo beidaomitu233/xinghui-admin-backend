@@ -77,7 +77,7 @@ public class VerifyMenuConsolidation {
             try {
                 var grants=rows(db,"SELECT rm.role_id,rm.menu_id FROM sys_role_menu rm JOIN sys_menu m ON m.menu_id=rm.menu_id WHERE m.menu_type IN ('C','F') ORDER BY rm.role_id,rm.menu_id");
                 var counts=new LinkedHashMap<String,Long>();
-                for(String table:List.of("sys_user","sys_role","sys_config","sys_news","sys_oss","sys_business_config","sys_lowcode_form","sys_lowcode_record")) counts.put(table,number(db,"SELECT COUNT(*) FROM "+table));
+                for(String table:List.of("sys_user","sys_role","sys_config","sys_oss","sys_business_config","sys_lowcode_form","sys_lowcode_record")) counts.put(table,number(db,"SELECT COUNT(*) FROM "+table));
                 var migration=flyway(url,password,root,false);migration.migrate();migration.validate();
                 require(beforePages.equals(pages(db)),"Page URL/component/permission changed");
                 require(beforeButtons.equals(rows(db,"SELECT menu_id,parent_id,path,component,perms FROM sys_menu WHERE menu_type='F' ORDER BY menu_id")),"Button metadata changed");
