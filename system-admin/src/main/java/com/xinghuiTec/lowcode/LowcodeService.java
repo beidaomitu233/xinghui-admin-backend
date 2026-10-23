@@ -34,6 +34,8 @@ public class LowcodeService {
     private final JdbcTemplate jdbc;
     private final LowcodeSchema schemas;
     private final LowcodeIdentity identity;
+    @org.springframework.beans.factory.annotation.Autowired
+    private LowcodeSharingService sharing;
 
     public LowcodeService(JdbcTemplate jdbc, LowcodeSchema schemas, LowcodeIdentity identity) {
         this.jdbc = jdbc;
@@ -95,6 +97,7 @@ public class LowcodeService {
                         + "update_time=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND is_deleted=0",
                 text(draft.name(), 100, true, "名称"), status, schemas.encode(schemas.validate(draft.schema()), 262144, "表单配置"), id, draft.revision());
         changed(changed);
+        if ("disabled".equals(status) && sharing != null) sharing.revokeForForm(id);
         LOG.info("Lowcode form updated formId={}", id);
         return form(id);
     }
@@ -137,6 +140,7 @@ public class LowcodeService {
         }
         changed(jdbc.update("UPDATE sys_lowcode_form SET is_deleted=1,revision=revision+1,update_time=CURRENT_TIMESTAMP "
                 + "WHERE id=? AND revision=? AND is_deleted=0", id, revision));
+        if (sharing != null) sharing.revokeForForm(id);
         LOG.info("Lowcode form removed formId={}", id);
     }
 

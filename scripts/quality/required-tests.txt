@@ -110,3 +110,5 @@ WechatLoginFlowControllerTest
 WechatAccountServiceTest
 RuntimeMailServiceTest
 NonnegativeHomeNavigationMigrationTest
+LowcodeSharingServiceTest
+LowcodeSharingAuthorizationTest
