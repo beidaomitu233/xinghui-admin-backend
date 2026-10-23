@@ -108,3 +108,7 @@ AiCallLogHttpTest
 AiCallLogEntryTest
 AiCallLogMethodSecurityTest
 AiCallTelemetryFailureReasonTest
+WechatLoginFlowServiceTest
+WechatLoginFlowControllerTest
+WechatAccountServiceTest
+RuntimeMailServiceTest

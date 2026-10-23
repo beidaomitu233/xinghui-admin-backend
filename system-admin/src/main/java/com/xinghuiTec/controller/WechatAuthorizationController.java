@@ -19,6 +19,10 @@ public class WechatAuthorizationController {
     private final WechatConfigService configs;
     private final WechatStateStore states;
     private final String resultPath;
+    @org.springframework.beans.factory.annotation.Autowired
+    private WechatLoginFlowService loginFlows;
+    @org.springframework.beans.factory.annotation.Autowired
+    private WechatLoginFlowController loginController;
     public WechatAuthorizationController(WechatConfigService configs, WechatStateStore states,
                                          @Value("${wechat.result-use-hash:true}") boolean hashRouter) {
         this.configs = configs; this.states = states;
@@ -66,8 +70,8 @@ public class WechatAuthorizationController {
     public ResponseEntity<Void> callback(@RequestParam(required = false) String state,
                                          @RequestParam(required = false) String code,
                                          HttpServletRequest request) {
-        // Never echo code/state and never contact a provider or authenticate a user in WX-01.
         try {
+            if(loginFlows!=null && loginFlows.hasState(state)) return loginController.callback("website",state,code,request);
             return configs.withCurrent(c -> {
                 String status = "invalid";
                 if (capability(c).available() && states.consume(state, binding(request), c.revision()))
