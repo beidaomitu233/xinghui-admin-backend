@@ -95,8 +95,9 @@ class LowcodeSortingMySqlIT {
                         assertEquals(35, new java.util.HashSet<>(actual).size());
                     }
                 }
-                assertEquals(4, jdbc.queryForObject("SELECT COUNT(*) FROM sys_lowcode_record WHERE form_id=? AND JSON_EXTRACT(data_json,'$.amount') IS NULL", Integer.class, form));
-                assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM sys_lowcode_record WHERE form_id=? AND JSON_TYPE(JSON_EXTRACT(data_json,'$.subject'))='NULL'", Integer.class, form) > 0);
+                // validateData omits optional nulls, so 4 version-1 rows without the key and 3 submitted JSON nulls all land as SQL NULL.
+                assertEquals(7, jdbc.queryForObject("SELECT COUNT(*) FROM sys_lowcode_record WHERE form_id=? AND JSON_EXTRACT(data_json,'$.amount') IS NULL", Integer.class, form));
+                assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sys_lowcode_record WHERE form_id=? AND JSON_TYPE(JSON_EXTRACT(data_json,'$.subject'))='NULL'", Integer.class, form));
                 assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM sys_lowcode_record WHERE form_id=? AND JSON_UNQUOTE(JSON_EXTRACT(data_json,'$.subject'))='null' AND JSON_TYPE(JSON_EXTRACT(data_json,'$.subject'))='STRING'", Integer.class, form) > 0);
                 for (String column : List.of("data.choices", "data.private_note", "data.unknown", "tenant_id", "data.subject') DESC; DELETE FROM sys_lowcode_record"))
                     assertThrows(ServiceException.class, () -> service.records(form, 1, 10, null, null, column, "asc"));
@@ -144,7 +145,8 @@ class LowcodeSortingMySqlIT {
     private static String referenceExpression(String kind) {
         return switch (kind) {
             // Type-aware reference preserves the literal string "null" independently of the service's CASE condition.
-            case "number" -> "CASE WHEN JSON_TYPE(JSON_EXTRACT(data_json,?)) IN ('INTEGER','DOUBLE','DECIMAL') THEN CAST(JSON_UNQUOTE(JSON_EXTRACT(data_json,?)) AS DECIMAL(20,6)) END";
+            // MySQL 8.0.12 parses large positive integer literals as UNSIGNED INTEGER; probe log ui-native-02/mysql-scalar-probe.json.
+            case "number" -> "CASE WHEN JSON_TYPE(JSON_EXTRACT(data_json,?)) IN ('INTEGER','UNSIGNED INTEGER','DOUBLE','DECIMAL') THEN CAST(JSON_UNQUOTE(JSON_EXTRACT(data_json,?)) AS DECIMAL(20,6)) END";
             case "boolean" -> "CASE JSON_UNQUOTE(JSON_EXTRACT(data_json,?)) WHEN 'true' THEN 1 WHEN 'false' THEN 0 END";
             default -> "CASE WHEN JSON_TYPE(JSON_EXTRACT(data_json,?))='STRING' THEN JSON_UNQUOTE(JSON_EXTRACT(data_json,?)) END";
         };
