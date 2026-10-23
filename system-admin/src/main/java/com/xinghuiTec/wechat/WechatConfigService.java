@@ -31,7 +31,7 @@ public class WechatConfigService {
         return jdbc.queryForObject("SELECT enabled,client_id,secret_env_name,callback_uri,revision,credential_mode,secret_ciphertext "
                 + "FROM sys_wechat_website_config WHERE id=1" + (lock ? " FOR UPDATE" : ""),
                 (rs, row) -> new Config(rs.getBoolean(1), rs.getString(2), rs.getString(3),
-                        rs.getString(4), rs.getInt(5), resolve(rs.getString(6),rs.getString(7),rs.getString(3)) != null));
+                        canonicalCallback(rs.getString(4)), rs.getInt(5), resolve(rs.getString(6),rs.getString(7),rs.getString(3)) != null));
     }
     // A DB row lock orders config updates against both flow creation and consumption across instances.
     @Transactional
@@ -42,7 +42,7 @@ public class WechatConfigService {
         if (change == null || change.enabled() == null || change.revision() == null || change.revision() < 0)
             throw new WechatFailure(400, "配置字段无效");
         String client = clean(change.clientId(), 64), env = clean(change.secretEnvName(), 128);
-        String callback = clean(change.callbackUri(), 2048);
+        String callback = canonicalCallback(clean(change.callbackUri(), 2048));
         if (!client.isEmpty() && !client.matches("[A-Za-z0-9_-]{1,64}"))
             throw new WechatFailure(400, "网站应用标识格式无效");
         try { rules.credentialEnvName(env); }
@@ -56,7 +56,19 @@ public class WechatConfigService {
         if (count != 1) throw new WechatFailure(409, "配置已更新，请刷新后重试");
         return get();
     }
-    void validateCallback(String value) {
+    public void validateMpCallback(String value) { validateCallbackPath(value,true); }
+    /** The deployed gateway forwards only /api/. Canonicalize legacy metadata for all new flows. */
+    public static String canonicalCallback(String value) {
+        if(value==null || value.isBlank()) return value;
+        try {
+            var uri=URI.create(value);
+            if(uri.getRawQuery()==null && uri.getRawFragment()==null && "/auth/wechat/callback".equals(uri.getRawPath()))
+                return uri.getScheme()+"://"+uri.getRawAuthority()+"/api/auth/wechat/callback";
+            return value;
+        } catch(RuntimeException invalid) { return value; }
+    }
+    void validateCallback(String value) { validateCallbackPath(value,false); }
+    private void validateCallbackPath(String value,boolean mp) {
         try {
             URI uri = URI.create(value);
             String host = uri.getHost();
@@ -66,8 +78,8 @@ public class WechatConfigService {
                     && !loopback;
             if (!(https || localHttp && loopback && "http".equals(uri.getScheme()))
                     || uri.getUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null
-                    || !("/auth/wechat/callback".equals(uri.getRawPath())
-                    || "/api/auth/wechat/callback".equals(uri.getRawPath())) || uri.getPort() == 0)
+                    || !(mp ? "/api/auth/wechat/mp-callback".equals(uri.getRawPath())
+                    : "/api/auth/wechat/callback".equals(uri.getRawPath())) || uri.getPort() == 0)
                 throw new IllegalArgumentException();
         } catch (RuntimeException e) { throw new WechatFailure(400, "回调须为固定HTTPS域名及微信回调路径"); }
     }
@@ -91,7 +103,7 @@ public class WechatConfigService {
     }
     @Transactional
     public void saveUnified(boolean enabled,String client,String env,String callback,String mode,String encrypted,int revision) {
-        client=clean(client,64);env=clean(env,128);callback=clean(callback,2048);
+        client=clean(client,64);env=clean(env,128);callback=canonicalCallback(clean(callback,2048));
         if(!client.isEmpty() && !client.matches("[A-Za-z0-9_-]{1,64}")) throw new WechatFailure(400,"网站应用标识格式无效");
         if(!"ENV".equals(mode) && !"DB".equals(mode)) throw new WechatFailure(400,"凭据来源无效");
         rules.credentialEnvName(env);

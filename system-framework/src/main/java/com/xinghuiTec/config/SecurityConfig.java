@@ -68,6 +68,8 @@ public class SecurityConfig {
                         // Druid's console must not be reachable through the anonymous allowlist.
                         .requestMatchers("/druid", "/druid/**").denyAll()
                         .requestMatchers("/auth/wechat/capability", "/auth/wechat/authorize", "/auth/wechat/callback").permitAll()
+                        .requestMatchers("/auth/wechat/login-capability", "/auth/wechat/flow", "/auth/wechat/flow/status",
+                                "/auth/wechat/flow/cancel", "/auth/wechat/flow/complete", "/auth/wechat/mp-callback").permitAll()
                         .requestMatchers(HttpConstants.PATH_LOGIN, HttpConstants.PATH_ROOT, HttpConstants.PATH_CAPTCHA)
                         .anonymous()
                         .anyRequest().authenticated())
