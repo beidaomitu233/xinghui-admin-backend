@@ -36,6 +36,7 @@ public class SysUserQueryDTO {
     private Integer pageSize = 10;
 
     /** 排序字段 */
+    @Pattern(regexp = "^(username|nickname|mobile|email|status|createTime|updateTime)$", message = "不支持的用户排序字段")
     private String orderBy = "createTime";
 
     /** 排序方式 */
