@@ -33,12 +33,7 @@ public final class SqlDatasetRegistry {
     /** Code-only extension seam used by business integrations and isolated policy tests, never request JSON. */
     SqlDatasetRegistry(JdbcTemplate jdbc, LowcodeSchema schemas, SqlActorVerifier actors, List<TablePolicy> extensions) {
         this.jdbc = jdbc; this.schemas = schemas; this.actors = actors;
-        var news = new LinkedHashMap<String, String>();
-        news.put("id", "news_id");
-        for (String name : List.of("title", "summary", "content", "category", "tags", "status", "view_count", "publish_time")) news.put(name, name);
         var values = new ArrayList<TablePolicy>();
-        values.add(new TablePolicy("content.news", "news", "资讯", "sys_news", ScopeKind.PLATFORM,
-                Set.of("system:news:list", "system:news:query"), news, null, null, null, "CONTENT_NEWS_PLATFORM_V1"));
         values.addAll(extensions);
         if (values.stream().map(TablePolicy::key).distinct().count() != values.size()) throw new IllegalArgumentException("Duplicate dataset policy");
         policies = List.copyOf(values);
@@ -288,9 +283,9 @@ public final class SqlDatasetRegistry {
                 || name == null || !name.matches("[A-Za-z_][A-Za-z0-9_]{0,63}")) return false;
         String n = name.toLowerCase(Locale.ROOT);
         if (List.of("sys_ai_", "sys_lowcode_", "sys_user", "sys_role", "sys_menu", "sys_tenant", "sys_oss",
-                "sys_config", "sys_business_config", "sys_oper_log", "sys_log", "sys_notification", "sys_notice",
+                "sys_config", "sys_business_config", "sys_oper_log", "sys_log", "sys_notification", "sys_notice", "sys_news",
                 "sys_wechat", "sys_job", "flyway").stream().anyMatch(n::startsWith) || n.contains("session") || secret(n, "")) return false;
-        String prefix = switch (n) { case "sys_news" -> "system:news:"; case "sys_dict_type", "sys_dict_data" -> "system:dict:"; default -> null; };
+        String prefix = switch (n) { case "sys_dict_type", "sys_dict_data" -> "system:dict:"; default -> null; };
         return prefix == null || actor.authorities().contains(prefix + "list") || actor.authorities().contains(prefix + "query");
     }
     private static String label(String comment, String fallback) {

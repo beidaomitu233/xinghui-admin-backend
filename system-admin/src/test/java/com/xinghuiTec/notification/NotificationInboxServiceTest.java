@@ -84,7 +84,7 @@ class NotificationInboxServiceTest {
         fixture.user(11, "000002", 1, 0);
         var delivery = new NotificationDeliveryService(fixture.jdbc,
                 new DataSourceTransactionManager(fixture.source), true,
-                new NotificationTemplateService(fixture.jdbc, ""));
+                new NotificationContentRules(""));
         delivery.deliverOne(fixture.request("000001", 10, "sample.created", "tenant-one", "One"));
         delivery.deliverOne(fixture.request("000002", 11, "sample.created", "tenant-two", "Two"));
         long otherId = fixture.jdbc.queryForObject("SELECT notification_id FROM sys_notification_inbox "

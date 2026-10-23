@@ -25,7 +25,7 @@ class DatabaseBindingsTest {
         jdbc.update("INSERT INTO customers VALUES(7,'客户甲','000000',0,'never-export-password','{\"color\":\"blue\",\"api_token\":\"never-export-token\"}'),(8,'别的租户','other',0,'hidden','{}'),(9,'已删除','000000',1,'hidden','{}')");
         jdbc.update("INSERT INTO orders VALUES(42,7,12.50,'OPEN','000000',0),(43,7,NULL,'CLOSED','000000',0),(44,8,99,'OPEN','other',0)");
         jdbc.update("INSERT INTO order_lines VALUES(1,42,'SKU-A',2,'000000',0),(2,43,'SKU-B',9,'000000',0),(3,42,'OTHER',8,'other',0),(4,42,'DELETED',1,'000000',1)");
-        String ddl=Files.readString(Path.of("src/main/resources/db/migration/V20261012_160__lowcode_forms.sql"));for(String sql:ddl.substring(0,ddl.indexOf("-- Prefer")).split(";"))if(!sql.isBlank())jdbc.execute(sql);
+        String ddl=new org.springframework.core.io.ClassPathResource("db/migration/V20261012_160__lowcode_forms.sql").getContentAsString(java.nio.charset.StandardCharsets.UTF_8);for(String sql:ddl.substring(0,ddl.indexOf("-- Prefer")).split(";"))if(!sql.isBlank())jdbc.execute(sql);
         var identity=new LowcodeIdentity(true);var schema=new LowcodeSchema(json);var lowcode=new LowcodeService(jdbc,schema,identity);service=new SceneDataService(jdbc,lowcode,identity,schema,json,new DataSourceTransactionManager(ds));service.database(new DatabaseBindingReader(jdbc,json,lowcode,schema,new PlatformAccessService(true)));
         actor=new TrustedActor("1","000000",Set.of(DatabaseBindingReader.READ,"lowcode:record:query","lowcode:record:list"),null);
     }
@@ -290,7 +290,7 @@ class DatabaseBindingsTest {
         jdbc.execute("CREATE TABLE business_scope(id BIGINT PRIMARY KEY,tenantId VARCHAR(20),deleted INT)");jdbc.update("INSERT INTO business_scope VALUES(1,'000000',0),(2,'other',0),(3,'000000',1)");
         var binding=binding("范围","db.business_scope",ReadMode.TABLE,List.of("id"),null,List.of(),20,null);assertEquals(1,preview(binding).reads().get(0).rowCount());
         jdbc.execute("CREATE TABLE sys_news(id BIGINT PRIMARY KEY,title VARCHAR(20),tenant_id VARCHAR(20),is_deleted INT)");jdbc.update("INSERT INTO sys_news VALUES(1,'资讯','000000',0)");assertThrows(AiRuntimeException.class,()->service.databaseFields("db.sys_news",actor,control()));
-        var granted=new TrustedActor("1","000000",Set.of(DatabaseBindingReader.READ,"system:news:query"),null);assertTrue(service.databaseFields("db.sys_news",granted,control()).fields().stream().anyMatch(f->f.field().equals("title")));
+        var granted=new TrustedActor("1","000000",Set.of(DatabaseBindingReader.READ,"system:news:query"),null);assertThrows(AiRuntimeException.class,()->service.databaseFields("db.sys_news",granted,control()));
     }
     @Test void plainBusinessTextKeepsItsTypeAndMalformedStructuredDataNeverLeaks(){
         jdbc.update("UPDATE customers SET name=? WHERE id=7","{普通文字}");assertEquals("{普通文字}",((Map<?,?>)preview(row("文字","db.customers","7",List.of("name"))).values().get("文字")).get("name"));
