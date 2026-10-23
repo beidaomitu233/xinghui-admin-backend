@@ -109,3 +109,4 @@ AiCallLogEntryTest
 AiCallLogMethodSecurityTest
 AiCallTelemetryFailureReasonTest
 IndependentHomeNavigationMigrationTest
+NonnegativeHomeNavigationMigrationTest
