@@ -104,3 +104,13 @@
 - 同参数慢列表期间写成功刷新：5 个有写动作的 Grid 在业务 load 入口递增单个 refreshRevision，proxy 返回前纳入对照接续；循环不自增，无新队列。读日志不机械扩展。定向真实组件用例已通过：慢列表期间创建成功，最终第三次列表查询显示新模型，异步表单双击只产生一次写入。
 
 - 32 项定向 Maven 通过后，新增 IT 的 CI 分支与生产一致 Druid stat/MySQL Wall 连接也已 test-compile 通过；尚未连接新库执行 IT。
+
+## 阶段提交与后续窗口
+
+- BE 阶段提交 `477ba03f6b649cfdff6a65155963598134077ad2`；FE 阶段提交 `3edaf3ce4611284a6f681d7ad0163db18a495797`，均已同步 PM 并进入聚合 feature。
+- 原生 Vxe 工具栏最终使用 `refresh: true, refreshOptions: { code: 'query' }`，沿用当前安装版本明确字段，保留当前页和排序。
+- FE 阶段提交为 45 个业务/API/测试文件；自动生成的 `components.d.ts` 差异已恢复，未纳入业务提交。
+- PM 已安排 C 接续 A 的串行窗口。正在适配旧场景、提示词编辑、数据选择测试的真实 Form/Grid/Modal 与明确 Portal 查询；保留原版本、权限、业务路由及晚响应断言。
+- 新隔离 QA 与正式浏览器验收仍未完成，不能把阶段提交或远端类型检查通过当作最终验收。
+
+- 远端完整门禁发现两个日志 Query 的兼容重载导致 MVC 构造绑定歧义，现移除重载保留唯一 canonical record 构造，直接调用补全可选排序参数；AiCallLogHttpTest 2 项与 SceneLogMvcTest 3 项真实 MockMvc 回归通过，新增 HTTP 断言确认 elapsedMs/asc 被准确转交，原枚举错误/权限/不缓存/Long 序列化断言保留。

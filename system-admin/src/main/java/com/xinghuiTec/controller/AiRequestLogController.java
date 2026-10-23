@@ -26,10 +26,6 @@ public class AiRequestLogController {
     }
     public record Query(String scope, String appId, String requestId, String businessId, String modelRef, String status,
                         String tenantRef, String subjectRef, String from, String to, Integer pageNum, Integer pageSize,String sceneKey,String requestKind,String orderBy,String order) {
-        public Query(String scope, String appId, String requestId, String businessId, String modelRef, String status,
-                     String tenantRef, String subjectRef, String from, String to, Integer pageNum, Integer pageSize,String sceneKey,String requestKind){
-            this(scope,appId,requestId,businessId,modelRef,status,tenantRef,subjectRef,from,to,pageNum,pageSize,sceneKey,requestKind,null,null);
-        }
         public AiRequestLogService.Filters filters() {
             try {
                 return new AiRequestLogService.Filters(scope == null ? AiRequestLogService.Scope.OWN : AiRequestLogService.Scope.valueOf(scope),

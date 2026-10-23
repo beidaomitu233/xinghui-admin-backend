@@ -22,10 +22,6 @@ public class AiCallLogController {
     public AiCallLogController(AiCallLogService logs,AiInvocationIdentity identity,PlatformAccessService platform){this.logs=logs;this.identity=identity;this.platform=platform;}
     public record Query(String scope,String from,String to,String requestId,String modelRef,String providerCode,String status,
                         String entryType,String tenantRef,String subjectRef,String appId,String sceneKey,Integer pageNum,Integer pageSize,String orderBy,String order){
-        public Query(String scope,String from,String to,String requestId,String modelRef,String providerCode,String status,
-                     String entryType,String tenantRef,String subjectRef,String appId,String sceneKey,Integer pageNum,Integer pageSize){
-            this(scope,from,to,requestId,modelRef,providerCode,status,entryType,tenantRef,subjectRef,appId,sceneKey,pageNum,pageSize,null,null);
-        }
         public AiCallLogService.Filters filters(){try{return new AiCallLogService.Filters(scope==null?AiRequestLogService.Scope.OWN:AiRequestLogService.Scope.valueOf(scope),
                 blank(from)?null:Instant.parse(from),blank(to)?null:Instant.parse(to),requestId,modelRef,providerCode,
                 blank(status)?null:AiRequestStatus.valueOf(status),blank(entryType)?null:AiCallLogService.EntryType.valueOf(entryType),tenantRef,subjectRef,appId,sceneKey);
