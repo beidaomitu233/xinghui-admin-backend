@@ -27,15 +27,15 @@ public class NotificationDeliveryService {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
     private final boolean tenantEnabled;
-    private final NotificationTemplateService templates;
+    private final NotificationContentRules rules;
 
     public NotificationDeliveryService(JdbcTemplate jdbc, PlatformTransactionManager manager,
             @Value("${tenant.enable:false}") boolean tenantEnabled,
-            NotificationTemplateService templates) {
+            NotificationContentRules rules) {
         this.jdbc = jdbc;
         this.transactions = new TransactionTemplate(manager);
         this.tenantEnabled = tenantEnabled;
-        this.templates = templates;
+        this.rules = rules;
     }
 
     @Scheduled(fixedDelayString = "${notification.delivery.poll-ms:1000}")
@@ -103,7 +103,7 @@ public class NotificationDeliveryService {
         }
         if (failure == null) {
             try {
-                templates.rules().validateRenderedTarget(request.target());
+                rules.validateTarget(request.target());
             } catch (NotificationContractException invalidTarget) {
                 failure = "TARGET_INVALID";
             }

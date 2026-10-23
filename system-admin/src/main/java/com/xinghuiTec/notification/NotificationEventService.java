@@ -18,11 +18,11 @@ public class NotificationEventService implements NotificationEventPublisher {
     private static final Pattern FAILURE_CODE = Pattern.compile("[A-Z][A-Z0-9_]{0,39}");
 
     private final JdbcTemplate jdbc;
-    private final NotificationTemplateService templates;
+    private final NotificationContentRules rules;
 
-    public NotificationEventService(JdbcTemplate jdbc, NotificationTemplateService templates) {
+    public NotificationEventService(JdbcTemplate jdbc, NotificationContentRules rules) {
         this.jdbc = jdbc;
-        this.templates = templates;
+        this.rules = rules;
     }
 
     @Override
@@ -30,26 +30,22 @@ public class NotificationEventService implements NotificationEventPublisher {
         if (event == null) throw new NotificationContractException("EVENT_INVALID", "事件请求不能为空");
         try {
             validateEnvelope(event);
-            NotificationTemplateService.View template = templates.enabledByCode(event.eventCode());
-            NotificationTemplateRules.Rendered rendered = templates.rules().render(
-                    template.titleTemplate(), template.bodyTemplate(), template.targetTemplate(),
-                    template.allowedVariables(), event.variables());
+            rules.validate(event.title(), event.body(), event.target());
             KeyHolder holder = new GeneratedKeyHolder();
             jdbc.update(connection -> {
                 PreparedStatement statement = connection.prepareStatement("""
                         INSERT INTO sys_notification_event_request
-                          (tenant_id,recipient_user_id,event_code,event_key,template_id,title,body,target,status)
-                        VALUES (?,?,?,?,?,?,?,?,?)
+                          (tenant_id,recipient_user_id,event_code,event_key,title,body,target,status)
+                        VALUES (?,?,?,?,?,?,?,?)
                         """, Statement.RETURN_GENERATED_KEYS);
                 statement.setString(1, event.tenantId());
                 statement.setLong(2, event.recipientUserId());
                 statement.setString(3, event.eventCode());
                 statement.setString(4, event.eventKey());
-                statement.setLong(5, template.id());
-                statement.setString(6, rendered.title());
-                statement.setString(7, rendered.body());
-                statement.setString(8, rendered.target());
-                statement.setString(9, "PENDING");
+                statement.setString(5, event.title());
+                statement.setString(6, event.body());
+                statement.setString(7, event.target());
+                statement.setString(8, "PENDING");
                 return statement;
             }, holder);
             return new Submission(holder.getKey().longValue(), "PENDING");

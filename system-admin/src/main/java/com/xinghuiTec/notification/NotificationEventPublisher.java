@@ -1,11 +1,9 @@
 package com.xinghuiTec.notification;
 
-import java.util.Map;
-
-/** Internal business-module boundary. Submission persists a pending request; NTF-02 owns delivery. */
+/** Trusted in-process business boundary; content is a snapshot, never accepted from an unauthenticated HTTP payload. */
 public interface NotificationEventPublisher {
     record Event(String tenantId, long recipientUserId, String eventCode, String eventKey,
-                 Map<String, String> variables) {}
+                 String title, String body, String target) {}
 
     record Submission(long requestId, String status) {}
 
