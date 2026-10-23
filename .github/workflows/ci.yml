@@ -149,7 +149,17 @@ jobs:
         run: >-
           mvn -B -ntp -pl system-admin -am test
           -Dtest=LowcodeSharingMySqlIT -Dsurefire.failIfNoSpecifiedTests=false
-      - name: Reject missing or skipped service regressions
+      - name: Exercise typed lowcode and AI latency sorting through Druid Wall
+        env:
+          CI: "true"
+          DB_URL: jdbc:mysql://127.0.0.1:3306/xinghui_oss04_ci?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+          DB_USERNAME: oss04_ci
+          DB_PASSWORD: oss04_ci_database_fixture
+          UI_NATIVE_MYSQL_SORT: "1"
+        run: >-
+          mvn -B -ntp -pl system-admin -am test
+          -Dtest=LowcodeSortingMySqlIT,AiCallLogMysqlSortIT -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Require every migrated MySQL regression report
         shell: pwsh
         run: ./scripts/quality/Verify-Build.ps1 -TestsOnly -RequiredList scripts/quality/required-service-tests.txt
   quality:

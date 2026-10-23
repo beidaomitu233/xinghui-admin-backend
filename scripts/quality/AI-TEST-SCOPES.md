@@ -10,11 +10,20 @@ required test fails before Maven starts.
 `ReleaseServicesIT` migrates the empty database and performs the existing
 authenticated service smoke; then `AiConfigurationDruidMySqlIT` verifies real
 Druid stat/MySQL Wall, empty and filtered list SQL, paging, and malformed HTTP
-parameters against that migrated schema. Both reports must exist and pass.
+parameters against that migrated schema. Every selected report must exist and pass.
 The latter test is read-only and rejects non-CI database targets. The ordinary
 build also runs `AiConfigurationDruidHttpTest` against its isolated H2 database
 with the real MySQL Wall filter. This is not a full deployed application Druid
 acceptance claim.
+
+The same matrix also executes `LowcodeSortingMySqlIT` and
+`AiCallLogMysqlSortIT` through the production stat/MySQL Wall pool. They verify
+typed JSON fields and AI latency values before paging, nulls, stable ties, and
+tenant/owner ranges. These tests accept only the named CI fixture schema or
+their explicitly assigned local UI QA schemas; CI enables the AI gate with
+`UI_NATIVE_MYSQL_SORT=1`. They make no external provider requests and remove
+only the fixture IDs they created. They are mandatory service tests rather
+than entries in the native exclusion ledger.
 
 `native-ai-tests.txt` is an explicit exclusion ledger, not a success or skipped
 test report. Those tests require assigned local MySQL/Redis fixtures, private

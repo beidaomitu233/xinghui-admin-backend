@@ -2,3 +2,5 @@ ReleaseServicesIT
 AiConfigurationDruidMySqlIT
 AiSceneSqlDruidMySqlIT
 LowcodeSharingMySqlIT
+LowcodeSortingMySqlIT
+AiCallLogMysqlSortIT
