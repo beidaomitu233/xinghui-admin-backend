@@ -25,7 +25,12 @@ class LowcodeSharingMySqlIT {
             assertEquals(Connection.TRANSACTION_REPEATABLE_READ, connection.getTransactionIsolation(), "Prove native default RR, not H2/read-committed-by-default");
             assertTrue(connection.getMetaData().getDatabaseProductName().contains("MySQL"));
         }
-        Flyway.configure().dataSource(source).locations("classpath:db/migration").cleanDisabled(true)
+        // ReleaseServicesIT already applies the retained optional repeatable in the shared CI schema.
+        // Resolve that same history without changing the assigned local schema's migration contract.
+        String[] migrationLocations = ci
+                ? new String[]{"classpath:db/migration", "classpath:db/optional-migration"}
+                : new String[]{"classpath:db/migration"};
+        Flyway.configure().dataSource(source).locations(migrationLocations).cleanDisabled(true)
                 .baselineOnMigrate(false).outOfOrder(false).load().migrate();
         return source;
     }
