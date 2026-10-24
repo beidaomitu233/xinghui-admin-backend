@@ -109,6 +109,20 @@ class AgentRuntimeTest {
             assertThat(events.toString()).doesNotContain("private reasoning");
         }
     }
+    @Test void nativeCompactionKeepsLongSessionsWithoutWritingConversationToWorkspace()throws Exception {
+        var summaries=new AtomicInteger();
+        AgentModelGateway model=(context,request)->{
+            var body=read(request);if(body.path("tools").isMissingNode()||body.path("tools").isEmpty()){summaries.incrementAndGet();return text("A synthetic conversation summary; continue the task.");}
+            return text("已记录");
+        };
+        try(var runtime=new AgentRuntime(call(),"Synthetic assistant",workspace,new InMemoryAgentStateStore(),model,null,json)){
+            for(int i=0;i<32;i++)runtime.run("QA-PRIVATE-NOTE-"+i).blockLast(Duration.ofSeconds(10));
+        }
+        assertThat(summaries.get()).isGreaterThan(0);
+        try(var paths=java.nio.file.Files.walk(workspace)){
+            for(Path file:paths.filter(java.nio.file.Files::isRegularFile).toList())assertThat(java.nio.file.Files.readString(file)).doesNotContain("QA-PRIVATE-NOTE-");
+        }
+    }
     private JsonNode read(String text) { try { return json.readTree(text); } catch (Exception e) { throw new AssertionError(e); } }
     private Flux<String> tool(String name, String id, String arguments) {
         var function = json.createObjectNode().put("name", name).put("arguments", arguments);

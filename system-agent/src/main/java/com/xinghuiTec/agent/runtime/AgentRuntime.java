@@ -7,6 +7,7 @@ import io.agentscope.core.event.*;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.harness.agent.HarnessAgent;
+import io.agentscope.harness.agent.memory.compaction.CompactionConfig;
 import reactor.core.publisher.Flux;
 
 import java.nio.file.Path;
@@ -49,6 +50,9 @@ public final class AgentRuntime implements AutoCloseable {
                 .disableDynamicSkills().disableDefaultWorkspaceSkills().disableToolsConfig()
                 .disableDynamicSubagents().disableSubagents()
                 .disableToolResultEviction().enableAgentTracingLog(false)
+                // Preserve native context summarization. Raw transcript offload and memory
+                // ledger flush would bypass the application's encrypted state store.
+                .compaction(CompactionConfig.builder().flushBeforeCompact(false).offloadBeforeCompact(false).build())
                 .build();
         // Harness 2.0.3 installs web tools even with workspace tools disabled. This app's
         // business gateway owns outbound access; remove implicit vendor tools at the registry.
