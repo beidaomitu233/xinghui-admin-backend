@@ -43,3 +43,16 @@ before Gitflow integration or release.
 assigned local MySQL/Redis and two JVMs; its acceptance evidence must remain
 separate. Do not re-run it as a generic CI test. Inclusion in this source
 candidate does not assert a new execution of the native test.
+
+The independent `system-agent` module is included in the source inventory and
+required report gate. Its runtime, JDBC state and repository tests execute in
+the normal build without a provider. `AiToolCapabilitiesTest` and
+`OpenRouterToolWireTest` cover credential-bound tool metadata, verified key
+admission, live disable, exact tool arguments, streaming and replay boundaries.
+
+`OpenRouterToolNativeQaTest` is a separately enabled native test. It sends only
+the fixed `QA-ONLY-20261024` fixture through the production transport to an
+explicit list of free models, then returns a synthetic tool result. Its safe
+receipt distinguishes ordinary chat connectivity from a real tool round trip;
+a model catalog's `tools` field alone is not native generation evidence. Its
+environment flags and private key file must never be enabled in ordinary CI.

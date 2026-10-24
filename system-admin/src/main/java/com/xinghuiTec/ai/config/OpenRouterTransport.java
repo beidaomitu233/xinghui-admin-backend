@@ -77,7 +77,19 @@ public class OpenRouterTransport {
     }
     private ExecutionOutcome callEndpoint(String provider,String endpoint,String modelCode,int timeoutSeconds,String key,List<AiMessage> messages,
                           Requirements requirements,int maxTokens,StreamObserver observer,InvocationControl control) {
+        return exchange(provider,endpoint,modelCode,timeoutSeconds,key,messages,requirements,maxTokens,observer,control,null);
+    }
+    ExecutionOutcome callTools(String provider,String endpoint,String modelCode,int timeoutSeconds,String key,String requestJson,
+                               int maxTokens,ToolStreamObserver observer,InvocationControl control) {
+        AiProviderPresets.require(provider,endpoint);
+        var wire=new OpenAiToolWire(requestJson,observer);
+        return exchange(provider,endpoint,modelCode,timeoutSeconds,key,List.of(),new Requirements(OutputFormat.TEXT,true,true),maxTokens,
+                new StreamObserver(){public void onDelta(String value){} public void onUsage(Usage value){}},control,wire);
+    }
+    private ExecutionOutcome exchange(String provider,String endpoint,String modelCode,int timeoutSeconds,String key,List<AiMessage> messages,
+                          Requirements requirements,int maxTokens,StreamObserver observer,InvocationControl control,OpenAiToolWire wire) {
         long start=System.nanoTime(); var state=new ParseState(key,observer,requirements.streaming(),requirements.outputFormat()==OutputFormat.JSON_OBJECT);
+        state.wire=wire;
         var stream=new AtomicReference<InputStream>();
         var pending=new AtomicReference<CompletableFuture<?>>();
         Instant bound=Instant.now().plusSeconds(timeoutSeconds);
@@ -93,7 +105,7 @@ public class OpenRouterTransport {
         },0,50,TimeUnit.MILLISECONDS);
         try {
             control.check();
-            if(requirements.tools()||(requirements.outputFormat()==OutputFormat.JSON_OBJECT&&!OpenRouterCapabilities.supportsJson(modelCode))) throw new AiRuntimeException(ErrorCode.CAPABILITY_UNSUPPORTED);
+            if((requirements.tools()&&wire==null)||(requirements.outputFormat()==OutputFormat.JSON_OBJECT&&!OpenRouterCapabilities.supportsJson(modelCode))) throw new AiRuntimeException(ErrorCode.CAPABILITY_UNSUPPORTED);
             if(maxTokens<1||maxTokens>32768) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             if(key==null||key.isBlank()||key.length()>8192||key.chars().anyMatch(c->c<32||c==127)) throw new AiRuntimeException(ErrorCode.CREDENTIAL_UNAVAILABLE);
             if(!proxy) for(var address:InetAddress.getAllByName(URI.create(endpoint).getHost())) {
@@ -104,9 +116,10 @@ public class OpenRouterTransport {
             if(state.jsonObject) outbound.add(Map.of("role","system","content","Return exactly one JSON object. Do not wrap it in Markdown."));
             outbound.addAll(messages.stream().map(m->Map.of("role",m.role().name().toLowerCase(Locale.ROOT),"content",m.content())).toList());
             body.put("model",modelCode); body.put("messages",outbound);
+            if(wire!=null)body.putAll(wire.body());
             body.put("stream",requirements.streaming());
             // OpenAI otherwise omits the final usage chunk; other supported providers report it without this opt-in.
-            if("openai".equals(provider)&&requirements.streaming())body.put("stream_options",Map.of("include_usage",true));
+            if(("openai".equals(provider)||wire!=null)&&requirements.streaming())body.put("stream_options",Map.of("include_usage",true));
             // OpenAI Chat Completions uses max_completion_tokens, including reasoning tokens.
             // https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
             body.put("openai".equals(provider)?"max_completion_tokens":"max_tokens",maxTokens);
@@ -115,7 +128,7 @@ public class OpenRouterTransport {
             if("openrouter".equals(provider) && requirements.outputFormat()==OutputFormat.TEXT && Set.of("poolside/laguna-s-2.1:free","nvidia/nemotron-3.5-lightning:free").contains(modelCode))
                 body.put("reasoning",Map.of("enabled",false));
             // Prevent routing to a different model; application-level fallback belongs to B.
-            if("openrouter".equals(provider)) body.put("provider",state.jsonObject?Map.of("allow_fallbacks",false,"require_parameters",true):Map.of("allow_fallbacks",false));
+            if("openrouter".equals(provider)) body.put("provider",state.jsonObject||wire!=null?Map.of("allow_fallbacks",false,"require_parameters",true):Map.of("allow_fallbacks",false));
             if("deepseek".equals(provider)) body.put("thinking",Map.of("type","disabled"));
             if(state.jsonObject) body.put("response_format",Map.of("type","json_object"));
             String encoded=json.writeValueAsString(body);
@@ -134,9 +147,10 @@ public class OpenRouterTransport {
             if(response.statusCode()!=200){try{readError(received,state,control);}catch(IOException partialErrorBody){control.check();}return outcome(ExecutionStatus.FAILED,httpError(response.statusCode()),retryable(httpError(response.statusCode())),state,start);}
             if(requirements.streaming()) parseStream(received,state,modelCode,control);
             else parseJson(received,state,modelCode,control);
-            if(!state.finished||!state.done||state.characters==0) throw new AiRuntimeException(ErrorCode.INVALID_RESPONSE);
+            if(!state.finished||!state.done||(wire==null?state.characters==0:!wire.hasOutput())) throw new AiRuntimeException(ErrorCode.INVALID_RESPONSE);
             if(state.jsonObject) state.prepareJsonObject();
             control.check();
+            if(wire!=null)wire.deliver(key,control);
             state.flush();
             return outcome(ExecutionStatus.SUCCEEDED,null,false,state,start);
         } catch(Exception failure) {
@@ -149,7 +163,7 @@ public class OpenRouterTransport {
             state.capture.failure(failure,code);
             // JSON fragments are withheld until a complete single object is validated and scrubbed.
             // An invalid/truncated object is never delivered as a successful structured result.
-            if(!state.jsonObject) try { state.flush(); } catch(RuntimeException ignored) { /* No retry after observer failure. */ }
+            if(!state.jsonObject&&wire==null) try { state.flush(); } catch(RuntimeException ignored) { /* No retry after observer failure. */ }
             ExecutionStatus status=code==ErrorCode.CANCELLED?ExecutionStatus.CANCELLED:code==ErrorCode.DEADLINE_EXCEEDED?ExecutionStatus.TIMED_OUT:
                     state.started()?ExecutionStatus.INCOMPLETE:ExecutionStatus.FAILED;
             return outcome(status,code,!state.started()&&retryable(code),state,start);
@@ -234,6 +248,13 @@ public class OpenRouterTransport {
         // The upstream retry boundary precedes validation/redaction and observer delivery.
         // JSON and short TEXT deltas may still be buffered when the next read fails.
         if(!content.isEmpty()) state.receivedContent=true;
+        if(state.wire!=null) {
+            var delta=choice.path("delta");
+            for(String field:List.of("tool_calls","reasoning","reasoning_content","reasoning_details","refusal")) {
+                var value=delta.get(field);
+                if(value!=null&&!value.isNull()&&(value.isContainerNode()?!value.isEmpty():!value.asText("").isEmpty()))state.receivedContent=true;
+            }
+        }
         if(data.has("error")) {
             int status=data.path("error").path("code").asInt(502);
             throw new AiRuntimeException(httpError(status));
@@ -248,6 +269,15 @@ public class OpenRouterTransport {
             state.observer.onUsage(state.usage);
         }
         String finish=choice.path("finish_reason").asText("");
+        if(state.wire!=null) {
+            // Tool arguments are validated as their own wire values. Audit redaction must never change an operation.
+            if(state.wire.observe(data,state.key))state.receivedContent=true;
+            if("stop".equals(finish)||"tool_calls".equals(finish)){state.wire.finish(finish);state.finished=true;}
+            else if("length".equals(finish))throw new AiRuntimeException(ErrorCode.OUTPUT_LIMIT);
+            else if("content_filter".equals(finish))throw new AiRuntimeException(ErrorCode.CONTENT_REJECTED);
+            else if(!finish.isEmpty())throw new AiRuntimeException(ErrorCode.INVALID_RESPONSE);
+            return;
+        }
         if(!content.isEmpty()) state.emit(content);
         if("stop".equals(finish)) state.finished=true;
         else if("length".equals(finish)) throw new AiRuntimeException(ErrorCode.OUTPUT_LIMIT);
@@ -260,6 +290,7 @@ public class OpenRouterTransport {
     private static final class ParseState {
         final String key; final StreamObserver observer; final boolean streaming,jsonObject;
         final AiResponseTelemetry capture;
+        OpenAiToolWire wire;
         final StringBuilder buffer=new StringBuilder();
         boolean receivedContent,unclassifiedBody,output,finished,done; int characters; Usage usage=new Usage(null,null,null); String providerId;
         ParseState(String key,StreamObserver observer,boolean streaming,boolean jsonObject) { this.key=key;this.observer=observer;this.streaming=streaming;this.jsonObject=jsonObject;this.capture=new AiResponseTelemetry(streaming,key); }

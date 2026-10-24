@@ -115,3 +115,8 @@ RuntimeMailServiceTest
 NonnegativeHomeNavigationMigrationTest
 LowcodeSharingServiceTest
 LowcodeSharingAuthorizationTest
+AgentRuntimeTest
+JdbcAgentStateStoreTest
+JdbcAgentRepositoryTest
+AiToolCapabilitiesTest
+OpenRouterToolWireTest

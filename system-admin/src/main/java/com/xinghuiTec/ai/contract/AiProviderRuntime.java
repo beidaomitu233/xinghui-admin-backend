@@ -17,6 +17,27 @@ public interface AiProviderRuntime {
     /** Exactly one upstream attempt. Recheck emergency disable, decrypt internally, bound I/O and response. */
     ExecutionOutcome execute(ExecutionRequest request, StreamObserver observer, InvocationControl control);
 
+    /** One OpenAI-compatible tool turn. The application still owns routing and retry boundaries. */
+    default ExecutionOutcome executeTools(ToolExecutionRequest request, ToolStreamObserver observer, InvocationControl control) {
+        throw new AiRuntimeException(ErrorCode.CAPABILITY_UNSUPPORTED);
+    }
+
+    /** Server-side formatter output, never a URL, credential or client-selected transport. */
+    record ToolExecutionRequest(Invocation invocation, String attemptId, Target target, String requestJson, int maxTokens) {
+        public ToolExecutionRequest {
+            Objects.requireNonNull(invocation); required(attemptId); Objects.requireNonNull(target);
+            required(requestJson);
+            if (maxTokens < 1 || maxTokens > 32768 || requestJson.length() > 262144)
+                throw new IllegalArgumentException("Invalid tool execution bounds");
+        }
+        @Override public String toString() { return "ToolExecutionRequest[REDACTED]"; }
+    }
+
+    /** Validated wire frames for an SDK, distinct from the redacted and possibly truncated audit archive. */
+    interface ToolStreamObserver {
+        void onFrame(String json);
+    }
+
     record AvailableModel(ModelVersionRef model, String configId, String configName, String providerCode,
                           String modelCode, Capabilities capabilities, int usableKeyCount) {
         public AvailableModel {

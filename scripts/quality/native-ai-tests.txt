@@ -8,3 +8,4 @@ AiSceneReadNativeQaTest
 TemplateDataMySqlFlowIT
 TemplateDataMySqlIT
 AiDistributedRuntimeMySqlIT
+OpenRouterToolNativeQaTest
