@@ -19,7 +19,7 @@ CREATE TABLE sys_agent_run (
   user_id VARCHAR(64) NOT NULL,
   client_request_id VARCHAR(64) NOT NULL,
   request_hash VARCHAR(64) NOT NULL,
-  prompt_scene_id BIGINT NOT NULL,
+  prompt_scene_key VARCHAR(128) NOT NULL,
   input_payload MEDIUMTEXT NOT NULL,
   status VARCHAR(24) NOT NULL,
   error_code VARCHAR(64) NULL,

@@ -46,7 +46,7 @@ class JdbcAgentRepositoryTest {
         jdbc.execute("CREATE TABLE qa_business(id INT PRIMARY KEY, name VARCHAR(100))");
     }
     private JdbcAgentRepository.Admission submit(String session, String id, String input) {
-        return repository.admit(actor, session, id, input, 1, Duration.ofMinutes(1));
+        return repository.admit(actor, session, id, input, "scene.qa", Duration.ofMinutes(1));
     }
     private AgentCall call(JdbcAgentRepository.Run run) { return new AgentCall(actor, run.sessionId(), run.id(), "model-1", run.deadline(), () -> !repository.running(actor, run.id())); }
 
@@ -110,14 +110,14 @@ class JdbcAgentRepositoryTest {
         };
         try (var workbench = new AgentWorkbench(repository, (owner, scene) -> new AgentPromptGateway.Preset("QA系统提示词", model),
                 null, jdbc, new DataSourceTransactionManager(Objects.requireNonNull(jdbc.getDataSource())), codec, json, workspace)) {
-            var first = workbench.submit(actor, session.id(), "client_request_0001", "第一次QA输入", 1);
+            var first = workbench.submit(actor, session.id(), "client_request_0001", "第一次QA输入", "scene.qa");
             awaitTerminal(first.run().id());
             assertThat(repository.run(actor, first.run().id()).status()).isEqualTo("COMPLETED");
             assertThat(repository.events(actor, session.id(), 0)).anySatisfy(event -> assertThat(event.type()).isEqualTo("TEXT_DELTA"));
-            assertThat(workbench.submit(actor, session.id(), "client_request_0001", "第一次QA输入", 1).created()).isFalse();
+            assertThat(workbench.submit(actor, session.id(), "client_request_0001", "第一次QA输入", "scene.qa").created()).isFalse();
             repository.events(actor, session.id(), 0); repository.events(actor, session.id(), 0);
             assertThat(calls).hasValue(1);
-            var second = workbench.submit(actor, session.id(), "client_request_0002", "继续QA任务", 1);
+            var second = workbench.submit(actor, session.id(), "client_request_0002", "继续QA任务", "scene.qa");
             awaitTerminal(second.run().id());
             assertThat(repository.run(actor, second.run().id()).status()).isEqualTo("COMPLETED");
             assertThat(calls).hasValue(2);
@@ -131,7 +131,7 @@ class JdbcAgentRepositoryTest {
         }).doFinally(type -> signal.set(type.name()));
         try (var workbench = new AgentWorkbench(repository, (owner, scene) -> new AgentPromptGateway.Preset("QA系统提示词", model),
                 null, jdbc, new DataSourceTransactionManager(Objects.requireNonNull(jdbc.getDataSource())), codec, json, workspace)) {
-            var run = workbench.submit(actor, session.id(), "client_request_0001", "等待QA请求", 1).run();
+            var run = workbench.submit(actor, session.id(), "client_request_0001", "等待QA请求", "scene.qa").run();
             assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
             workbench.cancel(actor, run.id());
             assertThat(cancelled.await(3, TimeUnit.SECONDS)).as("provider final=%s, run=%s", signal.get(), repository.run(actor, run.id()).status()).isTrue();

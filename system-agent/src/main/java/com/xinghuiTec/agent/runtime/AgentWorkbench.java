@@ -39,8 +39,8 @@ public final class AgentWorkbench implements AutoCloseable {
         this.jdbc = jdbc; this.transactions = transactions; this.codec = codec; this.json = json;
         this.workspaces = workspaces.toAbsolutePath().normalize();
     }
-    public JdbcAgentRepository.Admission submit(AgentActor actor, String sessionId, String requestId, String input, long sceneId) {
-        var admission = repository.admit(actor, sessionId, requestId, input, sceneId, Duration.ofMinutes(5));
+    public JdbcAgentRepository.Admission submit(AgentActor actor, String sessionId, String requestId, String input, String sceneKey) {
+        var admission = repository.admit(actor, sessionId, requestId, input, sceneKey, Duration.ofMinutes(5));
         if (!admission.created()) return admission;
         try { executor.execute(() -> execute(actor, admission.run().id())); }
         catch (RejectedExecutionException full) { repository.finish(actor, admission.run().id(), "FAILED", "QUEUE_FULL"); }
@@ -54,7 +54,7 @@ public final class AgentWorkbench implements AutoCloseable {
         AgentRuntime runtime = null;
         try {
             var run = repository.claim(actor, runId);
-            var preset = prompts.resolve(actor, run.promptSceneId());
+            var preset = prompts.resolve(actor, run.promptSceneKey());
             var call = new AgentCall(actor, run.sessionId(), run.id(), "run", run.deadline(), () -> !repository.running(actor, run.id()));
             var state = new JdbcAgentStateStore(jdbc, transactions, actor, run.sessionId(), codec,
                     () -> repository.guard(actor, run.id(), true));
