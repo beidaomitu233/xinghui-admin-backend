@@ -32,16 +32,19 @@ public class AgentConfiguredModels implements AgentPromptGateway {
         this.access=access;this.scenes=scenes;this.models=models;this.cursor=cursor;this.provider=provider;this.logs=logs;this.repository=repository;
     }
     @Override public Preset resolve(AgentActor actor,String sceneKey){
+        return resolve(actor,sceneKey,"");
+    }
+    @Override public Preset resolve(AgentActor actor,String sceneKey,String task){
         try{return access.as(actor,context->{
             var route=scenes.agentRoute(sceneKey,context.actor());
-            var frozen=route.policy().businessModel()==null?null:models.freeze(route.policy());
+            var frozen=route.policy().hasBusinessModels()?models.freeze(route.policy()):null;
             var policy=frozen==null?route.policy():frozen.policy();
             var first=new AtomicInteger(-1);
             return new Preset(route.systemPrompt(),(call,wire)->Flux.<String>create(sink->{
                 var cancelled=new AtomicBoolean();sink.onCancel(()->cancelled.set(true));
                 try{execute(actor,route,policy,frozen,first,call,wire,sink,cancelled);sink.complete();}
                 catch(RuntimeException failure){if(!sink.isCancelled())sink.error(classify(failure));}
-            },FluxSink.OverflowStrategy.ERROR).subscribeOn(Schedulers.boundedElastic()));
+            },FluxSink.OverflowStrategy.ERROR).subscribeOn(Schedulers.boundedElastic()),scenes.agentContext(sceneKey,context.actor(),task));
         });}catch(RuntimeException failure){throw classify(failure);}
     }
     private TrustedActor authorize(AgentActor owner,SceneManagementService.AgentRoute pinned,ModelHubService.Frozen frozen,AgentCall call){
@@ -52,7 +55,7 @@ public class AgentConfiguredModels implements AgentPromptGateway {
             if(!run.sessionId().equals(call.sessionId())||!run.promptSceneKey().equals(pinned.sceneKey()))throw AgentAccess.denied();
             var current=scenes.agentRoute(pinned.sceneKey(),context.actor());
             if(current.revision()!=pinned.revision()||!current.appVersion().equals(pinned.appVersion()))throw problem("VERSION_CONFLICT");
-            if(frozen!=null){var model=models.get(frozen.modelId());if(!model.enabled()||model.revision()!=frozen.revision())throw problem("VERSION_CONFLICT");}
+            if(frozen!=null&&!models.unchanged(frozen))throw problem("VERSION_CONFLICT");
             return context.actor();
         });
     }

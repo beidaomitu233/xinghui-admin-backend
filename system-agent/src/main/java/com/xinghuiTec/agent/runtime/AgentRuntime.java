@@ -61,11 +61,17 @@ public final class AgentRuntime implements AutoCloseable {
                 .forEach(agent.getToolkit()::removeTool);
     }
     public Flux<AgentEventView> run(String input) {
+        return run(input,List.of());
+    }
+    public Flux<AgentEventView> run(String input,List<String> contextMessages) {
         if (input == null || input.isBlank() || input.length() > 32768)
             return Flux.error(new AgentProblem("INVALID_MESSAGE", "请输入内容，最多32768个字符"));
         return Flux.defer(() -> {
             call.check();
-            return RunCancellation.guard(agent.streamEvents(input, context), call)
+            var messages=new java.util.ArrayList<io.agentscope.core.message.Msg>();
+            contextMessages.forEach(text->messages.add(new io.agentscope.core.message.UserMessage(text)));
+            messages.add(new io.agentscope.core.message.UserMessage(input));
+            return RunCancellation.guard(agent.streamEvents(messages, context), call)
                     .concatMapIterable(this::publicEvents);
         });
     }

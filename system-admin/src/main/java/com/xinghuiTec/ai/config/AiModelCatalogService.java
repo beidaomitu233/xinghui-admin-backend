@@ -124,6 +124,16 @@ public class AiModelCatalogService {
     public StoredCatalog stored(String configId,String keyId,String search,int pageNum,int pageSize) {
         return stored(configId,keyId,search,pageNum,pageSize,null,null);
     }
+    /** A persisted current directory can be bound before its inference Key is configured and tested. */
+    public boolean containsCurrentModel(String configId, String modelCode) {
+        for (int pageNum=1; pageNum<=50; pageNum++) {
+            var result = stored(configId, null, modelCode, pageNum, 100);
+            if (result.state() != CatalogState.FETCHED && result.state() != CatalogState.PARTIAL) return false;
+            if (result.catalog().records().stream().anyMatch(model -> model.code().equals(modelCode))) return true;
+            if (pageNum * 100 >= result.catalog().total()) return false;
+        }
+        return false;
+    }
     public StoredCatalog stored(String configId,String keyId,String search,int pageNum,int pageSize,String orderBy,String order) {
         if(store==null)throw failure(503,"UNAVAILABLE");
         String query=query(search,pageNum,pageSize);long config=decimalId(configId);if(keyId!=null)decimalId(keyId);

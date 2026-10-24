@@ -124,6 +124,8 @@ public class SmsLoginService {
             login.setToken(jwt);
             sessions.setCacheObject(ADMIN_LOGIN_PREFIX+user.getUserId(),login,
                     Math.toIntExact(TimeUnit.MILLISECONDS.toSeconds(TOKEN_EXPIRATION)),TimeUnit.SECONDS);
+            sessions.deleteObject(com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX+user.getUserId());
+            sessions.deleteObject(com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX+user.getUserId());
             return jwt;
         } catch(UsernameNotFoundException unknown) { throw new ServiceException("账号不可用，请联系管理员"); }
     }

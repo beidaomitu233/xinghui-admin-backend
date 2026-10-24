@@ -41,6 +41,8 @@ class AgentBusinessResourceTest {
     @Test void newPublishedBusinessesReuseOneAdapterAndNativeTypedCrudWithTenantIsolation()throws Exception {
         assertTrue(registry.describe(call,resource).path("operations").toString().contains("bulkCreate"));
         String second=createForm("second_form");assertEquals("forms:"+second,registry.query(f.call(f.platform),"forms",value("{}" )).path("records").get(0).path("resource").asText());
+        var byKey=registry.query(f.call(f.platform),"forms",value("{\"search\":\"second_form\"}"));
+        assertEquals("1",byKey.path("total").asText());assertEquals("forms:"+second,byKey.path("records").get(0).path("resource").asText());
         var add=value("{\"operation\":\"create\",\"schemaVersion\":1,\"data\":{\"title\":\"QA product\",\"amount\":0,\"available\":false}}");
         var saved=mutate("create-one",resource,add);String id=saved.path("id").asText();assertFalse(id.isBlank());assertEquals(0,saved.path("data").path("amount").intValue());assertFalse(saved.path("data").path("available").booleanValue());
         assertEquals(id,mutate("create-one",resource,add).path("id").asText());assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM sys_lowcode_record",Integer.class));

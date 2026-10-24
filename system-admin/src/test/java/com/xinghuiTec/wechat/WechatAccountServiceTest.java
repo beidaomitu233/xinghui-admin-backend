@@ -10,6 +10,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class WechatAccountServiceTest {
+    @Test void successfulLoginInvalidatesOnlyTheAuthenticatedAccountsNavigation(){
+        var users=mock(SysUserMapper.class);var details=mock(UserDetailsService.class);var redis=mock(RedisCacheUtils.class);
+        var service=new WechatAccountService(users,details,redis);
+        var user=new SysUser();user.setUserId(42L);user.setTenantId("fixture");user.setMobile("18800000310");user.setStatus(1);
+        var login=new LoginUser(user,List.of("ai:agent:invoke"));login.setTenantId("fixture");
+        when(users.selectById(42L)).thenReturn(user);when(details.loadUserByUsername(user.getMobile())).thenReturn(login);
+        try(var jwt=mockStatic(com.xinghuiTec.utils.JwtUtil.class)){
+            jwt.when(()->com.xinghuiTec.utils.JwtUtil.createJWT("42","fixture")).thenReturn("synthetic-session");
+            assertEquals("synthetic-session",service.login(42,"fixture"));
+        }
+        verify(redis).deleteObject(com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX+42);
+        verify(redis).deleteObject(com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX+42);
+    }
     @Test void reloadRejectsDisabledDeletedMissingAndWrongTenantBeforeSessionCreation() {
         var users=mock(SysUserMapper.class);var details=mock(UserDetailsService.class);var redis=mock(RedisCacheUtils.class);
         var service=new WechatAccountService(users,details,redis);

@@ -73,7 +73,7 @@ public class SqlAssistanceService {
             }
             var selected=scenes.assistanceRoute(input,actor);
             com.xinghuiTec.ai.modelhub.ModelHubService.Frozen frozen=null;
-            if(selected.policy().businessModel()!=null){require(modelHub!=null,503,"DEPENDENCY_UNAVAILABLE");frozen=modelHub.freeze(selected.policy());selected=new SceneManagementService.AssistanceRoute(selected.sceneKey(),selected.revision(),selected.appId(),selected.appVersion(),frozen.policy());}
+            if(selected.policy().hasBusinessModels()){require(modelHub!=null,503,"DEPENDENCY_UNAVAILABLE");frozen=modelHub.freeze(selected.policy());selected=new SceneManagementService.AssistanceRoute(selected.sceneKey(),selected.revision(),selected.appId(),selected.appVersion(),frozen.policy());}
             var app=application(selected,actor);Instant now=Instant.now();
             var accepted=requests.accept(new AiRequestStore.Admission(app[0],app[1],null,AiRequestStore.Kind.BUSINESS,owner,
                     AiRequestStore.SQL_ASSISTANCE_TYPE,input.clientMutationId(),input.clientMutationId(),hash,now.plusSeconds(selected.policy().timeoutSeconds())),now);

@@ -29,7 +29,7 @@ public class LowcodeAgentResources implements AgentResourceProvider {
     }
     public JsonNode describe(AgentCall call,String resource){
         requireReadable(call.actor(),resource);
-        if(resource.equals("forms"))return json.valueToTree(Map.of("resource",resource,"operations",List.of("query"),"query",Map.of("pageNum","正整数，默认1","pageSize","1至100，默认20","search","表单名称","orderBy","id/name/updateTime","order","asc/desc")));
+        if(resource.equals("forms"))return json.valueToTree(Map.of("resource",resource,"description","先查询目录中的resource值；forms:<id>中的id是目录返回的数字ID，不是formKey。","operations",List.of("query"),"query",Map.of("pageNum","正整数，默认1","pageSize","1至100，默认20","search","表单名称或formKey；可省略以列出目录","orderBy","id/name/updateTime","order","asc/desc")));
         var runtime=forms.runtime(formId(resource));var context=access.current(call.actor());var result=json.createObjectNode();
         result.put("resource",resource).put("name",String.valueOf(runtime.get("name"))).put("schemaVersion",((Number)runtime.get("schemaVersion")).intValue());
         result.set("schema",json.valueToTree(runtime.get("schema")));var operations=result.putArray("operations");

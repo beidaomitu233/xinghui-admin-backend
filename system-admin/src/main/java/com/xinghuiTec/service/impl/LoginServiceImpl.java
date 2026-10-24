@@ -109,6 +109,9 @@ public class LoginServiceImpl implements LoginService {
                 // 4. 存储 loginUser 到 Redis
                 Integer days = Math.toIntExact(TimeUnit.MILLISECONDS.toDays(TOKEN_EXPIRATION));
                 redisCacheUtils.setCacheObject(ADMIN_LOGIN_PREFIX + userId, loginUser, days, TimeUnit.DAYS);
+                // Authentication reloaded current authorities; navigation must not reuse an older grant snapshot.
+                redisCacheUtils.deleteObject(RedisConstants.USER_INFO_PREFIX + userId);
+                redisCacheUtils.deleteObject(RedisConstants.USER_ROUTER_PREFIX + userId);
 
                 return jwt;
         }

@@ -128,3 +128,5 @@ AgentSystemParameterTest
 SysConfigServiceImplTest
 AgentConfiguredModelsTest
 AgentWorkbenchHttpTest
+AgentNavigationMigrationTest
+LoginNavigationCacheTest

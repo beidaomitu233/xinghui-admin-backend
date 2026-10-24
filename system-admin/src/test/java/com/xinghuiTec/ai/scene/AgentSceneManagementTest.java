@@ -37,11 +37,13 @@ class AgentSceneManagementTest {
         assertTrue(fixture.management.agentChoices(agent).isEmpty());
         assertEquals(403,assertThrows(SceneFailure.class,()->fixture.management.agentChoices(fixture.actor)).status());
     }
-    @Test void agentInputsComeFromChatAndResourcesFromToolsRatherThanUnresolvedStaticBindings() {
+    @Test void agentUserRequestVariableUsesTheActualNaturalLanguageTask() {
         var created=fixture.management.create(new SceneDtos.Create("业务助手","",SceneDtos.Kind.AGENT,null,UUID.randomUUID().toString()),fixture.actor);
-        assertEquals("AGENT_INPUT_COMES_FROM_CHAT",assertThrows(SceneFailure.class,()->fixture.save(created,"请执行 {{user_request:用户要求}}",false)).getMessage());
-        assertNull(fixture.management.detail(created.scene().sceneKey(),fixture.actor).scene().currentVersionId());
-        assertEquals(0,fixture.jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_application_version",Integer.class));
+        var saved=fixture.save(created,"请执行 {{user_request:用户要求}}",false).detail();
+        var context=fixture.management.agentContext(saved.scene().sceneKey(),agent,"帮我整理商品");
+        assertTrue(context.stream().anyMatch(text->text.contains("帮我整理商品")));
+        assertTrue(context.stream().noneMatch(text->text.contains("{{user_request")));
+        assertEquals(0,fixture.provider.calls.get());
         var general=fixture.save(fixture.create(false),"普通对话",false).detail();
         assertEquals("AGENT_PROMPT_UNAVAILABLE",assertThrows(SceneFailure.class,()->fixture.management.agentRoute(general.scene().sceneKey(),agent)).getMessage());
     }

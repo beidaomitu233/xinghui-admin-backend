@@ -112,6 +112,8 @@ class SmsLoginServiceTest {
             assertThrows(ServiceException.class,()->service.login(PHONE,ID,"123456"));
             verify(users,times(1)).loadUserByUsername(PHONE);
             verify(sessions,times(1)).setCacheObject(anyString(),same(account),anyInt(),eq(java.util.concurrent.TimeUnit.SECONDS));
+            verify(sessions).deleteObject(com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX+42);
+            verify(sessions).deleteObject(com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX+42);
         }
     }
 }

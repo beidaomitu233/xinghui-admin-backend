@@ -53,8 +53,8 @@ public class LowcodeService {
         List<Object> args = new ArrayList<>();
         String where = " WHERE is_deleted=0";
         if (!keyword.isEmpty()) {
-            where += " AND name LIKE ? ESCAPE '!'";
-            args.add(like(keyword));
+            where += " AND (name LIKE ? ESCAPE '!' OR form_key LIKE ? ESCAPE '!')";
+            args.add(like(keyword));args.add(like(keyword));
         }
         Long total = jdbc.queryForObject("SELECT COUNT(*) FROM sys_lowcode_form" + where, Long.class, args.toArray());
         String sort = metadataOrder(orderBy, order, Map.of(

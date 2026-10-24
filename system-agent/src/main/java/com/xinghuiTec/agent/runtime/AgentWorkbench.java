@@ -54,7 +54,7 @@ public final class AgentWorkbench implements AutoCloseable {
         AgentRuntime runtime = null;
         try {
             var run = repository.claim(actor, runId);
-            var preset = prompts.resolve(actor, run.promptSceneKey());
+            var preset = prompts.resolve(actor, run.promptSceneKey(),run.input());
             var call = new AgentCall(actor, run.sessionId(), run.id(), "run", run.deadline(), () -> !repository.running(actor, run.id()));
             var state = new JdbcAgentStateStore(jdbc, transactions, actor, run.sessionId(), codec,
                     () -> repository.guard(actor, run.id(), true));
@@ -67,7 +67,7 @@ public final class AgentWorkbench implements AutoCloseable {
                     authorizedModels, trackedResources(), json);
             active.put(runId, runtime);
             var limited = new AtomicBoolean(false); var completed = new AtomicBoolean(false);
-            runtime.run(run.input()).doOnNext(event -> {
+            runtime.run(run.input(),preset.contextMessages()).doOnNext(event -> {
                 if ("LIMIT_REACHED".equals(event.type())) limited.set(true);
                 if ("ASSISTANT_DONE".equals(event.type())) completed.set(true);
                 repository.append(actor, run.id(), event);

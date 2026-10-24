@@ -59,6 +59,21 @@ class OpenRouterToolWireTest {
         fixture.response(200,frame(Map.of("content","Task completed"),null)+end("stop"));
         var result=call();assertEquals(ExecutionStatus.SUCCEEDED,result.status());assertEquals("TEXT",result.telemetry().firstOutputKind());assertFalse(delivered.isEmpty());
     }
+    @Test void repeatedTerminalMetadataOnUsageTrailerDoesNotRejectACompleteToolCall()throws Exception {
+        String trailer=frame(Map.of("role","assistant","content",""),"tool_calls");
+        String usage=trailer.replace("\"choices\":","\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":8,\"total_tokens\":12},\"choices\":");
+        fixture.response(200,first("records_mutate","{\"count\":0}")+trailer+usage+"data: [DONE]\n\n");
+        var result=call();assertEquals(ExecutionStatus.SUCCEEDED,result.status());assertEquals(12L,result.usage().totalTokens());
+        long fragments=0;for(String value:delivered)fragments+=json.readTree(value).path("choices").path(0).path("delta").path("tool_calls").size();
+        assertEquals(1,fragments);
+    }
+    @Test void actualOutputOrConflictingReasonAfterTerminalStillCannotReachTheSdk()throws Exception {
+        var done=frame(Map.of("role","assistant","content",""),"tool_calls");
+        for(String extra:List.of(frame(Map.of("content","late text"),"tool_calls"),frame(Map.of("reasoning","late reasoning"),"tool_calls"),frame(Map.of(),"stop"),rest("{}"))){
+            delivered.clear();fixture.response(200,first("records_mutate","{}")+done+extra+"data: [DONE]\n\n");
+            var result=call();assertEquals(ErrorCode.INVALID_RESPONSE,result.errorCode());assertTrue(result.outputStarted());assertFalse(result.retryable());assertTrue(delivered.isEmpty());
+        }
+    }
     @Test void longFinalTextStreamsBeforeAnEofFailureWithoutReplayingOrExposingTools()throws Exception {
         fixture.response(200,frame(Map.of("content","A sufficiently long ordinary assistant reply for streaming"),null));
         var result=call();assertEquals(ExecutionStatus.INCOMPLETE,result.status());assertFalse(result.retryable());

@@ -152,7 +152,9 @@ final class AiResponseTelemetry {
             if(text.startsWith("{")||text.startsWith("["))try{return TextNode.valueOf(JSON.writeValueAsString(scrub(JSON.readTree(text),partial)));}catch(IOException ignored){}
             return TextNode.valueOf(safeText(text,partial));
         }
-        if(value.isObject()){var out=JSON.createObjectNode();value.fields().forEachRemaining(e->{if(sensitive(e.getKey())){redacted=true;return;}out.set(safeText(e.getKey(),partial),scrub(e.getValue(),partial));});return out;}
+        // Parsed object keys are complete even when the overall stream was interrupted. A one-letter
+        // credential prefix must not corrupt ordinary field names such as choices/fields/receivedMs.
+        if(value.isObject()){var out=JSON.createObjectNode();value.fields().forEachRemaining(e->{if(sensitive(e.getKey())){redacted=true;return;}out.set(safeText(e.getKey(),false),scrub(e.getValue(),partial));});return out;}
         if(value.isArray()){var out=JSON.createArrayNode();value.forEach(v->out.add(scrub(v,partial)));return out;}
         String text=value.toString();return secrets.stream().anyMatch(s->!s.isEmpty()&&text.contains(s))?TextNode.valueOf(safeText(text,partial)):value;
     }

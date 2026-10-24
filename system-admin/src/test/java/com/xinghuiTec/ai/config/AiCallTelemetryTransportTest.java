@@ -86,6 +86,8 @@ class AiCallTelemetryTransportTest {
     @Test void interruptedStreamDoesNotArchiveAnIncompleteCredentialPrefix()throws Exception{
         String prefix=KEY.substring(0,15);response(200,frame(Map.of("content",prefix),null)+"data: {\"choices\":[{\"delta\":{\"content\":\""+prefix);
         var result=call(true);var t=result.telemetry();assertEquals(ExecutionStatus.INCOMPLETE,result.status());assertFalse(result.retryable());assertEquals("PARTIAL",t.captureStatus());assertFalse(t.responseBody().contains(prefix));assertTrue(t.redacted());bounded(t);oneCall();
+        var archived=JSON.readTree(t.responseBody()).get(0);
+        assertTrue(archived.has("receivedMs"));assertTrue(archived.has("fields"));assertTrue(archived.path("data").has("choices"));
     }
     @Test void cancellationBeforeHeadersRetainsSendTimingWithoutPretendingAResponseArrived(){
         var future=new CompletableFuture<HttpResponse<InputStream>>();when(client.sendAsync(any(HttpRequest.class),any(HttpResponse.BodyHandler.class))).thenReturn(future);

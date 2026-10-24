@@ -107,7 +107,7 @@ public class AiRuntimeService {
             var nativeScene=sceneAccess==null?null:sceneAccess.execution(version.appVersionId());
             if(nativeScene==null)throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
             var policy=version.snapshot().policy();policy.requireModelComplete();
-            if(test && policy.businessModel()==null){
+            if(test && !policy.hasBusinessModels()){
                 if(modelIndex<0 || modelIndex>=policy.models().size())throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
                 policy=new AiApplicationPolicy(AiApplicationPolicy.ModelMode.FIXED,List.of(policy.models().get(modelIndex)),false,null,
                         policy.inputNames(),policy.requirements(),policy.scope(),policy.allowedSubjects(),policy.allowedAuthorities(),policy.formId(),
@@ -177,7 +177,7 @@ public class AiRuntimeService {
         InvocationControl control = control(accepted.request(), owner);
         try {
             AiApplicationPolicy effectivePolicy=loaded.policy();
-            if(effectivePolicy.businessModel()!=null){
+            if(effectivePolicy.hasBusinessModels()){
                 if(modelHub==null)throw new AiRuntimeException(ErrorCode.DEPENDENCY_UNAVAILABLE);
                 var frozen=modelHub.freeze(effectivePolicy);modelHub.pin(id,frozen,actor,loaded.test());effectivePolicy=frozen.policy();
             }

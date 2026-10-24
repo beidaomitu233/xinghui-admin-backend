@@ -21,6 +21,7 @@ final class OpenAiToolWire {
     private final ToolStreamObserver observer;
     private int bytes;
     private boolean text,finished;
+    private String terminalReason;
     private final StringBuilder textBuffer=new StringBuilder();
     private static final class Call {
         String id,type;
@@ -83,7 +84,9 @@ final class OpenAiToolWire {
         var choices=frame.path("choices");
         if(!choices.isArray()||choices.size()>1)invalidResponse();
         var delta=choices.path(0).path("delta");
-        if(finished&&(!delta.isMissingNode()&&!delta.isEmpty()&&!delta.isNull()))invalidResponse();
+        // Some compatible providers repeat role/empty content and finish_reason on their usage trailer.
+        // Accept metadata-only repeats, never new text, reasoning or tool fragments after a terminal frame.
+        if(finished&&terminalPayload(delta))invalidResponse();
         var content=delta.get("content");
         if(content!=null&&!content.isNull()) {
             if(!content.isTextual())invalidResponse();
@@ -115,7 +118,7 @@ final class OpenAiToolWire {
         return output;
     }
     void finish(String reason) {
-        if(finished)invalidResponse();
+        if(finished){if(Objects.equals(terminalReason,reason))return;invalidResponse();}
         if("tool_calls".equals(reason)) {
             if(calls.isEmpty())invalidResponse();
             var ids=new HashSet<String>();int expected=0;
@@ -125,7 +128,17 @@ final class OpenAiToolWire {
                         ||!read(call.arguments.toString(),ErrorCode.INVALID_RESPONSE).isObject())invalidResponse();
             }
         } else if(!calls.isEmpty()||!text)invalidResponse();
-        finished=true;
+        finished=true;terminalReason=reason;
+    }
+    private static boolean terminalPayload(JsonNode delta){
+        if(delta.isMissingNode()||delta.isNull())return false;
+        if(!delta.isObject())return true;
+        var fields=delta.fields();while(fields.hasNext()){
+            var field=fields.next();var value=field.getValue();
+            if(value.isNull()||value.isTextual()&&value.textValue().isEmpty()||value.isContainerNode()&&value.isEmpty())continue;
+            if("role".equals(field.getKey())&&value.isTextual()&&"assistant".equals(value.textValue()))continue;
+            return true;
+        }return false;
     }
     boolean hasOutput(){return finished&&(text||!calls.isEmpty());}
     void deliver(String key,InvocationControl control) {
