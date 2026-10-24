@@ -9,3 +9,4 @@ TemplateDataMySqlFlowIT
 TemplateDataMySqlIT
 AiDistributedRuntimeMySqlIT
 OpenRouterToolNativeQaTest
+MimoToolNativeQaTest
