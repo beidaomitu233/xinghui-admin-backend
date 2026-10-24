@@ -148,6 +148,10 @@ public class ModelHubService {
         return new Model(s.id(),s.revision(),d.name(),d.slug(),d.capabilities(),d.contextWindow(),s.enabled(),d.strategy(),d.fallback(),List.copyOf(routes),new Health(s.enabled()&&ready>0,ready,distinct.size(),s.enabled()&&distinct.size()>=2&&d.fallback(),List.copyOf(reasons)),s.updated());
     }
     public record Frozen(String modelId,int revision,AiApplicationPolicy policy) {}
+    /** Readiness uses actual requested capabilities without consuming a round-robin cursor. */
+    public boolean ready(String slug,Requirements requirements) {
+        var stored=find(slug,false);return view(stored,healthContext(List.of(stored),requirements)).health().ready();
+    }
     public Frozen freeze(AiApplicationPolicy base){return guard.withReferenceGuard(()->{
         var s=find(base.businessModel(),true);var context=healthContext(List.of(s),base.requirements());var model=view(s,context);check(model.health().ready(),409,"BUSINESS_MODEL_NOT_READY");
         var available=context.available();var bindings=new ArrayList<AiProviderRuntime.ModelBinding>();

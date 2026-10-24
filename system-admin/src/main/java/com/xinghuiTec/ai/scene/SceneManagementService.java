@@ -102,6 +102,31 @@ public class SceneManagementService {
     }
     /** Internal immutable model selection for assistance; never serialized by a controller. */
     public record AssistanceRoute(String sceneKey,int revision,String appId,String appVersion,AiApplicationPolicy policy) {}
+    /** Internal only. Prompt bodies never appear in the workbench's preset list. */
+    public record AgentRoute(String sceneKey,int revision,String appId,String appVersion,String systemPrompt,AiApplicationPolicy policy) {
+        @Override public String toString(){return "AgentRoute[REDACTED]";}
+    }
+    public List<SceneDtos.Entry> agentChoices(TrustedActor actor) {
+        require(actor!=null&&actor.authorities().contains("ai:agent:invoke"),403,"FORBIDDEN");
+        return scenes.candidates(SceneDtos.Kind.AGENT,null).stream().filter(head->{
+            if(head.currentVersion()==null)return false;
+            try{return execution.policy(scenes.version(head.currentVersion()).appVersion()).permits(actor);}catch(RuntimeException unavailable){return false;}
+        }).map(head->new SceneDtos.Entry(head.key(),head.name(),head.kind(),head.formId(),head.currentVersion(),head.revision(),availability(head),false,null,null,false)).toList();
+    }
+    public AgentRoute agentRoute(String key,TrustedActor actor) {
+        require(actor!=null&&actor.authorities().contains("ai:agent:invoke"),403,"FORBIDDEN");
+        return references.withReferenceGuard(()->{
+            var head=scenes.head(key,true);
+            require(head.kind()==SceneDtos.Kind.AGENT&&head.enabled()&&head.currentVersion()!=null,409,"AGENT_PROMPT_UNAVAILABLE");
+            var version=scenes.version(head.currentVersion());var policy=execution.policy(version.appVersion());
+            require(policy.permits(actor),403,"FORBIDDEN");
+            var d=version.definition();
+            require(d!=null&&version.compiled()!=null&&d.dataObjects().isEmpty()&&d.dataBindings().isEmpty()&&d.sqlBindings().isEmpty()
+                    &&version.compiled().inputVariables().stream().noneMatch(AiSceneDataRuntime.InputVariable::required),409,"AGENT_PROMPT_UNAVAILABLE");
+            require(policy.requirements().tools()&&policy.requirements().outputFormat()==OutputFormat.TEXT,409,"AGENT_PROMPT_UNAVAILABLE");
+            return new AgentRoute(head.key(),head.revision(),head.appId(),version.appVersion(),d.promptText(),policy);
+        });
+    }
     public AssistanceRoute assistanceRoute(SqlAssistanceDtos.Start input,TrustedActor actor) {
         return references.withReferenceGuard(()->{
             var h=scenes.head(input.sceneKey(),true);expected(h,input.expectedSceneRevision());
@@ -213,24 +238,29 @@ public class SceneManagementService {
         try {
             var version=scenes.version(h.currentVersion());var policy=execution.policy(version.appVersion());var provider=providers.getIfUnique();
             if(provider==null || data.getIfUnique()==null)return new SceneDtos.Availability(SceneDtos.AvailabilityState.UNAVAILABLE,List.of("DEPENDENCY_UNAVAILABLE"));
-            if(policy.businessModel()!=null){var model=modelHub==null?null:modelHub.bySlug(policy.businessModel());return new SceneDtos.Availability(model!=null&&model.health().ready()?SceneDtos.AvailabilityState.READY:SceneDtos.AvailabilityState.UNAVAILABLE,List.of("BUSINESS_MODEL_CONFIGURATION"));}
+            if(policy.businessModel()!=null){boolean ready=modelHub!=null&&modelHub.ready(policy.businessModel(),policy.requirements());return new SceneDtos.Availability(ready?SceneDtos.AvailabilityState.READY:SceneDtos.AvailabilityState.UNAVAILABLE,List.of("BUSINESS_MODEL_CONFIGURATION"));}
             var validation=provider.validateBindings(policy.models(),policy.requirements());
             return new SceneDtos.Availability(validation.valid()?SceneDtos.AvailabilityState.READY:SceneDtos.AvailabilityState.UNAVAILABLE,
                     validation.violations().stream().map(v->v.code().name()).distinct().toList());
         }catch(RuntimeException unavailable){return new SceneDtos.Availability(SceneDtos.AvailabilityState.UNAVAILABLE,List.of("MODEL_UNAVAILABLE"));}
     }
     private AiApplicationPolicy policy(SceneStore.Head h,SceneDtos.Definition d,AiSceneDataRuntime.CompiledScene compiled) {
+        if(h.kind()==SceneDtos.Kind.AGENT) {
+            require(d.dataObjects().isEmpty()&&d.dataBindings().isEmpty()&&d.sqlBindings().isEmpty(),400,"AGENT_USES_BUSINESS_TOOLS");
+            require(compiled.inputVariables().stream().noneMatch(AiSceneDataRuntime.InputVariable::required),400,"AGENT_INPUT_COMES_FROM_CHAT");
+            require(d.modelPolicy().outputFormat()==SceneDtos.OutputFormat.TEXT,400,"AGENT_REQUIRES_TEXT_MODEL");
+        }
         var p=d.modelPolicy();var models=p.models().stream().map(b->new AiProviderRuntime.ModelBinding(
                 new ModelVersionRef(b.model().modelRef(),b.model().configVersion()),AiProviderRuntime.KeyMode.valueOf(b.keyMode().name()),
                 b.allowedKeys().stream().map(k->new KeyRef(k.keyRef(),k.keyVersion())).collect(java.util.stream.Collectors.toSet()),
                 b.fixedKey()==null?null:new KeyRef(b.fixedKey().keyRef(),b.fixedKey().keyVersion()),b.fallbackKeys().stream().map(k->new KeyRef(k.keyRef(),k.keyVersion())).toList())).toList();
-        Set<String> subjects=Set.of();Set<String> authorities=Set.of("ai:scene:invoke");AiApplicationPolicy.Scope scope=AiApplicationPolicy.Scope.FRONTEND;
+        Set<String> subjects=Set.of();Set<String> authorities=Set.of(h.kind()==SceneDtos.Kind.AGENT?"ai:agent:invoke":"ai:scene:invoke");AiApplicationPolicy.Scope scope=AiApplicationPolicy.Scope.FRONTEND;
         // Migration never expands an existing application's permitted caller set or scope.
         if(h.legacyBaseVersion()!=null){var old=execution.policy(h.legacyBaseVersion());subjects=old.allowedSubjects();authorities=old.allowedAuthorities();scope=old.scope();}
         else if(h.currentVersion()!=null){var old=execution.policy(scenes.version(h.currentVersion()).appVersion());subjects=old.allowedSubjects();authorities=old.allowedAuthorities();scope=old.scope();}
         return new AiApplicationPolicy(AiApplicationPolicy.ModelMode.valueOf(p.mode().name()),models,p.fallback(),null,
                 compiled.inputVariables().stream().map(AiSceneDataRuntime.InputVariable::name).collect(java.util.stream.Collectors.toSet()),
-                new Requirements(OutputFormat.valueOf(p.outputFormat().name()),true,false),scope,subjects,authorities,h.formId(),
+                new Requirements(OutputFormat.valueOf(p.outputFormat().name()),true,h.kind()==SceneDtos.Kind.AGENT),scope,subjects,authorities,h.formId(),
                 p.timeoutSeconds(),p.maxAttempts(),p.maxConcurrent(),p.maxTokens(),d.businessModel());
     }
     private AiSceneLegacyTemplates.LegacyView legacyView(SceneStore.Head head,TrustedActor actor){

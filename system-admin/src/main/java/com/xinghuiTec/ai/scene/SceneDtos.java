@@ -7,7 +7,7 @@ import java.util.Map;
 /** AI-UX public wire types. A scene/version is its own identity, never an application ID alias. */
 public final class SceneDtos {
     private SceneDtos() {}
-    public enum Kind { GENERAL, RECORD_SUMMARY }
+    public enum Kind { GENERAL, RECORD_SUMMARY, AGENT }
     public enum Source { NATIVE, LEGACY_V04 }
     public enum ModelMode { FIXED, ROUND_ROBIN }
     public enum KeyMode { AUTO, FIXED }
@@ -92,7 +92,7 @@ public final class SceneDtos {
     /** Business callers receive no prompt, model key material, internal application or template IDs. */
     public record Entry(String sceneKey,String name,Kind kind,String formId,String currentVersionId,
                         int revision,Availability availability,boolean contextRequired,String contextSourceKey,String contextSourceLabel,boolean canStartFromMonitor) {
-        public Entry(String sceneKey,String name,Kind kind,String formId,String currentVersionId,int revision,Availability availability){this(sceneKey,name,kind,formId,currentVersionId,revision,availability,kind==Kind.RECORD_SUMMARY,null,null,kind!=Kind.RECORD_SUMMARY);}
+        public Entry(String sceneKey,String name,Kind kind,String formId,String currentVersionId,int revision,Availability availability){this(sceneKey,name,kind,formId,currentVersionId,revision,availability,kind==Kind.RECORD_SUMMARY,null,null,kind==Kind.GENERAL);}
     }
     public record Request(String requestId,String sceneKey,String sceneVersionId,String kind,BusinessRef businessRef,
                           String status,String stage,String errorCode,boolean outputStarted,int attemptCount,
