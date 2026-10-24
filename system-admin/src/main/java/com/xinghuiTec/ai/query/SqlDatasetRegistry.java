@@ -166,8 +166,8 @@ public final class SqlDatasetRegistry {
         var projection = new ArrayList<>(List.of("r.id AS id"));
         for (var field : schema.fields()) {
             if (secret(field.fieldKey(), field.label())) continue;
-            String type = field.type().equals("number") ? "DECIMAL" : field.type().equals("switch") ? "BOOLEAN"
-                    : field.type().equals("multiselect") ? "JSON" : "STRING";
+            String type = LowcodeSchema.numericType(field.type()) ? "DECIMAL" : field.type().equals("switch") ? "BOOLEAN"
+                    : LowcodeSchema.arrayType(field.type()) ? "JSON" : "STRING";
             var compatible = new ArrayList<String>();
             for (var version : versions) {
                 var original = schemas.decode(String.valueOf(version.get("schema_json"))).fields().stream()

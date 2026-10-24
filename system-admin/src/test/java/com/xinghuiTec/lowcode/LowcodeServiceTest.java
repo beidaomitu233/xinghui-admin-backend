@@ -209,6 +209,44 @@ class LowcodeServiceTest {
         assertThrows(ServiceException.class, () -> service.records(form, 1, 10, null, null, "id; SELECT 1", "asc"));
     }
 
+    @Test
+    void visualDesignerPropertiesAndNewControlsSurvivePublishingAndTenantScopedFilling() {
+        var definition = schemas.validate(schemas.decode("""
+                {"layout":{"labelPosition":"top","labelWidth":100},"fields":[
+                  {"fieldKey":"contact","label":"联系人","type":"text","required":true,"ui":{"placeholder":"请填写联系人","clearable":true,"showWordLimit":true,"span":12}},
+                  {"fieldKey":"choice","label":"单选","type":"radio","options":[{"label":"甲","value":"a"}]},
+                  {"fieldKey":"choices","label":"多选","type":"checkbox","options":[{"label":"甲","value":"a"}]},
+                  {"fieldKey":"hours","label":"时间范围","type":"timerange"},
+                  {"fieldKey":"days","label":"日期范围","type":"daterange"},
+                  {"fieldKey":"score","label":"评分","type":"rate"},
+                  {"fieldKey":"progress","label":"进度","type":"slider","min":0,"max":100},
+                  {"fieldKey":"color","label":"颜色","type":"color"}
+                ]}
+                """));
+        long id = Long.parseLong(service.create(draft(definition, 0, "draft")));
+        service.publish(id, 0);
+        var published = (LowcodeSchema.Schema) service.runtime(id).get("schema");
+        assertEquals(schemas.data(schemas.encode(definition, 262144, "配置")),
+                schemas.data(schemas.encode(published, 262144, "配置")));
+        assertEquals(12, published.fields().get(0).ui().span());
+        String values = """
+                {"contact":"QA contact","choice":"a","choices":["a"],"hours":["09:00:00","18:30:00"],
+                 "days":["2026-10-24","2026-10-25"],"score":3.5,"progress":65,"color":"#3366ff"}
+                """;
+        var saved = service.addRecord(id, submission(1, 0, values));
+        long record = Long.parseLong((String) saved.get("id"));
+        assertEquals(schemas.data(values), service.record(id, record).get("data"));
+        assertThrows(ServiceException.class, () -> service.addRecord(id,
+                submission(1, 0, values.replace("18:30:00", "08:30:00"))));
+        assertThrows(ServiceException.class, () -> service.addRecord(id,
+                submission(1, 0, values.replace("3.5", "6"))));
+        assertThrows(ServiceException.class, () -> service.addRecord(id,
+                submission(1, 0, values.replace("#3366ff", "javascript:alert(1)"))));
+        when(identity.tenant()).thenReturn("tenant_b");
+        assertThrows(ServiceException.class, () -> service.record(id, record));
+        assertEquals("0", service.records(id, 1, 10, null, null).total());
+    }
+
     private static LowcodeSchema.Schema schema(String type,String label) {
         return new LowcodeSchema.Schema(List.of(new LowcodeSchema.Field("field_1",label,type,true,null,List.of(),"",200,null,null,true,true)));
     }

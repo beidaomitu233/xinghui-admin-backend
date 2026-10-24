@@ -188,7 +188,7 @@ public class LowcodeService {
                     where += " AND JSON_UNQUOTE(JSON_EXTRACT(data_json, ?)) LIKE ? ESCAPE '!'";
                     args.add(path);
                     args.add(like(value));
-                } else if (field.type().equals("number")) {
+                } else if (LowcodeSchema.numericType(field.type())) {
                     BigDecimal number;
                     try {
                         number = new BigDecimal(value);
@@ -243,7 +243,7 @@ public class LowcodeService {
         }
         String key = orderBy.substring(5);
         var field = schema.fields().stream().filter(candidate -> candidate.fieldKey().equals(key)
-                && candidate.listVisible() && !candidate.type().equals("multiselect")).findFirst()
+                && candidate.listVisible() && !LowcodeSchema.arrayType(candidate.type())).findFirst()
                 .orElseThrow(() -> invalid("字段未配置为可排序列"));
         // JSON paths are bound parameters derived only from the validated published schema.
         // Explicit JSON null and missing keys both become SQL NULL, while the text "null" stays text.
@@ -252,9 +252,9 @@ public class LowcodeService {
                 + "ELSE JSON_UNQUOTE(JSON_EXTRACT(data_json, ?)) END";
         args.add(path); args.add(path);
         String expression = switch (field.type()) {
-            case "number" -> "CAST((" + value + ") AS DECIMAL(20,6))";
+            case "number", "slider", "rate" -> "CAST((" + value + ") AS DECIMAL(20,6))";
             case "switch" -> "CASE (" + value + ") WHEN 'true' THEN 1 WHEN 'false' THEN 0 ELSE NULL END";
-            case "text", "textarea", "select", "date" -> "(" + value + ")";
+            case "text", "textarea", "select", "radio", "date", "time", "color" -> "(" + value + ")";
             default -> throw invalid("此类型暂不支持排序");
         };
         return expression + " " + direction(order) + ",id DESC";

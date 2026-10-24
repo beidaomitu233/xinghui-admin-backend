@@ -38,8 +38,8 @@ public class LowcodeSharingService {
     // Explicit public DTOs: no form/record IDs, tenant, creator, draft, list/query configuration or answers.
     public record FillField(String fieldKey, String label, String type, boolean required,
                             JsonNode defaultValue, List<LowcodeSchema.Option> options, String help,
-                            Integer maxLength, java.math.BigDecimal min, java.math.BigDecimal max) {}
-    public record FillView(String title, int schemaVersion, String accessMode, List<FillField> fields) {}
+                            Integer maxLength, java.math.BigDecimal min, java.math.BigDecimal max, LowcodeSchema.Presentation ui) {}
+    public record FillView(String title, int schemaVersion, String accessMode, List<FillField> fields, LowcodeSchema.Layout layout) {}
     public record FillReceipt(boolean submitted, String receipt) {}
     public static class Failure extends RuntimeException {
         public final int status;
@@ -116,7 +116,7 @@ public class LowcodeSharingService {
         return new FillView(String.valueOf(access.form().get("name")), number(access.form(), "published_version"),
                 String.valueOf(access.share().get("access_mode")), schema.fields().stream().map(field -> new FillField(
                 field.fieldKey(), field.label(), field.type(), field.required(), field.defaultValue(), field.options(),
-                field.help(), field.maxLength(), field.min(), field.max())).toList());
+                field.help(), field.maxLength(), field.min(), field.max(), field.ui())).toList(), schema.layout());
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
