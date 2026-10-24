@@ -122,7 +122,7 @@ public class OpenRouterTransport {
             if(("openai".equals(provider)||wire!=null)&&requirements.streaming())body.put("stream_options",Map.of("include_usage",true));
             // OpenAI Chat Completions uses max_completion_tokens, including reasoning tokens.
             // https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
-            body.put("openai".equals(provider)?"max_completion_tokens":"max_tokens",maxTokens);
+            body.put(Set.of("openai","mimo").contains(provider)?"max_completion_tokens":"max_tokens",maxTokens);
             // These two catalog-verified models support optional reasoning; ordinary chat should reserve output for text.
             // https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
             if("openrouter".equals(provider) && requirements.outputFormat()==OutputFormat.TEXT && Set.of("poolside/laguna-s-2.1:free","nvidia/nemotron-3.5-lightning:free").contains(modelCode))
@@ -130,6 +130,9 @@ public class OpenRouterTransport {
             // Prevent routing to a different model; application-level fallback belongs to B.
             if("openrouter".equals(provider)) body.put("provider",state.jsonObject||wire!=null?Map.of("allow_fallbacks",false,"require_parameters",true):Map.of("allow_fallbacks",false));
             if("deepseek".equals(provider)) body.put("thinking",Map.of("type","disabled"));
+            // MiMo recommends non-thinking mode for reliable multi-turn function calls.
+            // https://mimo.mi.com/docs/zh-CN/quick-start/faq/api-integration
+            if("mimo".equals(provider)) body.put("thinking",Map.of("type","disabled"));
             if(state.jsonObject) body.put("response_format",Map.of("type","json_object"));
             String encoded=json.writeValueAsString(body);
             if(encoded.length()>262144) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);

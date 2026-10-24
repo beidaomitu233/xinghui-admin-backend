@@ -91,6 +91,17 @@ class OpenRouterToolWireTest {
                 """);
         assertDoesNotThrow(()->new OpenAiToolWire(history,delivered::add));
     }
+    @Test void mimoUsesItsOfficialEndpointAndStableToolModeWithCompleteUsage()throws Exception {
+        fixture.response(200,first("records_mutate","{\"count\":0}")+end("tool_calls"));
+        var preset=AiProviderPresets.require("mimo");
+        var result=fixture.transport.callTools("mimo",preset.chatEndpoint(),"unit/model",10,"controlled-secret",request,128,delivered::add,control);
+        assertEquals(ExecutionStatus.SUCCEEDED,result.status());assertEquals(12L,result.usage().totalTokens());assertFalse(delivered.isEmpty());
+        var captured=org.mockito.ArgumentCaptor.forClass(HttpRequest.class);verify(fixture.client).sendAsync(captured.capture(),any(HttpResponse.BodyHandler.class));
+        assertEquals("https://api.xiaomimimo.com/v1/chat/completions",captured.getValue().uri().toString());
+        var body=json.readTree(new OpenRouterJsonObjectTest().requestBody(captured.getValue()));
+        assertEquals(128,body.path("max_completion_tokens").asInt());assertFalse(body.has("max_tokens"));assertFalse(body.has("provider"));
+        assertEquals("disabled",body.path("thinking").path("type").asText());assertTrue(body.path("stream_options").path("include_usage").asBoolean());
+    }
     @Test void streamedFunctionNamesAreReassembledAndDuplicateCallIdsFail()throws Exception {
         fixture.response(200,first("records_","{")+frame(Map.of("tool_calls",List.of(Map.of("index",0,"function",Map.of("name","mutate","arguments","}")))),null)+end("tool_calls"));
         assertEquals(ExecutionStatus.SUCCEEDED,call().status());

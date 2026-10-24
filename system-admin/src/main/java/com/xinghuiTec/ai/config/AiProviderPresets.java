@@ -15,6 +15,7 @@ public final class AiProviderPresets {
                 new Preset("deepseek","DeepSeek","https://api.deepseek.com/chat/completions","https://api.deepseek.com/models",null,
                         List.of("deepseek-flash","deepseek-v4-pro")),
                 new Preset("openai","OpenAI","https://api.openai.com/v1/chat/completions","https://api.openai.com/v1/models",null,List.of()),
+                new Preset("mimo","小米 MiMo","https://api.xiaomimimo.com/v1/chat/completions","https://api.xiaomimimo.com/v1/models",null,List.of("mimo-v2.6-flash")),
                 new Preset("siliconflow","硅基流动","https://api.siliconflow.cn/v1/chat/completions","https://api.siliconflow.cn/v1/models?sub_type=chat",null,List.of()));
     }
     public static Preset require(String code) {
