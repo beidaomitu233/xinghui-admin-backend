@@ -26,6 +26,7 @@
         <module>system-framework</module>
         <module>web-admin</module>
         <module>web-app</module>
+        <module>system-agent</module>
         <module>system-admin</module>
     </modules>
 
@@ -50,6 +51,7 @@
         <sms4j.version>3.3.5</sms4j.version>
         <justauth.version>1.16.7</justauth.version>
         <minio.version>8.5.10</minio.version>
+        <agentscope.version>2.0.3</agentscope.version>
     </properties>
 
 
