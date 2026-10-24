@@ -116,8 +116,12 @@ public final class JdbcAgentRepository {
         return run;
     }
     public boolean running(AgentActor actor, String runId) {
-        Run run = runInternal(actor, runId, false);
-        return "RUNNING".equals(run.status()) && Instant.now().isBefore(run.deadline());
+        // The transport cancellation watcher polls frequently; never decrypt the whole input here.
+        var rows=jdbc.query("SELECT status,deadline FROM sys_agent_run WHERE run_id=? AND tenant_id=? AND user_id=?",
+                (rs,n)->"RUNNING".equals(rs.getString(1))&&Instant.now().isBefore(rs.getTimestamp(2).toInstant()),
+                runId,actor.tenantId(),actor.userId());
+        if(rows.size()!=1)throw new AgentProblem("FORBIDDEN","无权访问该任务");
+        return rows.get(0);
     }
     /** Must run in the same transaction as state saves / business writes. Locks session first. */
     public void guard(AgentActor actor, String runId, boolean checkpoint) {

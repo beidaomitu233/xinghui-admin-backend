@@ -39,6 +39,7 @@ class AiCallLogServiceTest {
         jdbc.execute("ALTER TABLE sys_ai_request ADD COLUMN scene_key VARCHAR(128) NULL");
         jdbc.execute("ALTER TABLE sys_ai_request ADD COLUMN scene_version_id VARCHAR(32) NULL");
         script(read("V20261019_250__ai_call_logs.sql"));
+        script(read("V20261024_410__agent_call_log_associations.sql"));
         jdbc.update("INSERT INTO sys_ai_configuration(config_id,config_name,environment_name,provider_code,status,revision) VALUES(1,'fixture channel','test','SIMULATED','DRAFT',0)");
         jdbc.update("INSERT INTO sys_ai_configuration_version(version_id,config_id,snapshot_json) VALUES(2001,1,'{}')");
         jdbc.execute("CREATE TABLE sys_ai_conversation_turn(request_id BIGINT PRIMARY KEY,conversation_id BIGINT)");
@@ -217,6 +218,27 @@ class AiCallLogServiceTest {
         long id=Long.parseLong(admitted.request().requestId());requests.start(id,now);return id;
     }
     private AiRequestJournal.Attempt attempt(long request,TrustedActor actor){return journal.reserve(request,AiRuntimeService.owner(actor),new Target(new ModelVersionRef("1001","2001"),new KeyRef("3001","4001"),"SIMULATED","fixture-model","masked fixture",new Capabilities(Set.of(OutputFormat.TEXT),true,false)),2,AiRequestJournal.SwitchReason.FIRST,64);}
+    @Test void agentObservationsKeepFullTelemetryAndOwnerHistoryAccessWithoutOrdinaryRequestAliases(){
+        var permissions=new HashSet<>(actions);permissions.add("ai:agent:invoke");
+        var actor=new TrustedActor(own.subjectId(),own.tenantId(),permissions,null);
+        String session=UUID.randomUUID().toString(),run=UUID.randomUUID().toString(),turn=UUID.randomUUID().toString();
+        var target=new Target(new ModelVersionRef("1001","2001"),new KeyRef("fixture-key","1"),"fixture","agent-fixture","QA",new Capabilities(Set.of(OutputFormat.TEXT),true,true));
+        String call=store.beginAgentCall(actor,"scene.agent","1",session,run,turn,target,2,"FALLBACK_MODEL");
+        assertNotNull(call);store.completeAgentCall(call,success(telemetry()));store.completeAgentCall(call,success(telemetry()));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_call_response",Integer.class));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_request",Integer.class));
+        var filter=new AiCallLogService.Filters(AiRequestLogService.Scope.OWN,null,null,null,null,null,null,AiCallLogService.EntryType.AGENT_MODEL,null,null,"1","scene.agent");
+        assertEquals(1,logs.page(actor,false,filter,1,20).total());assertNull(logs.detail(actor,true,filter,call).response());
+        var allowed=new java.util.concurrent.atomic.AtomicBoolean(true);
+        logs.agentAccess((who,s,r)->who.equals(actor)&&s.equals(session)&&r.equals(run)&&allowed.get());
+        var detail=logs.detail(actor,false,filter,call);
+        assertEquals(turn,detail.call().get("agentModelCallId"));assertEquals(4L,detail.call().get("firstOutputMs"));assertNotNull(detail.response());
+        assertNull(detail.call().get("requestId"));allowed.set(false);assertNull(logs.detail(actor,true,filter,call).response());
+        // Management and audit permissions never grant someone else's Agent bodies.
+        assertNull(logs.detail(audit,true,filter(AiRequestLogService.Scope.AUDIT),call).response());
+        assertEquals(ErrorCode.FORBIDDEN,assertThrows(AiRuntimeException.class,()->logs.page(own,false,filter,1,20)).code());
+        var other=new TrustedActor("102",own.tenantId(),permissions,null);assertEquals(0,logs.page(other,false,filter,1,20).total());
+    }
     private String id(long request){return jdbc.queryForObject("SELECT call_id FROM sys_ai_call_log WHERE request_id=? AND attempt_id IS NOT NULL",String.class,request);}
     private AiCallLogService.Filters filter(AiRequestLogService.Scope scope){return new AiCallLogService.Filters(scope,null,null,null,null,null,null,null,null,null,null,null);}
     static AiCallTelemetry telemetry(){
