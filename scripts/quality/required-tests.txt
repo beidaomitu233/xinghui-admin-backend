@@ -109,6 +109,8 @@ IndependentHomeNavigationMigrationTest
 WechatLoginFlowServiceTest
 WechatLoginFlowControllerTest
 WechatAccountServiceTest
+SmsLoginServiceTest
+OperLogTenantMappingTest
 RuntimeMailServiceTest
 NonnegativeHomeNavigationMigrationTest
 LowcodeSharingServiceTest
