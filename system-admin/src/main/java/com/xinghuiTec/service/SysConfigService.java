@@ -17,4 +17,8 @@ public interface SysConfigService extends IService<SysConfig>, PublishedConfigRe
     Integer addManaged(ConfigChangeRequest request);
     void updateManaged(Integer id, ConfigChangeRequest request);
     void removeManaged(Integer id);
+    record Definition(String configKey,String name,java.util.Set<String> choices,boolean creatable) {}
+    List<Definition> managedDefinitions();
+    void updateManagedExpected(Integer id,String expectedValue,ConfigChangeRequest request);
+    void removeManagedExpected(Integer id,String expectedValue);
 }
