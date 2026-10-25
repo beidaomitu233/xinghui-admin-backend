@@ -17,6 +17,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.*;
 
 class AgentRuntimeTest {
+    @Test void officialFormatterKeepsImageAndNaturalTaskInTheSameUserMessage(){
+        String image="https://agent-image.internal/557de95f-8bbd-4005-a73a-b13c0df290e1";
+        AgentModelGateway model=(context,request)->{
+            var messages=read(request).path("messages");
+            assertThat(messages.toString()).contains("照图新增商品","image_url",image);
+            return text("已读取图片");
+        };
+        try(var runtime=new AgentRuntime(call(),"处理业务",workspace,new InMemoryAgentStateStore(),model,null,json)){
+            assertThat(runtime.run("照图新增商品",List.of(),List.of(image)).collectList().block(Duration.ofSeconds(25))).isNotEmpty();
+        }
+    }
     @TempDir Path workspace;
     private final ObjectMapper json = new ObjectMapper();
     private final AgentActor owner = new AgentActor("tenant-a", "42");

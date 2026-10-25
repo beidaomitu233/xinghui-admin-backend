@@ -34,7 +34,7 @@ class JdbcAgentStateStoreTest {
     };
     @BeforeEach void database() {
         var ds = new DriverManagerDataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261024_400__agent_workbench.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261024_400__agent_workbench.sql"),new ClassPathResource("db/migration/V20261025_430__agent_images.sql")).execute(ds);
         jdbc = new JdbcTemplate(ds); transactions = new DataSourceTransactionManager(ds);
     }
     private JdbcAgentStateStore store(AgentActor owner, Runnable guard) {

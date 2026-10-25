@@ -39,6 +39,18 @@ class SqlAstCompilerTest {
         assertNull(plan.parameters().get(0));assertTrue(plan.executionSql().contains("IS NULL"));
         assertThrows(UnsupportedOperationException.class,()->plan.parameters().add("x"));
     }
+    @Test void productBooleanFilterAndPriceOrderRemainScopedAndPrepared() {
+        var schema=new DatasetSchema("form.2","form_2","商品","",ScopeKind.TENANT,"",
+                List.of(new QueryColumn("name","名称","STRING",false),
+                        new QueryColumn("price","价格","DECIMAL",false),
+                        new QueryColumn("available","上架","BOOLEAN",false)),"schema");
+        var product=new SqlDataset(schema,"POLICY","SELECT name,price,available FROM private_products WHERE tenant_id=?",List.of("tenant-A"),List.of());
+        var plan=compiler.compile(new SqlQuery("SELECT name, price FROM form_2 WHERE available = true ORDER BY price ASC",Map.of(),20),List.of(product));
+        assertEquals(List.of("tenant-A",true,21),plan.parameters());
+        assertTrue(plan.executionSql().contains("tenant_id=?"));
+        assertTrue(plan.normalizedSql().contains("TRUE"));
+        assertEquals(plan.normalizedSql(),compiler.compile(new SqlQuery(plan.normalizedSql(),Map.of(),20),List.of(product)).normalizedSql());
+    }
     @Test void likeNotLikeEscapeAndBetweenArePrepared() {
         var plan=compile("select id from orders where name like 'a!_%' escape '!' and name not like 'b%' and amount between 1 and 9");
         assertTrue(plan.parameters().containsAll(List.of("a!_%","!","b%",new BigDecimal("1"),new BigDecimal("9"))));

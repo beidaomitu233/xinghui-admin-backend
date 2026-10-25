@@ -169,6 +169,10 @@ public class AiModelCatalogTransport {
                     var architecture = deepseek ? item : item.path("architecture");
                     var input = tokens(architecture.get("input_modalities"), secret);
                     var output = tokens(architecture.get("output_modalities"), secret);
+                    // The official MiMo image guide documents these /models IDs as vision-capable.
+                    // https://mimo.mi.com/docs/en-US/quick-start/usage-guide/multimodal-understanding/image-understanding
+                    if(documentedMiMo&&input.isEmpty())input=List.of("text","image");
+                    if(documentedMiMo&&output.isEmpty())output=List.of("text");
                     if (architecture.hasNonNull("output_modalities") && !output.contains("text")) {
                         reasons.merge("NON_TEXT_OUTPUT", 1, Integer::sum);
                         continue;

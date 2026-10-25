@@ -27,6 +27,7 @@ public class AgentConfiguredModels implements AgentPromptGateway {
     private final AiProviderRuntime provider;
     private final AiCallLogStore logs;
     private final JdbcAgentRepository repository;
+    @org.springframework.beans.factory.annotation.Autowired private AgentImages images;
     public AgentConfiguredModels(AgentAccess access,SceneManagementService scenes,ModelHubService models,
                                  AiSharedModelCursor cursor,AiProviderRuntime provider,AiCallLogStore logs,JdbcAgentRepository repository){
         this.access=access;this.scenes=scenes;this.models=models;this.cursor=cursor;this.provider=provider;this.logs=logs;this.repository=repository;
@@ -62,6 +63,7 @@ public class AgentConfiguredModels implements AgentPromptGateway {
     private void execute(AgentActor owner,SceneManagementService.AgentRoute route,AiApplicationPolicy policy,ModelHubService.Frozen frozen,
                          AtomicInteger first,AgentCall call,String wire,FluxSink<String> sink,AtomicBoolean cancelled){
         if(wire==null||wire.length()>262144)throw problem("MODEL_INPUT_LIMIT");
+        var request=images==null?new AgentImages.Wire(wire,false):images.hydrate(call,wire);
         Instant deadline=Instant.now().plusSeconds(policy.timeoutSeconds());if(deadline.isAfter(call.deadline()))deadline=call.deadline();
         final Instant end=deadline;
         InvocationControl control=new InvocationControl(){public Instant deadline(){return end;}public boolean cancelled(){return cancelled.get()||sink.isCancelled()||Thread.currentThread().isInterrupted()||call.cancelled().getAsBoolean();}};
@@ -69,21 +71,21 @@ public class AgentConfiguredModels implements AgentPromptGateway {
         if(first.get()<0){
             int selected=0;
             if(policy.modelMode()==AiApplicationPolicy.ModelMode.ROUND_ROBIN){
-                var eligible=policy.models().stream().map(binding->!targets(binding,Set.of(),policy.requirements(),control).isEmpty()).toList();
+                var eligible=policy.models().stream().map(binding->!targets(binding,Set.of(),policy.requirements(),control,request.hasImages()).isEmpty()).toList();
                 selected=cursor.next(Long.parseLong(route.appVersion()),eligible).orElseThrow(()->problem("MODEL_UNAVAILABLE"));
             }
             first.compareAndSet(-1,selected);
         }
-        var order=policy.attemptModelOrder(first.get());int attempts=0,previous=-1;ErrorCode last=ErrorCode.MODEL_UNAVAILABLE;
+        var order=policy.attemptModelOrder(first.get());int attempts=0,previous=-1;ErrorCode last=request.hasImages()?ErrorCode.CAPABILITY_UNSUPPORTED:ErrorCode.MODEL_UNAVAILABLE;
         for(int position=0;position<order.size();position++){
             int index=order.get(position);var attempted=new HashSet<KeyRef>();
             while(attempts<policy.maxAttempts()){
                 control.check();actor=authorize(owner,route,frozen,call);
-                var targets=targets(policy.models().get(index),attempted,policy.requirements(),control);if(targets.isEmpty())break;
+                var targets=targets(policy.models().get(index),attempted,policy.requirements(),control,request.hasImages());if(targets.isEmpty())break;
                 var target=targets.get(0);attempted.add(target.key());
                 int windows=targets.size();
                 for(int next=position+1;next<order.size()&&windows<policy.maxAttempts()-attempts;next++)
-                    windows+=targets(policy.models().get(order.get(next)),Set.of(),policy.requirements(),control).size();
+                    windows+=targets(policy.models().get(order.get(next)),Set.of(),policy.requirements(),control,request.hasImages()).size();
                 windows=Math.max(1,Math.min(windows,policy.maxAttempts()-attempts));
                 long millis=Math.max(1,Duration.between(Instant.now(),end).toMillis()/windows);
                 Instant attemptEnd=Instant.now().plusMillis(millis);if(attemptEnd.isAfter(end))attemptEnd=end;final Instant bounded=attemptEnd;
@@ -94,7 +96,7 @@ public class AgentConfiguredModels implements AgentPromptGateway {
                 try{
                     var invocation=new Invocation(actor,route.appId(),route.appVersion(),new BusinessRef("agent.session",call.sessionId()),call.runId());
                     // Each turn retains the configured completion limit. An attempt with any output is never replayed.
-                    outcome=provider.executeTools(new ToolExecutionRequest(invocation,UUID.randomUUID().toString(),target,wire,policy.maxTokens()),frame->{
+                    outcome=provider.executeTools(new ToolExecutionRequest(invocation,UUID.randomUUID().toString(),target,request.json(),policy.maxTokens()),frame->{
                         attemptControl.check();emitted.set(true);sink.next(frame);
                     },attemptControl);
                     if(outcome==null)throw new AiRuntimeException(ErrorCode.INVALID_RESPONSE);
@@ -116,8 +118,8 @@ public class AgentConfiguredModels implements AgentPromptGateway {
         }
         throw problem(last.name());
     }
-    private List<Target> targets(ModelBinding binding,Set<KeyRef> attempted,Requirements required,InvocationControl control){
-        try{return provider.resolveTargets(binding,attempted,control).stream().filter(t->t.capabilities().supports(required)).toList();}
+    private List<Target> targets(ModelBinding binding,Set<KeyRef> attempted,Requirements required,InvocationControl control,boolean images){
+        try{return provider.resolveTargets(binding,attempted,control).stream().filter(t->t.capabilities().supports(required)&&(!images||provider.supportsImages(t,control))).toList();}
         catch(AiRuntimeException missing){if(Set.of(ErrorCode.MODEL_UNAVAILABLE,ErrorCode.NO_USABLE_KEY,ErrorCode.CAPABILITY_UNSUPPORTED).contains(missing.code()))return List.of();throw missing;}
     }
     private static boolean retryable(ErrorCode code){return Set.of(ErrorCode.NETWORK_ERROR,ErrorCode.RATE_LIMITED,ErrorCode.PROVIDER_UNAVAILABLE,

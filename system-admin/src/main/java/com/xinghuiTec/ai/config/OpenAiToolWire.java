@@ -12,7 +12,7 @@ import static com.xinghuiTec.ai.contract.AiTypes.*;
 /** Bounded SDK wire exchange. No archive decoding, credential substitution or business execution. */
 final class OpenAiToolWire {
     private static final ObjectMapper JSON=new ObjectMapper(JsonFactory.builder()
-            .streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(64).maxStringLength(262144).maxNumberLength(256).build())
+            .streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(64).maxStringLength(2*1024*1024).maxNumberLength(256).build())
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build()).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private final Map<String,Object> body=new LinkedHashMap<>();
     private final Set<String> names=new HashSet<>();
@@ -31,7 +31,7 @@ final class OpenAiToolWire {
 
     OpenAiToolWire(String request,ToolStreamObserver observer) {
         this.observer=Objects.requireNonNull(observer);
-        JsonNode root=read(request,ErrorCode.INVALID_INPUT);
+        JsonNode root=read(request,ErrorCode.INVALID_INPUT,8*1024*1024);
         if(!root.isObject()||!root.path("messages").isArray()||root.path("messages").isEmpty()||root.path("messages").size()>512)invalidInput();
         var tools=root.path("tools");
         if(!tools.isMissingNode()&&(!tools.isArray()||tools.size()>32))invalidInput();
@@ -182,7 +182,10 @@ final class OpenAiToolWire {
     }
     private static boolean validId(String id){return id!=null&&id.matches("[A-Za-z0-9_.:-]{1,128}");}
     private static JsonNode read(String value,ErrorCode code) {
-        try {if(value==null||value.length()>262144)throw new AiRuntimeException(code);var node=JSON.readTree(value);if(node==null)throw new AiRuntimeException(code);return node;}
+        return read(value,code,262144);
+    }
+    private static JsonNode read(String value,ErrorCode code,int limit) {
+        try {if(value==null||value.length()>limit)throw new AiRuntimeException(code);var node=JSON.readTree(value);if(node==null)throw new AiRuntimeException(code);return node;}
         catch(AiRuntimeException safe){throw safe;}catch(Exception invalid){throw new AiRuntimeException(code);}
     }
     private static void invalidInput(){throw new AiRuntimeException(ErrorCode.INVALID_INPUT);}

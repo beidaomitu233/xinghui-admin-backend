@@ -64,13 +64,19 @@ public final class AgentRuntime implements AutoCloseable {
         return run(input,List.of());
     }
     public Flux<AgentEventView> run(String input,List<String> contextMessages) {
+        return run(input,contextMessages,List.of());
+    }
+    public Flux<AgentEventView> run(String input,List<String> contextMessages,List<String> images) {
         if (input == null || input.isBlank() || input.length() > 32768)
             return Flux.error(new AgentProblem("INVALID_MESSAGE", "请输入内容，最多32768个字符"));
         return Flux.defer(() -> {
             call.check();
             var messages=new java.util.ArrayList<io.agentscope.core.message.Msg>();
             contextMessages.forEach(text->messages.add(new io.agentscope.core.message.UserMessage(text)));
-            messages.add(new io.agentscope.core.message.UserMessage(input));
+            var content=new java.util.ArrayList<io.agentscope.core.message.ContentBlock>();
+            content.add(io.agentscope.core.message.TextBlock.builder().text(input).build());
+            images.forEach(url->content.add(new io.agentscope.core.message.ImageBlock(new io.agentscope.core.message.URLSource(url))));
+            messages.add(new io.agentscope.core.message.UserMessage(content));
             return RunCancellation.guard(agent.streamEvents(messages, context), call)
                     .concatMapIterable(this::publicEvents);
         });

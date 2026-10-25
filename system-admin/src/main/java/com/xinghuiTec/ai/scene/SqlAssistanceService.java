@@ -186,6 +186,9 @@ public class SqlAssistanceService {
 
     private SqlQuery candidate(String text,int maxRows) {
         try {
+            text=text.strip();
+            var fenced=java.util.regex.Pattern.compile("\\A```(?:json)?\\s*\\R(.*)\\R```\\z",java.util.regex.Pattern.DOTALL|java.util.regex.Pattern.CASE_INSENSITIVE).matcher(text);
+            if(fenced.matches())text=fenced.group(1);
             var root=OUTPUT.readTree(text);
             require(root!=null && root.isObject() && root.has("sql") && root.get("sql").isTextual(),422,"INVALID_SQL_GENERATION");
             var names=root.fieldNames();while(names.hasNext())require(Set.of("sql","parameters").contains(names.next()),422,"INVALID_SQL_GENERATION");

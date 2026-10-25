@@ -17,6 +17,12 @@ public class AiToolCapabilities {
         return new Capabilities(base.outputFormats(),base.streaming(),supports(configId,snapshot,model,key));
     }
     private boolean supports(long configId,Snapshot snapshot,ModelSpec model,KeySpec key) {
+        return supports(configId,snapshot,model,key,candidate->candidate.supportedParameters().contains("tools"));
+    }
+    boolean supportsImages(long configId,Snapshot snapshot,ModelSpec model,KeySpec key){
+        return supports(configId,snapshot,model,key,candidate->candidate.inputModalities().contains("image"));
+    }
+    private boolean supports(long configId,Snapshot snapshot,ModelSpec model,KeySpec key,java.util.function.Predicate<AiModelCatalogDtos.Model> capability) {
         try {
             if(!AiConfigurationService.associated(model,key)||!configs.keyUsable(key))return false;
             var preset=AiProviderPresets.require(snapshot.providerCode(),snapshot.endpointUrl());
@@ -29,7 +35,7 @@ public class AiToolCapabilities {
                             // metadata evidence, like the existing catalog view; it is not a generation guarantee.
                             &&fingerprint.equals(receipt.credentialFingerprint())&&!receipt.refreshedAt().isAfter(now)
                             &&receipt.catalog().models().stream().anyMatch(candidate->
-                            candidate.code().equals(model.modelCode())&&candidate.supportedParameters().contains("tools")));
+                            candidate.code().equals(model.modelCode())&&capability.test(candidate)));
         }catch(RuntimeException unavailable){return false;}
     }
 }

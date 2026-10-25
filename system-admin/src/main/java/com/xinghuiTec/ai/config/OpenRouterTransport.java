@@ -135,7 +135,7 @@ public class OpenRouterTransport {
             if("mimo".equals(provider)) body.put("thinking",Map.of("type","disabled"));
             if(state.jsonObject) body.put("response_format",Map.of("type","json_object"));
             String encoded=json.writeValueAsString(body);
-            if(encoded.length()>262144) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
+            if(encoded.length()>(wire==null?262144:8*1024*1024)) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             control.check();
             if(!Instant.now().isBefore(deadline)) throw new AiRuntimeException(ErrorCode.DEADLINE_EXCEEDED);
             var request=HttpRequest.newBuilder(URI.create(endpoint))

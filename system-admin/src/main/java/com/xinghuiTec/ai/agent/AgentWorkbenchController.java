@@ -22,7 +22,9 @@ import java.util.function.BiFunction;
 public class AgentWorkbenchController {
     public record Create(String title) {}
     public record Rename(String title,String expectedVersion) {}
-    public record Submit(String input,String sceneKey,String clientRequestId) {
+    public record Submit(String input,String sceneKey,String clientRequestId,List<String> imageIds) {
+        public Submit(String input,String sceneKey,String clientRequestId){this(input,sceneKey,clientRequestId,List.of());}
+        public Submit {imageIds=imageIds==null?List.of():List.copyOf(imageIds);}
         @Override public String toString(){return "Submit[REDACTED]";}
     }
     public record Cancel() {}
@@ -37,6 +39,7 @@ public class AgentWorkbenchController {
     private final JdbcAgentRepository repository;
     private final AgentWorkbench workbench;
     private final SceneManagementService scenes;
+    @org.springframework.beans.factory.annotation.Autowired private AgentImages images;
     public AgentWorkbenchController(AiInvocationIdentity identity,AgentAccess access,AiRuntimeBodyCodec codec,
                                     JdbcAgentRepository repository,AgentWorkbench workbench,SceneManagementService scenes){
         this.identity=identity;this.access=access;this.codec=codec;this.repository=repository;this.workbench=workbench;this.scenes=scenes;
@@ -53,11 +56,20 @@ public class AgentWorkbenchController {
     @GetMapping("/sessions/{sessionId}/events") public Result<List<JdbcAgentRepository.Event>> events(@PathVariable String sessionId,@RequestParam(defaultValue="0")String after){
         uuid(sessionId);long cursor=decimal(after);return owned((actor,current)->Result.ok(repository.events(actor,sessionId,cursor)));
     }
+    @PostMapping("/sessions/{sessionId}/images") public Result<com.xinghuiTec.agent.persistence.JdbcAgentImages.Image> image(@PathVariable String sessionId,@RequestParam("file")org.springframework.web.multipart.MultipartFile file){
+        uuid(sessionId);return owned((actor,current)->Result.ok(images.upload(actor,sessionId,file)));
+    }
+    @GetMapping("/sessions/{sessionId}/images/{imageId}") public ResponseEntity<byte[]> image(@PathVariable String sessionId,@PathVariable String imageId){
+        uuid(sessionId);uuid(imageId);return owned((actor,current)->{
+            var image=images.read(actor,sessionId,imageId);
+            return ResponseEntity.ok().contentType(org.springframework.http.MediaType.parseMediaType(image.image().mediaType())).body(image.bytes());
+        });
+    }
     @PostMapping("/sessions/{sessionId}/runs") public ResponseEntity<Result<Admission>> submit(@PathVariable String sessionId,HttpServletRequest request){
         uuid(sessionId);var input=body(request,Submit.class);
         return owned((actor,current)->{
             scenes.agentRoute(input.sceneKey(),current.actor());
-            var admission=workbench.submit(actor,sessionId,input.clientRequestId(),input.input(),input.sceneKey());
+            var admission=input.imageIds().isEmpty()?workbench.submit(actor,sessionId,input.clientRequestId(),input.input(),input.sceneKey()):workbench.submit(actor,sessionId,input.clientRequestId(),input.input(),input.sceneKey(),input.imageIds());
             return ResponseEntity.accepted().body(Result.ok(new Admission(run(admission.run()),admission.created())));
         });
     }
@@ -79,7 +91,7 @@ public class AgentWorkbenchController {
         int status=switch(error.code()){
             case "FORBIDDEN"->403;
             case "VERSION_CONFLICT","RUN_BUSY","IDEMPOTENCY_CONFLICT","RUN_STOPPED"->409;
-            case "INVALID_ID","INVALID_CURSOR","INVALID_VERSION","INVALID_TITLE","INVALID_REQUEST_ID","INVALID_MESSAGE"->400;
+            case "INVALID_ID","INVALID_CURSOR","INVALID_VERSION","INVALID_TITLE","INVALID_REQUEST_ID","INVALID_MESSAGE","INVALID_IMAGE","IMAGE_CONTEXT_LIMIT"->400;
             default->503;
         };return AiHttpFailures.response(status,error.code());
     }

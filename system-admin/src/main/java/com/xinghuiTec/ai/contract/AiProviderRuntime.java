@@ -21,13 +21,14 @@ public interface AiProviderRuntime {
     default ExecutionOutcome executeTools(ToolExecutionRequest request, ToolStreamObserver observer, InvocationControl control) {
         throw new AiRuntimeException(ErrorCode.CAPABILITY_UNSUPPORTED);
     }
+    default boolean supportsImages(Target target,InvocationControl control){return false;}
 
     /** Server-side formatter output, never a URL, credential or client-selected transport. */
     record ToolExecutionRequest(Invocation invocation, String attemptId, Target target, String requestJson, int maxTokens) {
         public ToolExecutionRequest {
             Objects.requireNonNull(invocation); required(attemptId); Objects.requireNonNull(target);
             required(requestJson);
-            if (maxTokens < 1 || maxTokens > 32768 || requestJson.length() > 262144)
+            if (maxTokens < 1 || maxTokens > 32768 || requestJson.length() > 8*1024*1024)
                 throw new IllegalArgumentException("Invalid tool execution bounds");
         }
         @Override public String toString() { return "ToolExecutionRequest[REDACTED]"; }

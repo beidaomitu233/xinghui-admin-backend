@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xinghuiTec.agent.api.*;
 import com.xinghuiTec.agent.persistence.JdbcAgentRepository;
 import com.xinghuiTec.agent.persistence.JdbcAgentStateStore;
+import com.xinghuiTec.agent.persistence.JdbcAgentImages;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -27,6 +28,7 @@ public final class AgentWorkbench implements AutoCloseable {
     private final AgentPayloadCodec codec;
     private final ObjectMapper json;
     private final Path workspaces;
+    private JdbcAgentImages images;
     private final Map<String, AgentRuntime> active = new ConcurrentHashMap<>();
     private final ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS,
             new ArrayBlockingQueue<>(8), task -> { var thread = new Thread(task, "agent-workbench"); thread.setDaemon(true); return thread; },
@@ -39,8 +41,13 @@ public final class AgentWorkbench implements AutoCloseable {
         this.jdbc = jdbc; this.transactions = transactions; this.codec = codec; this.json = json;
         this.workspaces = workspaces.toAbsolutePath().normalize();
     }
+    public void images(JdbcAgentImages images){this.images=images;}
     public JdbcAgentRepository.Admission submit(AgentActor actor, String sessionId, String requestId, String input, String sceneKey) {
-        var admission = repository.admit(actor, sessionId, requestId, input, sceneKey, Duration.ofMinutes(5));
+        return submit(actor,sessionId,requestId,input,sceneKey,java.util.List.of());
+    }
+    public JdbcAgentRepository.Admission submit(AgentActor actor, String sessionId, String requestId, String input, String sceneKey,java.util.List<String> imageIds) {
+        var attached = imageIds==null||imageIds.isEmpty()?java.util.List.<JdbcAgentImages.Image>of():images.require(actor,sessionId,imageIds);
+        var admission = repository.admit(actor, sessionId, requestId, input, sceneKey, Duration.ofMinutes(5),attached);
         if (!admission.created()) return admission;
         try { executor.execute(() -> execute(actor, admission.run().id())); }
         catch (RejectedExecutionException full) { repository.finish(actor, admission.run().id(), "FAILED", "QUEUE_FULL"); }
@@ -67,7 +74,8 @@ public final class AgentWorkbench implements AutoCloseable {
                     authorizedModels, trackedResources(), json);
             active.put(runId, runtime);
             var limited = new AtomicBoolean(false); var completed = new AtomicBoolean(false);
-            runtime.run(run.input(),preset.contextMessages()).doOnNext(event -> {
+            var references=run.imageIds().stream().map(id->{images.read(actor,run.sessionId(),id);return JdbcAgentImages.REFERENCE_PREFIX+id;}).toList();
+            runtime.run(run.input(),preset.contextMessages(),references).doOnNext(event -> {
                 if ("LIMIT_REACHED".equals(event.type())) limited.set(true);
                 if ("ASSISTANT_DONE".equals(event.type())) completed.set(true);
                 repository.append(actor, run.id(), event);

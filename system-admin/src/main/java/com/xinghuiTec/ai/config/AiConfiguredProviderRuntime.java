@@ -136,4 +136,12 @@ public class AiConfiguredProviderRuntime implements AiProviderRuntime {
         }catch(AiRuntimeException classified){throw classified;}
         catch(RuntimeException unavailable){throw new AiRuntimeException(ErrorCode.CREDENTIAL_UNAVAILABLE);}
     }
+    @Override public boolean supportsImages(Target target,InvocationControl control){
+        control.check();
+        try{
+            var selected=selected(target.model(),false);
+            var key=selected.snapshot().keys().stream().filter(k->k.keyRef().equals(target.key().keyRef())&&k.keyVersion().equals(target.key().keyVersion())).findFirst().orElse(null);
+            return key!=null&&tools!=null&&tools.supportsImages(selected.configId(),selected.snapshot(),selected.model(),key);
+        }catch(AiRuntimeException unavailable){return false;}
+    }
 }

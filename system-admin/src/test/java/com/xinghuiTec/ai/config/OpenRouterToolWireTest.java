@@ -23,6 +23,17 @@ class OpenRouterToolWireTest {
             """;
     @BeforeEach void setup(){fixture=new OpenRouterTransportTest();fixture.setup();delivered=new ArrayList<>();}
     ExecutionOutcome call(){return fixture.transport.callTools("openrouter",OpenRouterTransport.ENDPOINT,"unit/model",10,"controlled-secret",request,128,delivered::add,control);}
+    @Test void imageInputLargerThanTheOldTextLimitReachesTheConfiguredTransport()throws Exception {
+        String image="data:image/png;base64,"+"A".repeat(400_000);
+        String wire=json.writeValueAsString(Map.of("messages",List.of(Map.of("role","user","content",List.of(
+                Map.of("type","text","text","照图新增商品"),Map.of("type","image_url","image_url",Map.of("url",image)))))));
+        fixture.response(200,frame(Map.of("content","已识别图片"),null)+end("stop"));
+        var result=fixture.transport.callTools("openrouter",OpenRouterTransport.ENDPOINT,"unit/model",10,"controlled-secret",wire,128,delivered::add,control);
+        assertEquals(ExecutionStatus.SUCCEEDED,result.status());
+        var captured=org.mockito.ArgumentCaptor.forClass(HttpRequest.class);verify(fixture.client).sendAsync(captured.capture(),any(HttpResponse.BodyHandler.class));
+        var sent=json.readTree(new OpenRouterJsonObjectTest().requestBody(captured.getValue()));
+        assertEquals(image,sent.path("messages").path(0).path("content").path(1).path("image_url").path("url").asText());
+    }
     String frame(Map<String,Object> delta,String finish)throws Exception {
         var choice=new LinkedHashMap<String,Object>();choice.put("index",0);choice.put("delta",delta);choice.put("finish_reason",finish);
         return "data: "+json.writeValueAsString(Map.of("id","fixture-id","model","unit/model","choices",List.of(choice)))+"\n\n";

@@ -282,7 +282,7 @@ public final class SqlDatasetRegistry {
         if (!actors.platform(actor) || !actor.authorities().contains("ai:data:database:read")
                 || name == null || !name.matches("[A-Za-z_][A-Za-z0-9_]{0,63}")) return false;
         String n = name.toLowerCase(Locale.ROOT);
-        if (List.of("sys_ai_", "sys_lowcode_", "sys_user", "sys_role", "sys_menu", "sys_tenant", "sys_oss",
+        if (List.of("sys_ai_", "sys_agent_", "sys_lowcode_", "sys_user", "sys_role", "sys_menu", "sys_tenant", "sys_oss",
                 "sys_config", "sys_business_config", "sys_oper_log", "sys_log", "sys_notification", "sys_notice", "sys_news",
                 "sys_wechat", "sys_job", "flyway").stream().anyMatch(n::startsWith) || n.contains("session") || secret(n, "")) return false;
         String prefix = switch (n) { case "sys_dict_type", "sys_dict_data" -> "system:dict:"; default -> null; };

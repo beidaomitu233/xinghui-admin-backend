@@ -38,7 +38,7 @@ class JdbcAgentRepositoryTest {
     };
     @BeforeEach void database() {
         var ds = new DriverManagerDataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=3000", "sa", "");
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261024_400__agent_workbench.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261024_400__agent_workbench.sql"),new ClassPathResource("db/migration/V20261025_430__agent_images.sql")).execute(ds);
         jdbc = new JdbcTemplate(ds);
         repository = new JdbcAgentRepository(jdbc, new DataSourceTransactionManager(ds), codec, (owner, resources) -> {
             if (!historyAllowed.get() && !resources.isEmpty()) throw new AgentProblem("FORBIDDEN", "资源授权已变更");
@@ -49,6 +49,20 @@ class JdbcAgentRepositoryTest {
         return repository.admit(actor, session, id, input, "scene.qa", Duration.ofMinutes(1));
     }
     private AgentCall call(JdbcAgentRepository.Run run) { return new AgentCall(actor, run.sessionId(), run.id(), "model-1", run.deadline(), () -> !repository.running(actor, run.id())); }
+    @Test void imageHistoryKeepsOwnedReferencesAndSubmissionRetriesKeepTheSameAttachments(){
+        var session=repository.create(actor,"图片任务");
+        var images=new JdbcAgentImages(jdbc,repository,codec,json);
+        byte[] bytes=Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aYXcAAAAASUVORK5CYII=");
+        var image=images.save(actor,session.id(),"商品.png","image/png",bytes);
+        assertThat(images.read(actor,session.id(),image.id()).bytes()).isEqualTo(bytes);
+        assertThatThrownBy(()->images.read(new AgentActor("brand-b","42"),session.id(),image.id())).isInstanceOf(AgentProblem.class);
+        var first=repository.admit(actor,session.id(),"client_request_image1","照图新增商品","scene.qa",Duration.ofMinutes(1),List.of(image));
+        var replay=repository.admit(actor,session.id(),"client_request_image1","照图新增商品","scene.qa",Duration.ofMinutes(1),List.of(image));
+        assertThat(replay.run().id()).isEqualTo(first.run().id());
+        assertThat(repository.claim(actor,first.run().id()).imageIds()).containsExactly(image.id());
+        assertThat(repository.events(actor,session.id(),0).get(0).data().get("images").toString()).contains(image.id()).doesNotContain(Base64.getEncoder().encodeToString(bytes));
+        assertThatThrownBy(()->repository.admit(actor,session.id(),"client_request_image1","照图新增商品","scene.qa",Duration.ofMinutes(1),List.of())).isInstanceOf(AgentProblem.class);
+    }
 
     @Test void concurrentDuplicateSubmissionCreatesOnlyOneRunAndUserMessage() throws Exception {
         var session = repository.create(actor, "QA 任务");

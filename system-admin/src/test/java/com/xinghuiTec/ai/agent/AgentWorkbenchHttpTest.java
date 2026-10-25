@@ -66,6 +66,7 @@ class AgentWorkbenchHttpTest {
             context.registerBean(com.xinghuiTec.config.SecretCipher.class,()->new com.xinghuiTec.config.SecretCipher(()->Base64.getEncoder().encodeToString(new byte[32])));
             context.registerBean(SceneManagementService.class,()->scenes);
             context.registerBean(com.xinghuiTec.ai.modelhub.ModelHubService.class,()->mock(com.xinghuiTec.ai.modelhub.ModelHubService.class));
+            context.registerBean(com.xinghuiTec.ai.config.AiModelCatalogService.class,()->mock(com.xinghuiTec.ai.config.AiModelCatalogService.class));
             context.registerBean(AiSharedModelCursor.class,()->mock(AiSharedModelCursor.class));
             context.registerBean(com.xinghuiTec.ai.contract.AiProviderRuntime.class,()->mock(com.xinghuiTec.ai.contract.AiProviderRuntime.class));
             context.registerBean(AiRequestLogService.class,()->mock(AiRequestLogService.class));
@@ -73,7 +74,7 @@ class AgentWorkbenchHttpTest {
             context.registerBean(AiRuntimeService.class,()->mock(AiRuntimeService.class));
             context.registerBean(com.xinghuiTec.ai.scene.SqlAssistanceService.class,()->mock(com.xinghuiTec.ai.scene.SqlAssistanceService.class));
             context.registerBean(com.xinghuiTec.ai.modelhub.ModelHubTestService.class,()->mock(com.xinghuiTec.ai.modelhub.ModelHubTestService.class));
-            context.register(AgentWorkbenchConfiguration.class,AgentConfiguredModels.class,AgentResourceRegistry.class,AgentPayloadCipher.class,
+            context.register(AgentWorkbenchConfiguration.class,AgentConfiguredModels.class,AgentImages.class,AgentResourceRegistry.class,AgentPayloadCipher.class,
                     AgentLogAccess.class,AiCallLogStore.class,AiCallLogService.class);
             context.refresh();
             assertNotNull(context.getBean(AgentWorkbench.class));assertNotNull(context.getBean(JdbcAgentRepository.class));
