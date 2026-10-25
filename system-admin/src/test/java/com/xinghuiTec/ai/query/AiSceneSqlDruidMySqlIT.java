@@ -116,6 +116,16 @@ class AiSceneSqlDruidMySqlIT {
     @Test void platformGenericTableIsNotDelegatedToTenant(){assertEquals(QueryIssue.DATASET_FORBIDDEN,
             assertThrows(SqlQueryException.class,()->read("select order_no from "+orders,a,"db."+orders)).issue());}
     @Test void tenantScopeSurvivesOrAndSoftDelete(){var rows=read("select name from scoped_orders where amount>0 or name='deleted'",a,"qa.tenant");assertEquals(Set.of("order1","other-owner"),new HashSet<>(rows.rows().stream().map(r->r.get("name")).toList()));}
+    @Test void databaseBackedCancellationCanReadRequestStateWhileBusinessRowsStream(){
+        var until=Instant.now().plusSeconds(10);
+        var checks=new java.util.concurrent.atomic.AtomicInteger();
+        InvocationControl persisted=new InvocationControl(){
+            public Instant deadline(){return until;}
+            public boolean cancelled(){checks.incrementAndGet();return jdbc.queryForObject("SELECT COUNT(*) FROM sys_user WHERE user_id=?",Long.class,Long.parseLong(a.subjectId()))!=1;}
+        };
+        var result=runtime.preview(sql("select name from scoped_orders"),a,context("qa.tenant"),persisted);
+        assertEquals(2,result.rowCount());assertTrue(checks.get()>0);
+    }
     @Test void explicitPersonalScopeExcludesOtherOwner(){var rows=read("select name from personal_orders where amount>0 or name='other-owner'",a,"qa.personal");assertEquals(List.of("order1"),rows.rows().stream().map(r->r.get("name")).toList());}
     @Test void joinSourcesEachKeepTheirOwnershipBoundary(){var rows=read("select t.order_no,p.name from scoped_orders t left join personal_orders p on t.order_no=p.order_no order by t.order_no",a,"qa.tenant","qa.personal");assertEquals(2,rows.rowCount());assertEquals(1,rows.rows().stream().filter(r->r.get("name")==null).count());}
     @Test void platformCompiledLowcodeSnapshotScopesToEachInvocationTenant() throws Exception {
