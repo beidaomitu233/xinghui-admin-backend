@@ -113,6 +113,15 @@ jobs:
       - name: Reject missing or skipped smoke tests
         shell: pwsh
         run: ./scripts/quality/Verify-Build.ps1 -TestsOnly -RequiredClass ReleaseServicesIT
+      - name: Verify official no-shell Harness with real Redis and restored sessions
+        env:
+          CI: "true"
+          REDIS_PORT: "6379"
+          REDIS_DATABASE: "15"
+          REDIS_PASSWORD: oss04_ci_cache_fixture
+        run: >-
+          mvn -B -ntp -pl system-admin -am test
+          -Dtest=AgentScopeRemoteKvIT -Dsurefire.failIfNoSpecifiedTests=false
       - name: Exercise AI configuration HTTP through Druid Wall on migrated MySQL
         env:
           CI: "true"

@@ -29,14 +29,14 @@ class AgentWorkbenchHttpTest {
     @AfterEach void close(){fixture.close();}
     @Test void admissionAndStatusNeverExposeInternalInputAndReadsDoNotExecuteAgain()throws Exception{
         var record=new JdbcAgentRepository.Run(run,session,"RUNNING","scene.agent","DO-NOT-RETURN-PRIVATE-INPUT",null,Instant.now().plusSeconds(60));
-        when(workbench.submit(eq(fixture.a),eq(session),anyString(),eq("Synthetic task"),eq("scene.agent"))).thenReturn(new JdbcAgentRepository.Admission(record,true));
+        when(workbench.submit(eq(fixture.a),eq(session),anyString(),eq("Synthetic task"),eq("scene.agent"),eq(List.of()),eq("EXECUTE"))).thenReturn(new JdbcAgentRepository.Admission(record,true));
         when(repository.run(fixture.a,run)).thenReturn(record);
         String body="{\"input\":\"Synthetic task\",\"sceneKey\":\"scene.agent\",\"clientRequestId\":\"fixture-request-1234\"}";
         var response=mvc.perform(post("/system/ai/workbench/sessions/"+session+"/runs").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isAccepted()).andExpect(header().string("Cache-Control","no-store")).andExpect(jsonPath("$.data.run.id").value(run)).andReturn().getResponse();
         assertFalse(response.getContentAsString().contains("PRIVATE-INPUT"));
         for(int index=0;index<3;index++)mvc.perform(get("/system/ai/workbench/runs/"+run)).andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("RUNNING"));
-        verify(workbench,times(1)).submit(any(),anyString(),anyString(),anyString(),anyString());
+        verify(workbench,times(1)).submit(any(),anyString(),anyString(),anyString(),anyString(),anyList(),anyString());
     }
     @Test void identitiesDuplicateJsonTrailingValuesCompressionAndBodyOverflowAreRejected()throws Exception{
         for(String body:List.of("{\"title\":\"QA\",\"tenantId\":\"tenant_b\"}","{\"title\":\"QA\",\"title\":\"duplicate\"}","{\"title\":\"QA\"}{}","null"))
@@ -74,7 +74,8 @@ class AgentWorkbenchHttpTest {
             context.registerBean(AiRuntimeService.class,()->mock(AiRuntimeService.class));
             context.registerBean(com.xinghuiTec.ai.scene.SqlAssistanceService.class,()->mock(com.xinghuiTec.ai.scene.SqlAssistanceService.class));
             context.registerBean(com.xinghuiTec.ai.modelhub.ModelHubTestService.class,()->mock(com.xinghuiTec.ai.modelhub.ModelHubTestService.class));
-            context.register(AgentWorkbenchConfiguration.class,AgentConfiguredModels.class,AgentImages.class,AgentResourceRegistry.class,AgentPayloadCipher.class,
+            context.registerBean(io.agentscope.harness.agent.DistributedStore.class,()->mock(io.agentscope.harness.agent.DistributedStore.class));
+            context.register(com.xinghuiTec.ai.hub.NativeAgentScopeExecution.class,com.xinghuiTec.ai.hub.AgentChanges.class,AgentWorkbenchConfiguration.class,AgentConfiguredModels.class,AgentImages.class,AgentResourceRegistry.class,AgentPayloadCipher.class,
                     AgentLogAccess.class,AiCallLogStore.class,AiCallLogService.class);
             context.refresh();
             assertNotNull(context.getBean(AgentWorkbench.class));assertNotNull(context.getBean(JdbcAgentRepository.class));

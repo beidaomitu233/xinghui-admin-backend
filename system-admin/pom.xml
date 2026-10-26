@@ -18,8 +18,18 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-extensions-redis</artifactId>
+            <version>${agentscope.version}</version>
+            <!-- This binding uses the native Jedis backend; retain the application's managed Redis clients. -->
+            <exclusions>
+                <exclusion><groupId>org.redisson</groupId><artifactId>redisson</artifactId></exclusion>
+                <exclusion><groupId>io.lettuce</groupId><artifactId>lettuce-core</artifactId></exclusion>
+            </exclusions>
+        </dependency>
 
-        <!-- Independent AgentScope engine; this startup module owns business/security adapters. -->
+        <!-- Official AgentScope binding in the existing module; business/security adapters stay here. -->
         <dependency>
             <groupId>com.xinghuiTec</groupId>
             <artifactId>system-agent</artifactId>

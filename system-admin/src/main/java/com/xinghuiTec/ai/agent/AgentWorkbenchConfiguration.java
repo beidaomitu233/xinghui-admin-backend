@@ -19,8 +19,8 @@ public class AgentWorkbenchConfiguration {
     }
     @Bean(destroyMethod="close") public AgentWorkbench agentWorkbench(JdbcAgentRepository repository,AgentConfiguredModels prompts,
             AgentResourceRegistry resources,JdbcTemplate jdbc,PlatformTransactionManager transactions,AgentPayloadCipher cipher,ObjectMapper json,
-            @Value("${ai.agent.workspace-root:${java.io.tmpdir}/xinghui-agent-workspaces}") String workspace,JdbcAgentImages images){
+            @Value("${ai.agent.workspace-root:${java.io.tmpdir}/xinghui-agent-workspaces}") String workspace,JdbcAgentImages images,com.xinghuiTec.ai.hub.NativeAgentScopeExecution execution){
         var workbench=new AgentWorkbench(repository,prompts,resources,jdbc,transactions,cipher,json,Path.of(workspace));
-        workbench.images(images);return workbench;
+        workbench.images(images);workbench.execution(execution);return workbench;
     }
 }

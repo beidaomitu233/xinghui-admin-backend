@@ -45,7 +45,7 @@ public class AgentConfiguredModels implements AgentPromptGateway {
                 var cancelled=new AtomicBoolean();sink.onCancel(()->cancelled.set(true));
                 try{execute(actor,route,policy,frozen,first,call,wire,sink,cancelled);sink.complete();}
                 catch(RuntimeException failure){if(!sink.isCancelled())sink.error(classify(failure));}
-            },FluxSink.OverflowStrategy.ERROR).subscribeOn(Schedulers.boundedElastic()),scenes.agentContext(sceneKey,context.actor(),task));
+            },FluxSink.OverflowStrategy.ERROR).subscribeOn(Schedulers.boundedElastic()),List.of());
         });}catch(RuntimeException failure){throw classify(failure);}
     }
     private TrustedActor authorize(AgentActor owner,SceneManagementService.AgentRoute pinned,ModelHubService.Frozen frozen,AgentCall call){

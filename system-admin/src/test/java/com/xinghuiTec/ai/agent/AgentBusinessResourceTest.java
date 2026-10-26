@@ -25,6 +25,7 @@ class AgentBusinessResourceTest {
         String lowcode=migration("V20261012_160__lowcode_forms.sql");for(String sql:lowcode.split(";"))if(sql.strip().startsWith("CREATE TABLE IF NOT EXISTS sys_lowcode_"))jdbc.execute(sql);
         for(String sql:migration("V20261024_400__agent_workbench.sql").replace(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin","").split(";"))if(!sql.isBlank())jdbc.execute(sql);
         for(String sql:migration("V20261025_430__agent_images.sql").replace(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin","").split(";"))if(!sql.isBlank())jdbc.execute(sql);
+        for(String sql:migration("V20261025_500__ai_hub_gateway.sql").split(";"))if(!sql.isBlank())jdbc.execute(sql);
         jdbc.execute("CREATE TABLE sys_business_config(section VARCHAR(16) PRIMARY KEY,enabled BOOLEAN,parameters_json TEXT,secrets_ciphertext TEXT,revision INT,update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
         jdbc.execute("CREATE TABLE sys_business_config_history(section VARCHAR(16),revision INT,enabled BOOLEAN,parameters_json TEXT,secrets_ciphertext TEXT,PRIMARY KEY(section,revision))");
         var schemas=new LowcodeSchema(f.json);forms=new LowcodeService(jdbc,schemas,new LowcodeIdentity(true));

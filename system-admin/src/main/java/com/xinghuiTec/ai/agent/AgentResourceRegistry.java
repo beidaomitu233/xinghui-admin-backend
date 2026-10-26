@@ -29,6 +29,7 @@ public class AgentResourceRegistry implements AgentResourceGateway,AgentHistoryA
     public JsonNode describe(AgentCall call,String resource){return execute(call,()->provider(resource).describe(call,resource));}
     public JsonNode query(AgentCall call,String resource,JsonNode arguments){return execute(call,()->{AgentArguments.object(arguments);return provider(resource).query(call,resource,arguments);});}
     public JsonNode mutate(AgentCall call,String toolCallId,String resource,JsonNode arguments){return execute(call,()->{AgentArguments.object(arguments);return provider(resource).mutate(call,resource,arguments);});}
+    public JsonNode changeSnapshot(AgentCall call,String resource,JsonNode arguments){return execute(call,()->Optional.ofNullable(provider(resource).changeSnapshot(call,resource,arguments)).orElse(com.fasterxml.jackson.databind.node.NullNode.instance));}
     public void requireReadable(AgentActor actor,Set<String> resources){access.as(actor,context->{for(String resource:resources)provider(resource).requireReadable(actor,resource);return null;});}
     private AgentResourceProvider provider(String resource){
         if(resource==null||!resource.matches("[a-z][a-z0-9-]{0,49}(?::[A-Za-z0-9_.-]{1,70})?"))throw AgentArguments.invalid("资源标识无效，请先发现业务资源。");

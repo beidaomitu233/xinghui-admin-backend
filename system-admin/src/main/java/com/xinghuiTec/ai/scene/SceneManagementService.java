@@ -123,8 +123,7 @@ public class SceneManagementService {
             var d=version.definition();
             require(d!=null&&version.compiled()!=null,409,"AGENT_PROMPT_UNAVAILABLE");
             require(policy.requirements().tools()&&policy.requirements().outputFormat()==OutputFormat.TEXT,409,"AGENT_PROMPT_UNAVAILABLE");
-            var source=data.getIfUnique();require(source!=null,503,"DEPENDENCY_UNAVAILABLE");
-            source.authorize(version.compiled(),new AiSceneDataRuntime.SceneContext(key,version.id(),actor,new BusinessRef("ai.scene",key),UUID.randomUUID().toString()),control(10));
+            // Hub agents discover authorized data through business tools, never through manual prompt references.
             return new AgentRoute(head.key(),head.revision(),head.appId(),version.appVersion(),d.promptText(),policy);
         });
     }
@@ -277,6 +276,7 @@ public class SceneManagementService {
     }
     private AiApplicationPolicy policy(SceneStore.Head h,SceneDtos.Definition d,AiSceneDataRuntime.CompiledScene compiled) {
         if(h.kind()==SceneDtos.Kind.AGENT) {
+            require(d.dataObjects().isEmpty()&&d.dataBindings().isEmpty()&&d.sqlBindings().isEmpty(),400,"AGENT_USES_BUSINESS_TOOLS");
             require(compiled.inputVariables().stream().noneMatch(variable->variable.required()&&!variable.name().equals("user_request")),400,"AGENT_INPUT_COMES_FROM_CHAT");
             require(d.modelPolicy().outputFormat()==SceneDtos.OutputFormat.TEXT,400,"AGENT_REQUIRES_TEXT_MODEL");
         }

@@ -22,9 +22,10 @@ import java.util.function.BiFunction;
 public class AgentWorkbenchController {
     public record Create(String title) {}
     public record Rename(String title,String expectedVersion) {}
-    public record Submit(String input,String sceneKey,String clientRequestId,List<String> imageIds) {
+    public record Submit(String input,String sceneKey,String clientRequestId,List<String> imageIds,String mode) {
+        public Submit(String input,String sceneKey,String clientRequestId,List<String> images){this(input,sceneKey,clientRequestId,images,"EXECUTE");}
         public Submit(String input,String sceneKey,String clientRequestId){this(input,sceneKey,clientRequestId,List.of());}
-        public Submit {imageIds=imageIds==null?List.of():List.copyOf(imageIds);}
+        public Submit {imageIds=imageIds==null?List.of():List.copyOf(imageIds);mode=mode==null?"EXECUTE":mode;}
         @Override public String toString(){return "Submit[REDACTED]";}
     }
     public record Cancel() {}
@@ -49,6 +50,7 @@ public class AgentWorkbenchController {
     @GetMapping("/sessions") public Result<List<SessionView>> sessions(){return owned((actor,current)->Result.ok(repository.sessions(actor).stream().map(AgentWorkbenchController::session).toList()));}
     @PostMapping("/sessions") public Result<SessionView> create(HttpServletRequest request){var input=body(request,Create.class);return owned((actor,current)->Result.ok(session(repository.create(actor,input.title()))));}
     @GetMapping("/sessions/{sessionId}") public Result<SessionView> session(@PathVariable String sessionId){uuid(sessionId);return owned((actor,current)->Result.ok(session(repository.session(actor,sessionId))));}
+    @DeleteMapping("/sessions/{sessionId}") public Result<Void> archive(@PathVariable String sessionId){uuid(sessionId);return owned((actor,current)->{repository.archive(actor,sessionId);return Result.ok();});}
     @PutMapping("/sessions/{sessionId}") public Result<SessionView> rename(@PathVariable String sessionId,HttpServletRequest request){
         uuid(sessionId);var input=body(request,Rename.class);long version=positive(input.expectedVersion());
         return owned((actor,current)->{repository.rename(actor,sessionId,input.title(),version);return Result.ok(session(repository.session(actor,sessionId)));});
@@ -69,7 +71,7 @@ public class AgentWorkbenchController {
         uuid(sessionId);var input=body(request,Submit.class);
         return owned((actor,current)->{
             scenes.agentRoute(input.sceneKey(),current.actor());
-            var admission=input.imageIds().isEmpty()?workbench.submit(actor,sessionId,input.clientRequestId(),input.input(),input.sceneKey()):workbench.submit(actor,sessionId,input.clientRequestId(),input.input(),input.sceneKey(),input.imageIds());
+            var admission=workbench.submit(actor,sessionId,input.clientRequestId(),input.input(),input.sceneKey(),input.imageIds(),input.mode());
             return ResponseEntity.accepted().body(Result.ok(new Admission(run(admission.run()),admission.created())));
         });
     }

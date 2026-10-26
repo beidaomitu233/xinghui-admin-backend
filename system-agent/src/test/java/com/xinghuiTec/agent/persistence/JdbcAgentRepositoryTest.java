@@ -38,7 +38,7 @@ class JdbcAgentRepositoryTest {
     };
     @BeforeEach void database() {
         var ds = new DriverManagerDataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=3000", "sa", "");
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261024_400__agent_workbench.sql"),new ClassPathResource("db/migration/V20261025_430__agent_images.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261024_400__agent_workbench.sql"),new ClassPathResource("db/migration/V20261025_430__agent_images.sql"),new ClassPathResource("db/migration/V20261025_500__ai_hub_gateway.sql")).execute(ds);
         jdbc = new JdbcTemplate(ds);
         repository = new JdbcAgentRepository(jdbc, new DataSourceTransactionManager(ds), codec, (owner, resources) -> {
             if (!historyAllowed.get() && !resources.isEmpty()) throw new AgentProblem("FORBIDDEN", "资源授权已变更");
@@ -124,6 +124,10 @@ class JdbcAgentRepositoryTest {
         };
         try (var workbench = new AgentWorkbench(repository, (owner, scene) -> new AgentPromptGateway.Preset("QA系统提示词", model),
                 null, jdbc, new DataSourceTransactionManager(Objects.requireNonNull(jdbc.getDataSource())), codec, json, workspace)) {
+            workbench.execution((call,preset,input,images,mode,state,resources)->{
+                var runtime=new com.xinghuiTec.agent.runtime.AgentScopeBinding(call,preset.systemPrompt(),workspace,state,preset.models(),resources,json);
+                return runtime.run(input,List.of(),images).doFinally(ignored->runtime.close());
+            });
             var first = workbench.submit(actor, session.id(), "client_request_0001", "第一次QA输入", "scene.qa");
             awaitTerminal(first.run().id());
             assertThat(repository.run(actor, first.run().id()).status()).isEqualTo("COMPLETED");
@@ -145,6 +149,10 @@ class JdbcAgentRepositoryTest {
         }).doFinally(type -> signal.set(type.name()));
         try (var workbench = new AgentWorkbench(repository, (owner, scene) -> new AgentPromptGateway.Preset("QA系统提示词", model),
                 null, jdbc, new DataSourceTransactionManager(Objects.requireNonNull(jdbc.getDataSource())), codec, json, workspace)) {
+            workbench.execution((call,preset,input,images,mode,state,resources)->{
+                var runtime=new com.xinghuiTec.agent.runtime.AgentScopeBinding(call,preset.systemPrompt(),workspace,state,preset.models(),resources,json);
+                return runtime.run(input,List.of(),images).doFinally(ignored->runtime.close());
+            });
             var run = workbench.submit(actor, session.id(), "client_request_0001", "等待QA请求", "scene.qa").run();
             assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
             workbench.cancel(actor, run.id());

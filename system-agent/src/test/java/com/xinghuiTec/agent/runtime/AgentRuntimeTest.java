@@ -24,7 +24,7 @@ class AgentRuntimeTest {
             assertThat(messages.toString()).contains("照图新增商品","image_url",image);
             return text("已读取图片");
         };
-        try(var runtime=new AgentRuntime(call(),"处理业务",workspace,new InMemoryAgentStateStore(),model,null,json)){
+        try(var runtime=new AgentScopeBinding(call(),"处理业务",workspace,new InMemoryAgentStateStore(),model,null,json)){
             assertThat(runtime.run("照图新增商品",List.of(),List.of(image)).collectList().block(Duration.ofSeconds(25))).isNotEmpty();
         }
     }
@@ -65,7 +65,7 @@ class AgentRuntimeTest {
         };
         var state = new InMemoryAgentStateStore();
         List<AgentEventView> events;
-        try (var runtime = new AgentRuntime(call(), "你负责管理授权业务数据。", workspace, state, models, resources, json)) {
+        try (var runtime = new AgentScopeBinding(call(), "你负责管理授权业务数据。", workspace, state, models, resources, json)) {
             events = runtime.run("新增QA商品并核对").collectList().block(Duration.ofSeconds(25));
         }
         assertThat(resourceCalls).containsExactly("list", "describe:forms:1", "mutate:forms:1", "query:forms:1");
@@ -92,7 +92,7 @@ class AgentRuntimeTest {
             public JsonNode query(AgentCall c, String r, JsonNode q) { throw new AgentProblem("FORBIDDEN", "无权访问该资源"); }
             public JsonNode mutate(AgentCall c, String id, String r, JsonNode q) { throw new IllegalStateException("database-password-DO-NOT-EXPOSE"); }
         };
-        try (var runtime = new AgentRuntime(call(), "处理业务", workspace, new InMemoryAgentStateStore(), models, resources, json)) {
+        try (var runtime = new AgentScopeBinding(call(), "处理业务", workspace, new InMemoryAgentStateStore(), models, resources, json)) {
             var events = runtime.run("查询管理资源").collectList().block(Duration.ofSeconds(25));
             assertThat(events).isNotEmpty();
             assertThat(last.get(1)).contains("FORBIDDEN", "无权访问该资源").doesNotContain("database-password");
@@ -101,7 +101,7 @@ class AgentRuntimeTest {
 
     @Test void stoppedRunNeverCallsModelOrBusinessGateway() {
         var stopped = new AgentCall(owner, "s", "r", "c", Instant.now().plusSeconds(30), () -> true);
-        try (var runtime = new AgentRuntime(stopped, "处理业务", workspace, new InMemoryAgentStateStore(),
+        try (var runtime = new AgentScopeBinding(stopped, "处理业务", workspace, new InMemoryAgentStateStore(),
                 (c, r) -> { throw new AssertionError("must not send"); }, null, json)) {
             assertThatThrownBy(() -> runtime.run("继续").collectList().block()).isInstanceOf(AgentProblem.class).hasMessage("任务已停止");
         }
@@ -111,7 +111,7 @@ class AgentRuntimeTest {
         AgentModelGateway model = (context, request) -> turns.getAndIncrement() == 0
                 ? tool("todo_write", "plan-1", "{\"todos\":[{\"content\":\"核对业务数据\",\"status\":\"in_progress\"},{\"content\":\"保存修改\",\"status\":\"pending\"}]}")
                 : text("计划已更新");
-        try (var runtime = new AgentRuntime(call(), "处理业务", workspace, new InMemoryAgentStateStore(), model, null, json)) {
+        try (var runtime = new AgentScopeBinding(call(), "处理业务", workspace, new InMemoryAgentStateStore(), model, null, json)) {
             var events = runtime.run("安排任务").collectList().block(Duration.ofSeconds(25));
             assertThat(events).anySatisfy(event -> {
                 assertThat(event.type()).isEqualTo("PLAN");
@@ -126,7 +126,7 @@ class AgentRuntimeTest {
             var body=read(request);if(body.path("tools").isMissingNode()||body.path("tools").isEmpty()){summaries.incrementAndGet();return text("A synthetic conversation summary; continue the task.");}
             return text("已记录");
         };
-        try(var runtime=new AgentRuntime(call(),"Synthetic assistant",workspace,new InMemoryAgentStateStore(),model,null,json)){
+        try(var runtime=new AgentScopeBinding(call(),"Synthetic assistant",workspace,new InMemoryAgentStateStore(),model,null,json)){
             for(int i=0;i<32;i++)runtime.run("QA-PRIVATE-NOTE-"+i).blockLast(Duration.ofSeconds(10));
         }
         assertThat(summaries.get()).isGreaterThan(0);

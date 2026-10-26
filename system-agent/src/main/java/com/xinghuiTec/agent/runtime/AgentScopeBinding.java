@@ -7,6 +7,9 @@ import io.agentscope.core.event.*;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.harness.agent.HarnessAgent;
+import io.agentscope.harness.agent.DistributedStore;
+import io.agentscope.harness.agent.IsolationScope;
+import io.agentscope.harness.agent.filesystem.spec.RemoteFilesystemSpec;
 import io.agentscope.harness.agent.memory.compaction.CompactionConfig;
 import reactor.core.publisher.Flux;
 
@@ -21,23 +24,28 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * One official Harness/ReAct invocation. The application supplies a persisted state store,
  * authorized resources and a configured model bridge. No business intent routing lives here.
  */
-public final class AgentRuntime implements AutoCloseable {
+public final class AgentScopeBinding implements AutoCloseable {
     private final HarnessAgent agent;
     private final RuntimeContext context;
     private final AgentCall call;
     private final AtomicBoolean stopped = new AtomicBoolean();
 
-    public AgentRuntime(AgentCall call, String systemPrompt, Path workspace, AgentStateStore stateStore,
+    public AgentScopeBinding(AgentCall call, String systemPrompt, Path workspace, AgentStateStore stateStore,
                         AgentModelGateway models, AgentResourceGateway resources, ObjectMapper json) {
+        this(call,systemPrompt,workspace,stateStore,models,resources,json,false,"EXECUTE",null);
+    }
+    public AgentScopeBinding(AgentCall call, String systemPrompt, Path workspace, AgentStateStore stateStore,
+                        AgentModelGateway models, AgentResourceGateway resources, ObjectMapper json, boolean hub, String mode, DistributedStore distributed) {
         Objects.requireNonNull(call);
         this.call = new AgentCall(call.actor(), call.sessionId(), call.runId(), call.callId(), call.deadline(),
                 () -> stopped.get() || call.cancelled().getAsBoolean());
         this.context = RuntimeContext.builder().userId(call.actor().stateUserId()).sessionId(call.sessionId()).build();
-        this.agent = HarnessAgent.builder()
+        var toolkit=hub?SkillBusinessTools.create(this.call,resources,json):BusinessTools.create(this.call,resources,json);
+        var builder = HarnessAgent.builder()
                 .name("AI工作台").agentId("business-agent")
                 .sysPrompt(Objects.requireNonNull(systemPrompt))
                 .model(new GatewayModel(models, this.call))
-                .toolkit(BusinessTools.create(this.call, resources, json))
+                .toolkit(toolkit)
                 .stateStore(Objects.requireNonNull(stateStore))
                 .workspace(Objects.requireNonNull(workspace))
                 .maxIters(40).maxRetries(1) // SDK counts the initial model attempt in this budget.
@@ -52,13 +60,27 @@ public final class AgentRuntime implements AutoCloseable {
                 .disableToolResultEviction().enableAgentTracingLog(false)
                 // Preserve native context summarization. Raw transcript offload and memory
                 // ledger flush would bypass the application's encrypted state store.
-                .compaction(CompactionConfig.builder().flushBeforeCompact(false).offloadBeforeCompact(false).build())
-                .build();
+                .compaction(CompactionConfig.builder().flushBeforeCompact(false).offloadBeforeCompact(false).build());
+        if(hub) {
+            // Official shared-KV mode never creates a shell-capable filesystem. Harness owns execution and state recovery.
+            builder.distributedStore(Objects.requireNonNull(distributed,"Official distributed store required"))
+                    .filesystem(new RemoteFilesystemSpec().isolationScope(IsolationScope.SESSION));
+            try { builder.skillRepository(new io.agentscope.core.skill.repository.ClasspathSkillRepository("hub-skills")); }
+            catch(java.io.IOException failed){ throw new IllegalStateException("Skills unavailable",failed); }
+            builder.enablePlanMode().enableMetaTool(true);
+        }
+        this.agent=builder.build();
         // Harness 2.0.3 installs web tools even with workspace tools disabled. This app's
         // business gateway owns outbound access; remove implicit vendor tools at the registry.
-        var businessTools = Set.of("resources_list", "resource_describe", "records_query", "records_mutate", "todo_write");
+        var businessTools = new java.util.HashSet<>(toolkit.getToolNames());
+        businessTools.add("todo_write");
+        if(hub)businessTools.addAll(Set.of("load_skill_through_path","reset_equipped_tools","plan_enter","plan_write"));
         Set.copyOf(agent.getToolkit().getToolNames()).stream().filter(name -> !businessTools.contains(name))
                 .forEach(agent.getToolkit()::removeTool);
+        if(hub) {
+            // A model cannot approve its own plan. Only the authenticated next user turn selects EXECUTE.
+            if("PLAN".equals(mode))agent.enterPlanMode(context);else agent.exitPlanMode(context);
+        }
     }
     public Flux<AgentEventView> run(String input) {
         return run(input,List.of());
@@ -67,14 +89,14 @@ public final class AgentRuntime implements AutoCloseable {
         return run(input,contextMessages,List.of());
     }
     public Flux<AgentEventView> run(String input,List<String> contextMessages,List<String> images) {
-        if (input == null || input.isBlank() || input.length() > 32768)
+        if (input == null || input.isBlank() && images.isEmpty() || input.length() > 32768)
             return Flux.error(new AgentProblem("INVALID_MESSAGE", "请输入内容，最多32768个字符"));
         return Flux.defer(() -> {
             call.check();
             var messages=new java.util.ArrayList<io.agentscope.core.message.Msg>();
             contextMessages.forEach(text->messages.add(new io.agentscope.core.message.UserMessage(text)));
             var content=new java.util.ArrayList<io.agentscope.core.message.ContentBlock>();
-            content.add(io.agentscope.core.message.TextBlock.builder().text(input).build());
+            if(!input.isBlank())content.add(io.agentscope.core.message.TextBlock.builder().text(input).build());
             images.forEach(url->content.add(new io.agentscope.core.message.ImageBlock(new io.agentscope.core.message.URLSource(url))));
             messages.add(new io.agentscope.core.message.UserMessage(content));
             return RunCancellation.guard(agent.streamEvents(messages, context), call)
@@ -108,5 +130,6 @@ public final class AgentRuntime implements AutoCloseable {
         return List.of();
     }
     public void cancel() { stopped.set(true); }
+    public HarnessAgent nativeAgent(){return agent;}
     @Override public void close() { stopped.set(true); agent.close(); }
 }

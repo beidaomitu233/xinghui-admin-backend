@@ -29,7 +29,8 @@ public final class AgentWorkbench implements AutoCloseable {
     private final ObjectMapper json;
     private final Path workspaces;
     private JdbcAgentImages images;
-    private final Map<String, AgentRuntime> active = new ConcurrentHashMap<>();
+    private AgentExecutionGateway execution;
+    public void execution(AgentExecutionGateway execution){this.execution=execution;}
     private final ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS,
             new ArrayBlockingQueue<>(8), task -> { var thread = new Thread(task, "agent-workbench"); thread.setDaemon(true); return thread; },
             new ThreadPoolExecutor.AbortPolicy());
@@ -46,8 +47,11 @@ public final class AgentWorkbench implements AutoCloseable {
         return submit(actor,sessionId,requestId,input,sceneKey,java.util.List.of());
     }
     public JdbcAgentRepository.Admission submit(AgentActor actor, String sessionId, String requestId, String input, String sceneKey,java.util.List<String> imageIds) {
+        return submit(actor,sessionId,requestId,input,sceneKey,imageIds,"EXECUTE");
+    }
+    public JdbcAgentRepository.Admission submit(AgentActor actor, String sessionId, String requestId, String input, String sceneKey,java.util.List<String> imageIds,String mode) {
         var attached = imageIds==null||imageIds.isEmpty()?java.util.List.<JdbcAgentImages.Image>of():images.require(actor,sessionId,imageIds);
-        var admission = repository.admit(actor, sessionId, requestId, input, sceneKey, Duration.ofMinutes(5),attached);
+        var admission = repository.admit(actor, sessionId, requestId, input, sceneKey, Duration.ofMinutes(5),attached,mode);
         if (!admission.created()) return admission;
         try { executor.execute(() -> execute(actor, admission.run().id())); }
         catch (RejectedExecutionException full) { repository.finish(actor, admission.run().id(), "FAILED", "QUEUE_FULL"); }
@@ -55,10 +59,8 @@ public final class AgentWorkbench implements AutoCloseable {
     }
     public void cancel(AgentActor actor, String runId) {
         repository.cancel(actor, runId);
-        var runtime = active.get(runId); if (runtime != null) runtime.cancel();
     }
     private void execute(AgentActor actor, String runId) {
-        AgentRuntime runtime = null;
         try {
             var run = repository.claim(actor, runId);
             var preset = prompts.resolve(actor, run.promptSceneKey(),run.input());
@@ -70,12 +72,10 @@ public final class AgentWorkbench implements AutoCloseable {
                 modelCall.check();
                 return preset.models().stream(modelCall, request);
             });
-            runtime = new AgentRuntime(call, preset.systemPrompt(), workspace(actor, run.sessionId()), state,
-                    authorizedModels, trackedResources(), json);
-            active.put(runId, runtime);
+            if(execution==null)throw new AgentProblem("AGENT_NOT_CONFIGURED","AI中台尚未配置");
             var limited = new AtomicBoolean(false); var completed = new AtomicBoolean(false);
             var references=run.imageIds().stream().map(id->{images.read(actor,run.sessionId(),id);return JdbcAgentImages.REFERENCE_PREFIX+id;}).toList();
-            runtime.run(run.input(),preset.contextMessages(),references).doOnNext(event -> {
+            execution.execute(call,new AgentPromptGateway.Preset(preset.systemPrompt(),authorizedModels),run.input(),references,run.mode(),state,trackedResources()).doOnNext(event -> {
                 if ("LIMIT_REACHED".equals(event.type())) limited.set(true);
                 if ("ASSISTANT_DONE".equals(event.type())) completed.set(true);
                 repository.append(actor, run.id(), event);
@@ -87,9 +87,6 @@ public final class AgentWorkbench implements AutoCloseable {
         } catch (Exception unexpected) {
             // Provider bodies, hidden prompts, tool arguments and SQL errors stay out of public events.
             repository.finish(actor, runId, "FAILED", "AGENT_EXECUTION_FAILED");
-        } finally {
-            active.remove(runId);
-            if (runtime != null) runtime.close();
         }
     }
     private AgentResourceGateway trackedResources() {
@@ -115,6 +112,6 @@ public final class AgentWorkbench implements AutoCloseable {
         } catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
     }
     @Override public void close() {
-        executor.shutdownNow(); active.values().forEach(AgentRuntime::cancel);
+        executor.shutdownNow();
     }
 }
