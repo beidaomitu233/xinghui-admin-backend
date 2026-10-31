@@ -113,7 +113,11 @@ class HubEngineTest {
         };
         var owner=call();
         try(var runtime=new AgentScopeBinding(owner,"先规划再执行",workspace,state(),model,resources(),json,true,"EXECUTE",distributed())){
-            runtime.run("新增杯子").blockLast(Duration.ofSeconds(25));
+            var events=runtime.run("新增杯子").collectList().block(Duration.ofSeconds(25));
+            assertThat(events).anySatisfy(event->{
+                assertThat(event.type()).isEqualTo("PLAN_DOCUMENT");
+                assertThat(event.data().get("markdown")).isEqualTo("查询后新增商品，并由页面确认具体变更。");
+            });
             var rc=io.agentscope.core.agent.RuntimeContext.builder().userId(owner.actor().stateUserId()).sessionId(owner.sessionId()).build();
             assertThat(runtime.nativeAgent().getDelegate().getAgentState(rc).getPlanModeContext().isPlanActive()).isFalse();
         }

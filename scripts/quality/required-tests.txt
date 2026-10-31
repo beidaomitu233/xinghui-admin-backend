@@ -133,3 +133,4 @@ AgentConfiguredModelsTest
 AgentWorkbenchHttpTest
 AgentNavigationMigrationTest
 LoginNavigationCacheTest
+BusinessConfigProbeTest

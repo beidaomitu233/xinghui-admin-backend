@@ -29,6 +29,7 @@ public class AgentChanges {
     public record View(String id,String runId,String resource,String status,JsonNode preview,JsonNode result,Instant expiresAt) {}
     private final JdbcTemplate jdbc;private final TransactionTemplate tx;private final AgentPayloadCipher cipher;
     private final AgentResourceRegistry resources;private final AgentAccess access;private final JdbcAgentRepository repository;private final ObjectMapper json;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private AgentOperationLogs operationLogs;
     public AgentChanges(JdbcTemplate jdbc,PlatformTransactionManager transactions,AgentPayloadCipher cipher,AgentResourceRegistry resources,AgentAccess access,JdbcAgentRepository repository,ObjectMapper json){
         this.jdbc=jdbc;this.tx=new TransactionTemplate(transactions);this.cipher=cipher;this.resources=resources;this.access=access;this.repository=repository;this.json=json;
     }
@@ -147,6 +148,7 @@ public class AgentChanges {
         try {String digest=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(arguments.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             var targets=new LinkedHashSet<String>();targetIds(arguments,targets);if(result!=null){targetIds(result,targets);if(result.isIntegralNumber())targetId(result,targets);}
             jdbc.update("INSERT INTO sys_agent_tool_audit(tenant_id,user_id,session_id,run_id,tool_call_id,operation,resource_id,arguments_hash,status,change_id,created_at,target_ids_json,duration_ms,error_code) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",call.actor().tenantId(),call.actor().userId(),call.sessionId(),call.runId(),call.callId(),operation,resource,digest,status,change,Timestamp.from(Instant.now()),json.valueToTree(targets).toString(),duration,error);
+            if(operationLogs!=null&&"confirm_execute".equals(operation))operationLogs.record(call,resource,arguments.path("operation").asText(),status,targets,duration,error);
         }catch(java.security.NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
     }
     private JsonNode redact(JsonNode value){

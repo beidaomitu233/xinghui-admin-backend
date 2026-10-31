@@ -119,7 +119,7 @@ public final class JdbcAgentRepository {
                     id, time(now), sessionId, actor.tenantId(), actor.userId());
             Run run = new Run(id, sessionId, "QUEUED", sceneKey, input, null, now.plus(budget),images.stream().map(JdbcAgentImages.Image::id).toList(),mode);
             append(actor, run, new AgentEventView("USER_MESSAGE", images.isEmpty()?Map.of("text", input):Map.of("text", input,"images",images)));
-            append(actor, run, new AgentEventView("RUN_STATE", Map.of("status", "QUEUED")));
+            append(actor, run, new AgentEventView("RUN_STATE", Map.of("status", "QUEUED", "mode", mode)));
             return new Admission(run, true);
         }));
     }

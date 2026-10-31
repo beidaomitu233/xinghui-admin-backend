@@ -22,6 +22,8 @@ class BusinessConfigMethodSecurityTest {
         var c=new AnnotationConfigApplicationContext();c.register(Security.class);
         c.registerBean("platformAccess",PlatformAccessService.class,()->new PlatformAccessService(tenants));
         c.registerBean(BusinessConfigService.class,()->mock(BusinessConfigService.class));
+        c.registerBean(com.xinghuiTec.businessconfig.BusinessConfigProbe.class,()->mock(com.xinghuiTec.businessconfig.BusinessConfigProbe.class));
+        c.registerBean(BusinessConfigProbeController.class);
         c.registerBean(AiModelCredentialService.class,()->mock(AiModelCredentialService.class));
         c.registerBean(OpenRouterModelTester.class,()->mock(OpenRouterModelTester.class));
         c.registerBean(BusinessConfigController.class);c.registerBean(AiModelTestController.class);c.refresh();return c;
@@ -37,6 +39,7 @@ class BusinessConfigMethodSecurityTest {
             var business=c.getBean(BusinessConfigController.class);var ai=c.getBean(AiModelTestController.class);
             assertThrows(AccessDeniedException.class,business::all);
             assertThrows(AccessDeniedException.class,()->business.save("oss",null));
+            assertThrows(AccessDeniedException.class,()->c.getBean(BusinessConfigProbeController.class).test("sms",null));
             assertThrows(AccessDeniedException.class,()->ai.save(1,null));
             assertThrows(AccessDeniedException.class,()->ai.test(1));
             verifyNoInteractions(c.getBean(BusinessConfigService.class),c.getBean(AiModelCredentialService.class),c.getBean(OpenRouterModelTester.class));
@@ -48,6 +51,7 @@ class BusinessConfigMethodSecurityTest {
             var business=c.getBean(BusinessConfigController.class);var ai=c.getBean(AiModelTestController.class);
             assertDoesNotThrow(business::all);
             assertThrows(AccessDeniedException.class,()->business.save("oss",null));
+            assertThrows(AccessDeniedException.class,()->c.getBean(BusinessConfigProbeController.class).test("mail",null));
             assertThrows(AccessDeniedException.class,()->ai.test(1));
             verify(c.getBean(BusinessConfigService.class)).all();
         }

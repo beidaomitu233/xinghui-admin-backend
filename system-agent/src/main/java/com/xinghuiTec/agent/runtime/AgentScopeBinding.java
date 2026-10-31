@@ -152,6 +152,11 @@ public final class AgentScopeBinding implements AutoCloseable {
         if (event instanceof ToolResultEndEvent tool) {
             var result = new AgentEventView("TOOL_END", Map.of("callId", tool.getToolCallId(),
                     "name", tool.getToolCallName(), "state", tool.getState().name()));
+            if (hubPlan(tool)) {
+                // The explicit plan document is public task output, never the model's private reasoning.
+                var plan=agent.getWorkspaceManager().readManagedWorkspaceFileUtf8(context,"plans/PLAN.md");
+                return List.of(result,new AgentEventView("PLAN_DOCUMENT",Map.of("markdown",plan.length()>32768?plan.substring(0,32768):plan)));
+            }
             if (!"todo_write".equals(tool.getToolCallName())) return List.of(result);
             var tasks = agent.getDelegate().getAgentState(context).getTasksContext().getTasks().stream()
                     .map(task -> Map.of("id", task.getId(), "title", task.getSubject(), "status", task.getState().name())).toList();
@@ -162,6 +167,9 @@ public final class AgentScopeBinding implements AutoCloseable {
         if (event instanceof AgentResultEvent result)
             return List.of(new AgentEventView("ASSISTANT_DONE", Map.of("replyId", result.getResult().getId())));
         return List.of();
+    }
+    private boolean hubPlan(ToolResultEndEvent event){
+        return "plan_write".equals(event.getToolCallName()) && event.getState()==io.agentscope.core.message.ToolResultState.SUCCESS;
     }
     public void cancel() { stopped.set(true); }
     public HarnessAgent nativeAgent(){return agent;}

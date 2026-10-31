@@ -43,6 +43,17 @@ class HubChangesTest {
     }
     @AfterEach void close(){fixture.close();}
     String preview(){var input=fixture.json.createObjectNode().put("operation","create");input.putObject("data").put("name","QA_PRIVATE_ITEM").put("password","QA_PRIVATE_SECRET");return changes.preview(call,"call-1","forms:1",input).path("changeId").asText();}
+    @Test void confirmedBusinessActionIsPublishedOnlyAfterCommitWithoutPrivatePayload(){
+        var logService=org.mockito.Mockito.mock(com.xinghuiTec.service.SysOperLogService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(changes,"operationLogs",new AgentOperationLogs(logService));
+        String id=preview();changes.decide(fixture.a,id,true);
+        var capture=org.mockito.ArgumentCaptor.forClass(com.xinghuiTec.domain.entity.SysOperLog.class);
+        org.mockito.Mockito.verify(logService).saveOperLog(capture.capture());
+        var log=capture.getValue();com.xinghuiTec.aop.BusinessLogDetails.enrich(log);
+        assertThat(log.getOperationSource()).isEqualTo("AI 中台");assertThat(log.getBusinessTarget()).contains("业务表单 #1","42");
+        assertThat(log.toString()).doesNotContain("QA_PRIVATE_ITEM","QA_PRIVATE_SECRET");
+        changes.decide(fixture.a,id,true);org.mockito.Mockito.verifyNoMoreInteractions(logService);
+    }
     @Test void previewDoesNotWriteAndOnlyOwnerCanConfirmExactlyOnce(){
         String id=preview();assertThat(writes).hasValue(0);
         assertThatThrownBy(()->changes.decide(fixture.b,id,true)).isInstanceOf(AgentProblem.class);assertThat(writes).hasValue(0);

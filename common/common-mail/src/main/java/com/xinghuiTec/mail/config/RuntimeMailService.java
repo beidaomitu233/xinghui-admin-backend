@@ -25,6 +25,9 @@ public class RuntimeMailService {
         if(account==null) throw new ServiceException("邮件服务尚未配置或已停用");
         return account;
     }
+    public String sendText(MailAccount account,String recipient,String subject,String content){
+        return cn.hutool.extra.mail.MailUtil.send(account,recipient,subject,content,false);
+    }
     public static void validateParameters(Map<String,String> p) {
         if(!java.util.Set.of("qq","163","enterprise","smtp").contains(p.get("provider")))
             throw new ServiceException("邮件服务商无效");

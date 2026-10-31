@@ -71,7 +71,9 @@ public class SysOperLogServiceImpl extends ServiceImpl<SysOperLogMapper, SysOper
         wrapper.orderByAsc(SysOperLog::getOperId);
 
         // 执行查询
-        return this.page(page, wrapper);
+        var result=this.page(page, wrapper);
+        result.getRecords().forEach(com.xinghuiTec.aop.BusinessLogDetails::enrich);
+        return result;
     }
 
     /**

@@ -23,6 +23,14 @@ import com.baomidou.mybatisplus.annotation.TableName;
 @NoArgsConstructor
 @TableName("sys_oper_log")
 public class SysOperLog implements Serializable {
+    @com.baomidou.mybatisplus.annotation.TableField(exist=false)
+    private String businessAction;
+    @com.baomidou.mybatisplus.annotation.TableField(exist=false)
+    private String businessTarget;
+    @com.baomidou.mybatisplus.annotation.TableField(exist=false)
+    private String businessResult;
+    @com.baomidou.mybatisplus.annotation.TableField(exist=false)
+    private String operationSource;
     @TableId
     // 日志主键
     private Long operId;
