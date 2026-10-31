@@ -117,6 +117,21 @@ class OpenRouterToolWireTest {
                 """);
         assertDoesNotThrow(()->new OpenAiToolWire(history,delivered::add));
     }
+    @Test void deactivatedSkillHistoryDoesNotRequireItsSchemaInTheCurrentTurn()throws Exception {
+        String wire="""
+            {"messages":[{"role":"user","content":"查看商品后查询角色"},
+              {"role":"assistant","content":null,"tool_calls":[{"id":"old_query","type":"function","function":{"name":"forms_query","arguments":"{}"}}]},
+              {"role":"tool","tool_call_id":"old_query","content":"商品查询完成"}],
+             "tools":[{"type":"function","function":{"name":"roles_query","parameters":{"type":"object"}}}]}
+            """;
+        fixture.response(200,first("roles_query","{}")+end("tool_calls"));
+        var result=fixture.transport.callTools("openrouter",OpenRouterTransport.ENDPOINT,"unit/model",10,"controlled-secret",wire,128,delivered::add,control);
+        assertEquals(ExecutionStatus.SUCCEEDED,result.status());
+        var captured=org.mockito.ArgumentCaptor.forClass(HttpRequest.class);verify(fixture.client).sendAsync(captured.capture(),any(HttpResponse.BodyHandler.class));
+        var sent=json.readTree(new OpenRouterJsonObjectTest().requestBody(captured.getValue()));
+        assertEquals(1,sent.path("tools").size());
+        assertEquals("roles_query",sent.path("tools").path(0).path("function").path("name").asText());
+    }
     @Test void mimoUsesItsOfficialEndpointAndStableToolModeWithCompleteUsage()throws Exception {
         fixture.response(200,first("records_mutate","{\"count\":0}")+end("tool_calls"));
         var preset=AiProviderPresets.require("mimo");

@@ -54,7 +54,9 @@ final class OpenAiToolWire {
                     for(var call:toolCalls) {
                         String id=call.path("id").asText("");
                         if(!validId(id)||!seen.add(id)||!"function".equals(call.path("type").asText())
-                                ||!names.contains(call.path("function").path("name").asText()))invalidInput();
+                                // Deferred SDK Skills may deactivate a previous turn's schema.
+                                // Validate history linkage/syntax; current output still must use an advertised tool.
+                                ||!validName(call.path("function").path("name").asText()))invalidInput();
                         var arguments=call.path("function").path("arguments");
                         if(!arguments.isTextual()||!read(arguments.textValue(),ErrorCode.INVALID_INPUT).isObject())invalidInput();
                         pending.add(id);

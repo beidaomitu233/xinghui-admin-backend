@@ -89,7 +89,11 @@ public class AgentConfiguredModels implements AgentPromptGateway {
                 windows=Math.max(1,Math.min(windows,policy.maxAttempts()-attempts));
                 long millis=Math.max(1,Duration.between(Instant.now(),end).toMillis()/windows);
                 Instant attemptEnd=Instant.now().plusMillis(millis);if(attemptEnd.isAfter(end))attemptEnd=end;final Instant bounded=attemptEnd;
-                InvocationControl attemptControl=new InvocationControl(){public Instant deadline(){return bounded;}public boolean cancelled(){return control.cancelled();}};
+                InvocationControl attemptControl=new InvocationControl(){
+                    public Instant deadline(){return end;}
+                    public Instant firstOutputDeadline(){return bounded;}
+                    public boolean cancelled(){return control.cancelled();}
+                };
                 String reason=attempts==0?"FIRST":previous==index?"NEXT_KEY":"FALLBACK_MODEL";previous=index;attempts++;
                 String log=logs.beginAgentCall(actor,route.sceneKey(),route.appId(),call.sessionId(),call.runId(),call.callId(),target,attempts,reason);
                 var emitted=new AtomicBoolean();long started=System.nanoTime();ExecutionOutcome outcome;

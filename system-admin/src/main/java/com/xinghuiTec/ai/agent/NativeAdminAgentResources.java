@@ -78,7 +78,7 @@ public class NativeAdminAgentResources {
         NativeResource(String namespace,String name,String permission,boolean platform,AgentAccess access,ObjectMapper json,Validator validator,JdbcTemplate locks,Query query,Map<String,Mutation> changes){this.namespace=namespace;this.name=name;this.permission=permission;this.platform=platform;this.access=access;this.json=json;this.validator=validator;this.locks=locks;this.query=query;this.changes=changes;}
         public String namespace(){return namespace;}
         private boolean readable(AgentAccess.Context current){return (!platform||current.platform())&&(current.has(permission+":list")||current.has(permission+":query"));}
-        public JsonNode catalog(AgentCall call){var result=json.createArrayNode();if(readable(access.current(call.actor())))result.addObject().put("resource",namespace).put("name",name);return result;}
+        public JsonNode catalog(AgentCall call){var result=json.createArrayNode();if(readable(access.current(call.actor())))result.addObject().put("resource",namespace).put("name",name).put("readOnly",changes.isEmpty());return result;}
         public void requireReadable(AgentActor actor,String resource){if(!namespace.equals(resource)||!readable(access.current(actor)))throw AgentAccess.denied();}
         public JsonNode describe(AgentCall call,String resource){requireReadable(call.actor(),resource);var current=access.current(call.actor());var result=json.createObjectNode().put("resource",resource).put("name",name);
             var operations=result.putArray("operations").add("query");var mutations=result.putObject("mutation");

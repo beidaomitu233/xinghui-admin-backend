@@ -51,6 +51,23 @@ class HubChangesTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM sys_agent_tool_audit WHERE operation='confirm_execute'",Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT target_ids_json FROM sys_agent_tool_audit WHERE operation='confirm_execute'",String.class)).isEqualTo("[\"42\"]");
     }
+    @Test void missingOperationExplainsTheToolContractInsteadOfClaimingPermissionDenial(){
+        var malformed=fixture.json.createObjectNode().put("name","QA杯子").put("price",39);
+        assertThatThrownBy(()->changes.preview(call,"missing-operation","forms:1",malformed))
+                .isInstanceOfSatisfying(AgentProblem.class,p->{assertThat(p.code()).isEqualTo("INVALID_ARGUMENTS");assertThat(p.getMessage()).contains("operation","mutation");});
+        assertThat(writes).hasValue(0);
+        assertThat(changes.list(fixture.a,call.sessionId())).isEmpty();
+    }
+    @Test void retryingAProposalWithANewToolIdReusesThePendingCard(){
+        String first=preview();
+        var original=fixture.json.createObjectNode().put("operation","create");
+        original.putObject("data").put("name","QA_PRIVATE_ITEM").put("password","QA_PRIVATE_SECRET");
+        assertThat(changes.preview(call,"retry-tool-call","forms:1",original).path("changeId").asText()).isEqualTo(first);
+        assertThat(changes.list(fixture.a,call.sessionId())).hasSize(1);
+        assertThat(writes).hasValue(0);
+        var other=original.deepCopy();((com.fasterxml.jackson.databind.node.ObjectNode)other).put("id","different");
+        assertThatThrownBy(()->changes.preview(call,"different-tool-call","forms:1",other)).isInstanceOfSatisfying(AgentProblem.class,p->assertThat(p.code()).isEqualTo("CHANGE_PENDING"));
+    }
     @Test void permissionRevocationAndExpiredPreviewNeverReachBusinessWrite(){
         String id=preview();fixture.permissions.remove("lowcode:record:add");
         assertThatThrownBy(()->changes.decide(fixture.a,id,true)).isInstanceOf(AgentProblem.class);assertThat(writes).hasValue(0);

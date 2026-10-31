@@ -22,6 +22,42 @@ class OpenRouterTransportTest {
     @BeforeEach void setup() {
         client=mock(HttpClient.class); transport=new OpenRouterTransport(new ObjectMapper(),new AiModelConfigRules(),client); output=new StringBuilder();
     }
+    @Test void reservedDnsAddressesRemainBlockedAndReportNetworkFailureBeforeAnyResponse() throws Exception {
+        for(String address:List.of("198.18.0.197","2001:2::be","127.0.0.1")) {
+            var error=assertThrows(com.xinghuiTec.ai.contract.AiRuntimeException.class,
+                    ()->transport.validateResolvedAddress(java.net.InetAddress.getByName(address)));
+            assertEquals(ErrorCode.NETWORK_ERROR,error.code());
+        }
+        assertDoesNotThrow(()->transport.validateResolvedAddress(java.net.InetAddress.getByName("1.1.1.1")));
+        verifyNoInteractions(client);
+    }
+    @Test void aStartedStreamUsesTheFullResponseBudgetInsteadOfTheSilentFallbackWindow() {
+        var initial=frame("商品信息",null);
+        var tail=frame("已查询完成","stop")+"data: [DONE]\n\n";
+        @SuppressWarnings("unchecked") HttpResponse<InputStream> upstream=mock(HttpResponse.class);
+        when(upstream.statusCode()).thenReturn(200);
+        when(upstream.body()).thenReturn(new InputStream(){
+            final byte[] first=initial.getBytes(StandardCharsets.UTF_8),last=tail.getBytes(StandardCharsets.UTF_8);
+            int index;boolean waited;volatile boolean closed;
+            public int read()throws IOException {
+                if(index==first.length&&!waited){
+                    waited=true;
+                    try{Thread.sleep(1000);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new IOException(e);}
+                }
+                if(closed)throw new IOException("controlled stream closed");
+                return index<first.length?first[index++]&255:index<first.length+last.length?last[index++-first.length]&255:-1;
+            }
+            public int read(byte[] bytes,int offset,int length)throws IOException {int value=read();if(value<0)return -1;bytes[offset]=(byte)value;return 1;}
+            public void close(){closed=true;}
+        });
+        when(client.sendAsync(any(HttpRequest.class),any(HttpResponse.BodyHandler.class))).thenReturn(CompletableFuture.completedFuture(upstream));
+        Instant silent=Instant.now().plusMillis(800),full=Instant.now().plusSeconds(5);
+        var budget=new InvocationControl(){public Instant deadline(){return full;}public Instant firstOutputDeadline(){return silent;}public boolean cancelled(){return false;}};
+        var result=transport.call("unit/model",5,"controlled-secret",List.of(new AiMessage(MessageRole.USER,"QA budget")),new Requirements(OutputFormat.TEXT,true,false),128,mock(StreamObserver.class),budget);
+        assertEquals(ExecutionStatus.SUCCEEDED,result.status());
+        assertTrue(result.outputStarted());
+        assertFalse(result.retryable());
+    }
     void response(int status,String body) {
         HttpResponse<InputStream> response=mock(HttpResponse.class);
         when(response.statusCode()).thenReturn(status); when(response.body()).thenReturn(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));

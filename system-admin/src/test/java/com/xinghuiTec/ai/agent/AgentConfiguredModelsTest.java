@@ -42,6 +42,8 @@ class AgentConfiguredModelsTest {
     @Test void sameKeyCanServeSeveralModelsAndPaidFallbackIsLastWithFullTurnBudget(){
         when(provider.executeTools(any(),any(),any())).thenAnswer(i->{ToolExecutionRequest request=i.getArgument(0);ToolStreamObserver observer=i.getArgument(1);
             assertEquals(4096,request.maxTokens());assertEquals(call.runId(),request.invocation().requestId());
+            InvocationControl budget=i.getArgument(2);
+            assertTrue(budget.firstOutputDeadline().isBefore(budget.deadline()));
             if(request.target().equals(free))return outcome(ExecutionStatus.FAILED,ErrorCode.RATE_LIMITED,true,false);
             observer.onFrame("synthetic-final-frame");return outcome(ExecutionStatus.SUCCEEDED,null,false,true);
         });

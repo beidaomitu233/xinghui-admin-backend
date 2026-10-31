@@ -5,6 +5,10 @@ import com.xinghuiTec.agent.api.*;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.*;
 import io.agentscope.core.model.GenerateOptions;
+import io.agentscope.core.permission.*;
+import io.agentscope.core.tool.AgentTool;
+import io.agentscope.core.tool.ToolCallParam;
+import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.harness.agent.HarnessAgent;
 import io.agentscope.harness.agent.DistributedStore;
@@ -41,6 +45,12 @@ public final class AgentScopeBinding implements AutoCloseable {
                 () -> stopped.get() || call.cancelled().getAsBoolean());
         this.context = RuntimeContext.builder().userId(call.actor().stateUserId()).sessionId(call.sessionId()).build();
         var toolkit=hub?SkillBusinessTools.create(this.call,resources,json):BusinessTools.create(this.call,resources,json);
+        if(hub) {
+            // Harness's plan middleware captures its pre-ReAct toolkit copy. Seed metadata
+            // there too; ReAct re-registers the native meta tool against its final tool groups.
+            toolkit.registerMetaTool();
+            markMetaToolReadOnly(toolkit);
+        }
         var builder = HarnessAgent.builder()
                 .name("AI工作台").agentId("business-agent")
                 .sysPrompt(Objects.requireNonNull(systemPrompt))
@@ -74,13 +84,37 @@ public final class AgentScopeBinding implements AutoCloseable {
         // business gateway owns outbound access; remove implicit vendor tools at the registry.
         var businessTools = new java.util.HashSet<>(toolkit.getToolNames());
         businessTools.add("todo_write");
-        if(hub)businessTools.addAll(Set.of("load_skill_through_path","reset_equipped_tools","plan_enter","plan_write"));
+        if(hub)businessTools.addAll(Set.of("load_skill_through_path","reset_equipped_tools","plan_enter","plan_write","plan_exit"));
         Set.copyOf(agent.getToolkit().getToolNames()).stream().filter(name -> !businessTools.contains(name))
                 .forEach(agent.getToolkit()::removeTool);
         if(hub) {
-            // A model cannot approve its own plan. Only the authenticated next user turn selects EXECUTE.
+            // Native meta-tool activation changes only equipped schemas, never business data.
+            // SDK 2.0.3 omits its read-only metadata, which otherwise blocks discovery in PLAN.
+            markMetaToolReadOnly(agent.getToolkit());
+            var permissions=PermissionContextState.builder().mode(PermissionMode.DONT_ASK);
+            for(String name:List.of("plan_enter","plan_write","todo_write"))
+                permissions.addAllowRule(name,new PermissionRule(name,null,PermissionBehavior.ALLOW,"application"));
+            if("EXECUTE".equals(mode))permissions.addAllowRule("plan_exit",
+                    new PermissionRule("plan_exit",null,PermissionBehavior.ALLOW,"userSelectedExecute"));
+            agent.getDelegate().replacePermissionContext(context.getUserId(),context.getSessionId(),permissions.build());
+            // plan_exit remains the official ASK tool. DONT_ASK denies autonomous approval;
+            // only an authenticated user turn selecting EXECUTE authorizes leaving plan mode.
             if("PLAN".equals(mode))agent.enterPlanMode(context);else agent.exitPlanMode(context);
         }
+    }
+    private static void markMetaToolReadOnly(io.agentscope.core.tool.Toolkit toolkit) {
+        AgentTool meta=Objects.requireNonNull(toolkit.getTool("reset_equipped_tools"));
+        toolkit.removeTool(meta.getName());
+        toolkit.registerAgentTool(new ReadOnlyMetaTool(meta));
+    }
+    private record ReadOnlyMetaTool(AgentTool nativeTool) implements AgentTool {
+        public String getName(){return nativeTool.getName();}
+        public String getDescription(){return nativeTool.getDescription();}
+        public Map<String,Object> getParameters(){return nativeTool.getParameters();}
+        public Boolean getStrict(){return nativeTool.getStrict();}
+        public Map<String,Object> getOutputSchema(){return nativeTool.getOutputSchema();}
+        public boolean isReadOnly(){return true;}
+        public reactor.core.publisher.Mono<ToolResultBlock> callAsync(ToolCallParam param){return nativeTool.callAsync(param);}
     }
     public Flux<AgentEventView> run(String input) {
         return run(input,List.of());

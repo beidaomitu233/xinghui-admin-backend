@@ -169,7 +169,9 @@ public class AiModelConfigRules {
         boolean documentationRange = (address[0] & 0xff) == 0x20
                 && (address[1] & 0xff) == 0x01 && (address[2] & 0xff) == 0x0d
                 && (address[3] & 0xff) == 0xb8;
-        if (!globalUnicast || documentationRange) {
+        boolean benchmarkingRange = (address[0] & 0xff) == 0x20 && (address[1] & 0xff) == 0x01
+                && address[2] == 0 && address[3] == 2 && address[4] == 0 && address[5] == 0;
+        if (!globalUnicast || documentationRange || benchmarkingRange) {
             throw new ServiceException("服务端点不能使用本机、内网或保留 IP 地址");
         }
     }

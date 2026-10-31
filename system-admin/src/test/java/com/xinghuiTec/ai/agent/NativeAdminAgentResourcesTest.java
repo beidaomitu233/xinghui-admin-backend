@@ -70,4 +70,38 @@ class NativeAdminAgentResourcesTest {
         assertThatThrownBy(()->gateway.mutate(call,"tool-3","dictionary",args)).isInstanceOf(AgentProblem.class);
         verifyNoInteractions(controller);
     }
+    @Test void fileToolsExposeOnlyNativeOwnerMetadataAndRecheckPermissions(){
+        fixture.permissions.addAll(Set.of("system:oss:list","system:oss:query"));
+        var controller=mock(SysOssController.class);var file=new com.xinghuiTec.oss.entity.SysOss();
+        file.setOssId(91L);file.setOriginalName("QA收据.pdf");file.setUrl("https://qa.invalid/private?signature=hidden");
+        var page=new com.baomidou.mybatisplus.extension.plugins.pagination.Page<com.xinghuiTec.oss.entity.SysOss>(1,20,1);page.setRecords(List.of(file));
+        when(controller.getList(1,20,null,null,"createTime","desc")).thenReturn(Result.ok(page));
+        var reads=new NativeReadAgentResources(fixture.access,fixture.json,validation.getValidator(),jdbc);
+        var gateway=registry(reads.fileAgentResources(controller));var call=fixture.call(fixture.a);
+        var result=gateway.query(call,"files",fixture.json.createObjectNode());
+        assertThat(result.path("records").get(0).path("originalName").asText()).isEqualTo("QA收据.pdf");
+        assertThat(result.toString()).doesNotContain("signature","https:");
+        assertThat(gateway.resources(call).get(0).path("readOnly").asBoolean()).isTrue();
+        assertThatThrownBy(()->gateway.query(call,"files",fixture.json.createObjectNode().put("pageSize",101))).isInstanceOf(AgentProblem.class);
+        fixture.permissions.removeAll(Set.of("system:oss:list","system:oss:query"));
+        assertThatThrownBy(()->gateway.query(call,"files",fixture.json.createObjectNode())).isInstanceOf(AgentProblem.class);
+        verify(controller,times(1)).getList(anyInt(),anyInt(),any(),any(),anyString(),anyString());
+    }
+    @Test void platformReadToolsDoNotExposeOtherTenantsToTenantIdentity(){
+        fixture.permissions.add("system:tenant:list");var controller=mock(SysTenantController.class);
+        var reads=new NativeReadAgentResources(fixture.access,fixture.json,validation.getValidator(),jdbc);
+        var gateway=registry(reads.tenantAgentResources(controller));var call=fixture.call(fixture.a);
+        assertThat(gateway.resources(call)).isEmpty();
+        assertThatThrownBy(()->gateway.query(call,"tenants",fixture.json.createObjectNode())).isInstanceOf(AgentProblem.class);
+        verifyNoInteractions(controller);
+    }
+    @Test void menuQueriesUseTheNativeAssignedPermissionWithoutInventingAnExtraIdentityRule(){
+        fixture.permissions.add("system:menu:list");var controller=mock(SysMenuController.class);
+        when(controller.getMenuList(any())).thenReturn(Result.ok(List.of()));
+        var reads=new NativeReadAgentResources(fixture.access,fixture.json,validation.getValidator(),jdbc);
+        var gateway=registry(reads.menuAgentResources(controller));var call=fixture.call(fixture.a);
+        assertThat(gateway.resources(call)).hasSize(1);
+        assertThat(gateway.query(call,"menus",fixture.json.createObjectNode())).isEmpty();
+        verify(controller).getMenuList(any());
+    }
 }

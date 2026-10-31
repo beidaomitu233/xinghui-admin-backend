@@ -53,13 +53,21 @@ public final class JdbcAgentRepository {
                 sessionMapper(), actor.tenantId(), actor.userId());
         var visible = new ArrayList<Session>();
         for (Session session : candidates) {
-            try { requireHistory(actor, session.id()); visible.add(session); }
+            try { requireHistory(actor, session.id()); visible.add(publicSession(actor,session)); }
             catch (AgentProblem denied) { if (!"FORBIDDEN".equals(denied.code())) throw denied; }
         }
         return List.copyOf(visible);
     }
     public Session session(AgentActor actor, String sessionId) {
-        Session session = ownedSession(actor, sessionId, false); requireHistory(actor, sessionId); return session;
+        Session session = ownedSession(actor, sessionId, false); requireHistory(actor, sessionId); return publicSession(actor,session);
+    }
+    /** Keep the internal latest-run pointer for checkpoint ordering, but expose only a live run.
+     * Reading a reconnected session also settles a deadline left behind by a terminated process. */
+    private Session publicSession(AgentActor actor,Session session) {
+        if(session.activeRunId()==null)return session;
+        Run latest=run(actor,session.activeRunId());
+        return TERMINAL.contains(latest.status())
+                ?new Session(session.id(),session.title(),null,session.version(),session.updatedAt()):session;
     }
     public void archive(AgentActor actor,String sessionId){
         tx.executeWithoutResult(status->{var session=ownedSession(actor,sessionId,true);requireHistory(actor,sessionId);

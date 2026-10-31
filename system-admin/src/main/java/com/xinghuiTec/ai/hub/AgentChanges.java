@@ -6,6 +6,8 @@ import com.xinghuiTec.agent.api.*;
 import com.xinghuiTec.agent.persistence.JdbcAgentRepository;
 import com.xinghuiTec.ai.agent.*;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ColumnMapRowMapper;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -17,6 +19,13 @@ import java.util.*;
 /** Confirmation is a host-side business transaction, never a model tool or a client-supplied flag. */
 @Service
 public class AgentChanges {
+    // Connector/J exposes DATETIME as LocalDateTime through getObject; use the JDBC
+    // timestamp accessor so connection time-zone handling stays with the driver.
+    private static final RowMapper<Map<String,Object>> EXPIRY_ROW=(rs,n)->{
+        var row=new ColumnMapRowMapper().mapRow(rs,n);
+        row.put("expires_at",rs.getTimestamp("expires_at"));
+        return row;
+    };
     public record View(String id,String runId,String resource,String status,JsonNode preview,JsonNode result,Instant expiresAt) {}
     private final JdbcTemplate jdbc;private final TransactionTemplate tx;private final AgentPayloadCipher cipher;
     private final AgentResourceRegistry resources;private final AgentAccess access;private final JdbcAgentRepository repository;private final ObjectMapper json;
@@ -26,7 +35,10 @@ public class AgentChanges {
     public JsonNode preview(AgentCall call,String toolId,String resource,JsonNode arguments){
         call.check();if(toolId==null||toolId.length()>160||!arguments.isObject()||arguments.toString().length()>65536)throw new AgentProblem("INVALID_ARGUMENTS","变更参数无效");
         return access.as(call.actor(),current->{
-            var definition=resources.describe(call,resource);String operation=arguments.path("operation").asText();
+            var definition=resources.describe(call,resource);
+            if(!arguments.path("operation").isTextual()||arguments.path("operation").asText().isBlank())
+                throw new AgentProblem("INVALID_ARGUMENTS","arguments.operation必填；请按describe返回的mutation结构填写其他参数，再生成具体变更预览。");
+            String operation=arguments.path("operation").asText();
             if(!definition.path("operations").isArray()||java.util.stream.StreamSupport.stream(definition.path("operations").spliterator(),false).noneMatch(v->v.asText().equals(operation)))throw new AgentProblem("FORBIDDEN","当前账号不能执行此操作");
             var preview=json.createObjectNode().put("name",definition.path("name").asText(resource)).put("resource",resource).put("operation",operation);
             preview.set("changes",redact(arguments));
@@ -41,6 +53,13 @@ public class AgentChanges {
                     String found=(String)prior.get(0).get("change_id");
                     if(!cipher.open(purpose(call.actor(),found,"arguments"),(String)prior.get(0).get("arguments_payload")).equals(arguments.toString()))throw new AgentProblem("IDEMPOTENCY_CONFLICT","同一次操作不能替换变更内容");
                     return json.createObjectNode().put("changeId",found).put("status","AWAITING_CONFIRMATION");
+                }
+                var waiting=jdbc.queryForList("SELECT change_id,resource_id,arguments_payload FROM sys_agent_change WHERE run_id=? AND status='PENDING' ORDER BY created_at LIMIT 1",call.runId());
+                if(!waiting.isEmpty()){
+                    var pending=waiting.get(0);String found=(String)pending.get("change_id");
+                    if(resource.equals(pending.get("resource_id"))&&read(cipher.open(purpose(call.actor(),found,"arguments"),(String)pending.get("arguments_payload"))).equals(arguments))
+                        return json.createObjectNode().put("changeId",found).put("status","AWAITING_CONFIRMATION");
+                    throw new AgentProblem("CHANGE_PENDING","已有具体变更等待用户在页面确认，请等待处理后再提交其他变更。");
                 }
                 jdbc.update("INSERT INTO sys_agent_change(change_id,tenant_id,user_id,session_id,run_id,tool_call_id,resource_id,arguments_payload,preview_payload,status,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                     id,call.actor().tenantId(),call.actor().userId(),call.sessionId(),call.runId(),toolId,resource,cipher.seal(purpose(call.actor(),id,"arguments"),arguments.toString()),cipher.seal(purpose(call.actor(),id,"preview"),preview.toString()),"PENDING",Timestamp.from(now),Timestamp.from(call.deadline().isBefore(now.plusSeconds(900))?call.deadline():now.plusSeconds(900)));
@@ -57,7 +76,7 @@ public class AgentChanges {
             call.check();
             JsonNode receipt=access.as(call.actor(),current->{
                 if(!repository.running(call.actor(),call.runId()))throw new AgentProblem("RUN_STOPPED","任务已停止");
-                var rows=jdbc.queryForList("SELECT resource_id,status,result_payload,expires_at FROM sys_agent_change WHERE change_id=? AND tenant_id=? AND user_id=? AND run_id=?",id,call.actor().tenantId(),call.actor().userId(),call.runId());
+                var rows=jdbc.query("SELECT resource_id,status,result_payload,expires_at FROM sys_agent_change WHERE change_id=? AND tenant_id=? AND user_id=? AND run_id=?",EXPIRY_ROW,id,call.actor().tenantId(),call.actor().userId(),call.runId());
                 if(rows.size()!=1)throw new AgentProblem("FORBIDDEN","无权访问此变更");
                 var row=rows.get(0);resources.requireReadable(call.actor(),Set.of((String)row.get("resource_id")));
                 String status=(String)row.get("status");
@@ -91,7 +110,7 @@ public class AgentChanges {
             try{return tx.execute(status->{
             // Same lock order as cancellation: session, run, change. No locks are held during user wait.
             repository.guard(actor,run,false);
-            var rows=jdbc.queryForList("SELECT * FROM sys_agent_change WHERE change_id=? AND tenant_id=? AND user_id=? FOR UPDATE",id,actor.tenantId(),actor.userId());
+            var rows=jdbc.query("SELECT * FROM sys_agent_change WHERE change_id=? AND tenant_id=? AND user_id=? FOR UPDATE",EXPIRY_ROW,id,actor.tenantId(),actor.userId());
             if(rows.size()!=1)throw new AgentProblem("FORBIDDEN","无权确认此变更");var row=rows.get(0);
             if(!"PENDING".equals(row.get("status")))return json.createObjectNode().put("status",String.valueOf(row.get("status")));
             if(((Timestamp)row.get("expires_at")).toInstant().isBefore(Instant.now()))throw new AgentProblem("CHANGE_EXPIRED","变更已过期，请重新生成预览");

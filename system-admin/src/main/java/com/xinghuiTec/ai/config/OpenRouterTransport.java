@@ -94,9 +94,10 @@ public class OpenRouterTransport {
         var pending=new AtomicReference<CompletableFuture<?>>();
         Instant bound=Instant.now().plusSeconds(timeoutSeconds);
         Instant deadline=control.deadline().isBefore(bound)?control.deadline():bound;
+        Instant firstDeadline=control.firstOutputDeadline().isBefore(deadline)?control.firstOutputDeadline():deadline;
         var watch=WATCH.scheduleAtFixedRate(()->{
             boolean abort;
-            try { abort=control.cancelled()||!Instant.now().isBefore(deadline); }
+            try { abort=control.cancelled()||!Instant.now().isBefore(state.receivedContent?deadline:firstDeadline); }
             catch(RuntimeException unavailable) { abort=true; }
             if(abort) {
                 var p=pending.get(); if(p!=null) p.cancel(true);
@@ -108,9 +109,7 @@ public class OpenRouterTransport {
             if((requirements.tools()&&wire==null)||(requirements.outputFormat()==OutputFormat.JSON_OBJECT&&!OpenRouterCapabilities.supportsJson(modelCode))) throw new AiRuntimeException(ErrorCode.CAPABILITY_UNSUPPORTED);
             if(maxTokens<1||maxTokens>32768) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             if(key==null||key.isBlank()||key.length()>8192||key.chars().anyMatch(c->c<32||c==127)) throw new AiRuntimeException(ErrorCode.CREDENTIAL_UNAVAILABLE);
-            if(!proxy) for(var address:InetAddress.getAllByName(URI.create(endpoint).getHost())) {
-                String host=address.getHostAddress(); addresses.endpointUrl("https://"+(host.contains(":")?"["+host+"]":host));
-            }
+            if(!proxy) for(var address:InetAddress.getAllByName(URI.create(endpoint).getHost())) validateResolvedAddress(address);
             var body=new LinkedHashMap<String,Object>();
             var outbound=new ArrayList<Map<String,String>>();
             if(state.jsonObject) outbound.add(Map.of("role","system","content","Return exactly one JSON object. Do not wrap it in Markdown."));
@@ -137,14 +136,14 @@ public class OpenRouterTransport {
             String encoded=json.writeValueAsString(body);
             if(encoded.length()>(wire==null?262144:8*1024*1024)) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             control.check();
-            if(!Instant.now().isBefore(deadline)) throw new AiRuntimeException(ErrorCode.DEADLINE_EXCEEDED);
+            if(!Instant.now().isBefore(firstDeadline)) throw new AiRuntimeException(ErrorCode.DEADLINE_EXCEEDED);
             var request=HttpRequest.newBuilder(URI.create(endpoint))
                     .timeout(Duration.ofMillis(Math.max(1,Duration.between(Instant.now(),deadline).toMillis())))
                     .header("Authorization","Bearer "+key).header("Content-Type","application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(encoded,StandardCharsets.UTF_8)).build();
             state.capture.sent();
             var future=client.sendAsync(request,HttpResponse.BodyHandlers.ofInputStream()); pending.set(future);
-            var response=future.get(Math.max(1,Duration.between(Instant.now(),deadline).toMillis()),TimeUnit.MILLISECONDS);
+            var response=future.get(Math.max(1,Duration.between(Instant.now(),firstDeadline).toMillis()),TimeUnit.MILLISECONDS);
             try{state.capture.response(response.statusCode(),response.headers().map());}catch(RuntimeException unavailableHeaders){state.capture.unavailableHeaders(response.statusCode());}
             InputStream received=state.capture.receive(response.body());stream.set(received);
             if(response.statusCode()!=200){try{readError(received,state,control);}catch(IOException partialErrorBody){control.check();}return outcome(ExecutionStatus.FAILED,httpError(response.statusCode()),retryable(httpError(response.statusCode())),state,start);}
@@ -158,7 +157,7 @@ public class OpenRouterTransport {
             return outcome(ExecutionStatus.SUCCEEDED,null,false,state,start);
         } catch(Exception failure) {
             ErrorCode code;
-            try { code=control.cancelled()?ErrorCode.CANCELLED:!Instant.now().isBefore(deadline)?ErrorCode.DEADLINE_EXCEEDED:
+            try { code=control.cancelled()?ErrorCode.CANCELLED:!Instant.now().isBefore(state.receivedContent?deadline:firstDeadline)?ErrorCode.DEADLINE_EXCEEDED:
                     failure instanceof AiRuntimeException safe?safe.code():failure instanceof TimeoutException?ErrorCode.DEADLINE_EXCEEDED:
                     failure instanceof com.fasterxml.jackson.core.JsonProcessingException?ErrorCode.INVALID_RESPONSE:
                     failure instanceof IOException||failure instanceof ExecutionException?ErrorCode.NETWORK_ERROR:ErrorCode.INVALID_RESPONSE; }
@@ -173,6 +172,12 @@ public class OpenRouterTransport {
         } finally {
             watch.cancel(false); close(stream.get()); var p=pending.get(); if(p!=null&&!p.isDone()) p.cancel(true);
         }
+    }
+    /** A rejected DNS result is a connection failure, before any provider response exists. */
+    void validateResolvedAddress(InetAddress address) {
+        String host=address.getHostAddress();
+        try { addresses.endpointUrl("https://"+(host.contains(":")?"["+host+"]":host)); }
+        catch(com.xinghuiTec.exception.ServiceException rejected) { throw new AiRuntimeException(ErrorCode.NETWORK_ERROR); }
     }
     private static boolean retryable(ErrorCode code) {
         return Set.of(ErrorCode.AUTH_FAILED,ErrorCode.RATE_LIMITED,ErrorCode.PROVIDER_UNAVAILABLE,
@@ -295,7 +300,8 @@ public class OpenRouterTransport {
         final AiResponseTelemetry capture;
         OpenAiToolWire wire;
         final StringBuilder buffer=new StringBuilder();
-        boolean receivedContent,unclassifiedBody,output,finished,done; int characters; Usage usage=new Usage(null,null,null); String providerId;
+        volatile boolean receivedContent;
+        boolean unclassifiedBody,output,finished,done; int characters; Usage usage=new Usage(null,null,null); String providerId;
         ParseState(String key,StreamObserver observer,boolean streaming,boolean jsonObject) { this.key=key;this.observer=observer;this.streaming=streaming;this.jsonObject=jsonObject;this.capture=new AiResponseTelemetry(streaming,key); }
         boolean started() { return receivedContent||unclassifiedBody||output; }
         void emit(String value) {

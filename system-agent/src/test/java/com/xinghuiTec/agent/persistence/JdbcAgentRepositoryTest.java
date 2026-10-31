@@ -49,6 +49,19 @@ class JdbcAgentRepositoryTest {
         return repository.admit(actor, session, id, input, "scene.qa", Duration.ofMinutes(1));
     }
     private AgentCall call(JdbcAgentRepository.Run run) { return new AgentCall(actor, run.sessionId(), run.id(), "model-1", run.deadline(), () -> !repository.running(actor, run.id())); }
+    @Test void reconnectSettlesAnExpiredRunAndOnlyReportsLiveGeneration(){
+        var session=repository.create(actor,"进程中断后的任务");
+        var run=submit(session.id(),"expired_request_0001","新增杯子").run();
+        repository.claim(actor,run.id());
+        assertThat(repository.session(actor,session.id()).activeRunId()).isEqualTo(run.id());
+        jdbc.update("UPDATE sys_agent_run SET deadline=? WHERE run_id=?",java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(1)),run.id());
+        var events=repository.events(actor,session.id(),0);
+        assertThat(events).last().satisfies(event->assertThat(event.data()).containsEntry("status","INTERRUPTED").containsEntry("errorCode","DEADLINE_EXCEEDED"));
+        assertThat(repository.session(actor,session.id()).activeRunId()).isNull();
+        assertThat(repository.sessions(actor)).singleElement().satisfies(value->assertThat(value.activeRunId()).isNull());
+        assertThat(jdbc.queryForObject("SELECT active_run_id FROM sys_agent_session WHERE session_id=?",String.class,session.id())).isEqualTo(run.id());
+        assertThat(submit(session.id(),"continue_request_0002","继续").created()).isTrue();
+    }
     @Test void imageHistoryKeepsOwnedReferencesAndSubmissionRetriesKeepTheSameAttachments(){
         var session=repository.create(actor,"图片任务");
         var images=new JdbcAgentImages(jdbc,repository,codec,json);

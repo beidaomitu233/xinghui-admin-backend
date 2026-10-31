@@ -26,7 +26,9 @@ final class SkillBusinessTools {
         for(String namespace:namespaces) {
             if(!namespace.matches("[a-z][a-z0-9-]{0,49}"))throw new IllegalStateException("Invalid tool namespace");
             toolkit.createSkillToolGroup(namespace,"业务能力："+namespace,false,namespace);
-            for(String operation:List.of("describe","query","preview")) {
+            boolean readOnly=java.util.stream.StreamSupport.stream(catalog.spliterator(),false)
+                    .filter(item->item.path("resource").asText().split(":",2)[0].equals(namespace)).allMatch(item->item.path("readOnly").asBoolean(false));
+            for(String operation:readOnly?List.of("describe","query"):List.of("describe","query","preview")) {
                 String name=namespace.replace('-','_')+"_"+operation;
                 toolkit.registration().agentTool(new BusinessTool(name,namespace,operation,call,gateway,json)).group(namespace).apply();
             }
@@ -41,9 +43,14 @@ final class SkillBusinessTools {
             case "query"->"按资源定义查询业务数据，分页并选择所需字段。";
             default->"提交具体业务变更预览并等待用户确认，返回EXECUTED及业务结果后才算执行成功。用户拒绝返回REJECTED；失败返回FAILED。确认成功后继续任务。";
         };}
-        public Map<String,Object> getParameters(){return Map.of("type","object","additionalProperties",false,
-            "properties",Map.of("resource",Map.of("type","string"),"arguments",Map.of("type","object")),
-            "required",List.of("resource","arguments"));}
+        public Map<String,Object> getParameters(){
+            Map<String,Object> arguments=operation.equals("preview")
+                    ?Map.of("type","object","required",List.of("operation"),"properties",Map.of("operation",Map.of("type","string","description","从当前资源describe返回的operations中选择写入操作；其他字段按mutation参数定义填写。")))
+                    :Map.of("type","object");
+            return Map.of("type","object","additionalProperties",false,
+                "properties",Map.of("resource",Map.of("type","string"),"arguments",arguments),
+                "required",List.of("resource","arguments"));
+        }
         public boolean isReadOnly(){return !operation.equals("preview");}
         public Mono<ToolResultBlock> callAsync(ToolCallParam param){return Mono.fromCallable(()->{
             call.check();var args=param.getInput();String resource=String.valueOf(args.getOrDefault("resource",""));

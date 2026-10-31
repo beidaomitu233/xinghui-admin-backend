@@ -31,7 +31,7 @@ class HubEngineTest {
     @Test void schemasAreDeferredUntilNativeSkillLoadsAndHostToolsNeverAppear(){
         var turns=new AtomicInteger();AgentModelGateway model=(call,wire)->{
             var request=read(wire);var names=new HashSet<String>();request.path("tools").forEach(t->names.add(t.path("function").path("name").asText()));
-            assertThat(names).doesNotContain("execute","web_fetch","web_search","read_file","plan_exit","system_parameters_query");
+            assertThat(names).contains("plan_exit").doesNotContain("execute","web_fetch","web_search","read_file","system_parameters_query");
             int turn=turns.getAndIncrement();
             if(turn==0){
                 assertThat(names).contains("load_skill_through_path","resources_list").doesNotContain("forms_query");
@@ -47,6 +47,12 @@ class HubEngineTest {
         }
         assertThat(turns).hasValue(3);
     }
+    @Test void readOnlyResourceGroupsDoNotRegisterMutationTools(){
+        var gateway=org.mockito.Mockito.mock(AgentResourceGateway.class);
+        org.mockito.Mockito.when(gateway.resources(org.mockito.ArgumentMatchers.any())).thenReturn(read("[{\"resource\":\"files\",\"name\":\"文件元数据\",\"readOnly\":true}]"));
+        var toolkit=SkillBusinessTools.create(call(),gateway,json);
+        assertThat(toolkit.getToolNames()).contains("files_describe","files_query").doesNotContain("files_preview");
+    }
     @Test void planModeCannotPreviewWritesEvenIfModelCallsHiddenTool(){
         var turn=new AtomicInteger();AgentModelGateway model=(call,wire)->{
             if(turn.getAndIncrement()==0)return tool("forms_preview","{\"resource\":\"forms:1\",\"arguments\":{\"operation\":\"create\"}}");
@@ -55,6 +61,29 @@ class HubEngineTest {
         try(var runtime=new AgentScopeBinding(call(),"先计划",workspace,state(),model,resources(),json,true,"PLAN",distributed())){
             runtime.run("整理商品").blockLast(Duration.ofSeconds(25));
         }
+        assertThat(mutations).hasValue(0);
+    }
+    @Test void planCanDiscoverSkillsAndFinishWithoutApprovingItsOwnExecution(){
+        var turn=new AtomicInteger();
+        AgentModelGateway model=(c,wire)->{
+            int step=turn.getAndIncrement();
+            if(step==0)return tool("reset_equipped_tools","{\"to_activate\":[\"forms\"]}");
+            if(step==1){
+                assertThat(wire).contains("forms_describe");
+                return tool("forms_query","{\"resource\":\"forms:1\",\"arguments\":{}}");
+            }
+            if(step==2){assertThat(wire).contains("QA纸杯");return tool("plan_write","{\"content\":\"查询商品后等待用户批准新增。\"}");}
+            if(step==3){assertThat(wire).contains("Plan saved");return tool("plan_exit","{\"summary\":\"请批准计划\"}");}
+            if(step==4){assertThat(wire).contains("plan_exit");return tool("forms_preview","{\"resource\":\"forms:1\",\"arguments\":{\"operation\":\"create\"}}");}
+            return text("计划完成，请切换到执行后继续。");
+        };
+        var owner=call();
+        try(var runtime=new AgentScopeBinding(owner,"先计划",workspace,state(),model,resources(),json,true,"PLAN",distributed())){
+            runtime.run("新增一个杯子，先计划").blockLast(Duration.ofSeconds(25));
+            var context=io.agentscope.core.agent.RuntimeContext.builder().userId(owner.actor().stateUserId()).sessionId(owner.sessionId()).build();
+            assertThat(runtime.nativeAgent().getDelegate().getAgentState(context).getPlanModeContext().isPlanActive()).isTrue();
+        }
+        assertThat(turn).hasValue(6);
         assertThat(mutations).hasValue(0);
     }
     @Test void nativeRemoteKvSurvivesAgentRecreationAndKeepsSessionWorkspacesSeparateWithoutShell(){
@@ -73,6 +102,22 @@ class HubEngineTest {
             var other=io.agentscope.core.agent.RuntimeContext.builder().userId(owner.actor().stateUserId()).sessionId("different-session").build();
             assertThat(fs.read(other,"/plans/qa-plan.md",0,100).isSuccess()).isFalse();
         }
+    }
+    @Test void userSelectedExecutionCanFinishNativePlanningWithoutGettingStuckInPlanMode(){
+        var step=new AtomicInteger();
+        AgentModelGateway model=(c,wire)->switch(step.getAndIncrement()){
+            case 0->tool("plan_enter","{}");
+            case 1->tool("plan_write","{\"content\":\"查询后新增商品，并由页面确认具体变更。\"}");
+            case 2->tool("plan_exit","{\"summary\":\"执行已选择的任务\"}");
+            default->{assertThat(wire).contains("Plan approved");yield text("将提交具体业务预览，等待页面确认。");}
+        };
+        var owner=call();
+        try(var runtime=new AgentScopeBinding(owner,"先规划再执行",workspace,state(),model,resources(),json,true,"EXECUTE",distributed())){
+            runtime.run("新增杯子").blockLast(Duration.ofSeconds(25));
+            var rc=io.agentscope.core.agent.RuntimeContext.builder().userId(owner.actor().stateUserId()).sessionId(owner.sessionId()).build();
+            assertThat(runtime.nativeAgent().getDelegate().getAgentState(rc).getPlanModeContext().isPlanActive()).isFalse();
+        }
+        assertThat(mutations).hasValue(0);
     }
     JsonNode read(String wire){try{return json.readTree(wire);}catch(Exception error){throw new AssertionError(error);}}
     Flux<String> tool(String name,String args){var function=json.createObjectNode().put("name",name).put("arguments",args);var t=json.createObjectNode().put("index",0).put("id",UUID.randomUUID().toString()).put("type","function").set("function",function);return Flux.just(chunk(json.createObjectNode().set("tool_calls",json.createArrayNode().add(t)),null),chunk(json.createObjectNode(),"tool_calls"));}

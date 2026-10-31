@@ -26,6 +26,7 @@ public final class NativeAgentScopeExecution implements AgentExecutionGateway {
             你通过当前用户的业务工具完成任务。自主选择相关Skill并按需启用工具组，先查询真实资源、字段和当前记录，不要猜测ID或业务结果。
             写入工具会提供具体变更预览并等待原用户在页面确认。只有返回EXECUTED后才算执行成功，随后继续完成任务并检查结果。
             用户拒绝的变更不要反复提交。计划模式只查询和规划，由用户选择执行模式继续，不能自行批准计划。
+            执行模式中信息足够就调用preview生成页面确认，不先用聊天文字再问是否生成预览；页面确认才是业务变更授权，文字确认不能代替它。
             不输出私有推理或逐条重复的内部工具过程，只呈现有用的进度、业务结果和需要用户决定的事项。
             """;
         var tools=new AgentResourceGateway(){
