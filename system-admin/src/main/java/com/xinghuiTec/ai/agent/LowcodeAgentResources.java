@@ -18,8 +18,13 @@ public class LowcodeAgentResources implements AgentResourceProvider {
     public String namespace(){return "forms";}
     public JsonNode catalog(AgentCall call){
         var entries=json.createArrayNode();var actor=access.current(call.actor());
-        if(actor.platform()&&actor.has("lowcode:form:list"))entries.addObject().put("resource","forms").put("name","业务表单")
-                .put("description","查询表单目录，返回forms:<id>资源，再读取其字段与操作定义。新发布的表单自动可用。").putArray("operations").add("query");
+        if(actor.platform()&&actor.has("lowcode:form:list")){
+            var entry=entries.addObject().put("resource","forms").put("name","业务表单")
+                .put("description","查询已授权表单目录；记录操作仅适用于已发布、当前账号可访问的表单，以具体表单定义为准。");
+            entry.putArray("operations").add("query");var records=entry.putArray("recordOperations");
+            if(actor.has("lowcode:record:list"))records.add("query");if(actor.has("lowcode:record:query"))records.add("get");
+            for(String action:List.of("create","update","delete"))if(actor.has(permission(action))){records.add(action);records.add("bulk"+Character.toUpperCase(action.charAt(0))+action.substring(1));}
+        }
         return entries;
     }
     public void requireReadable(AgentActor actor,String resource){

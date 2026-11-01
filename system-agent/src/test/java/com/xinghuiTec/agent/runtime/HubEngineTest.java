@@ -34,6 +34,7 @@ class HubEngineTest {
             assertThat(names).contains("plan_exit").doesNotContain("execute","web_fetch","web_search","read_file","system_parameters_query");
             int turn=turns.getAndIncrement();
             if(turn==0){
+                assertThat(wire).contains("当前账号业务能力目录","业务表单","未开放的接口");
                 assertThat(names).contains("load_skill_through_path","resources_list").doesNotContain("forms_query");
                 var matcher=java.util.regex.Pattern.compile("(?s)<name>forms</name>.*?<skill-id>([^<]+)</skill-id>").matcher(wire);
                 assertThat(matcher.find()).as("Native skill metadata must be present").isTrue();

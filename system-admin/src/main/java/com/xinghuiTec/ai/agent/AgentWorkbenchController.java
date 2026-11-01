@@ -41,12 +41,15 @@ public class AgentWorkbenchController {
     private final AgentWorkbench workbench;
     private final SceneManagementService scenes;
     @org.springframework.beans.factory.annotation.Autowired private AgentImages images;
+    @org.springframework.beans.factory.annotation.Autowired private AgentResourceRegistry resources;
     public AgentWorkbenchController(AiInvocationIdentity identity,AgentAccess access,AiRuntimeBodyCodec codec,
                                     JdbcAgentRepository repository,AgentWorkbench workbench,SceneManagementService scenes){
         this.identity=identity;this.access=access;this.codec=codec;this.repository=repository;this.workbench=workbench;this.scenes=scenes;
     }
     @GetMapping("/presets") public Result<List<PresetView>> presets(){return owned((actor,current)->Result.ok(scenes.agentChoices(current.actor()).stream()
             .map(entry->new PresetView(entry.sceneKey(),entry.name())).toList()));}
+    @GetMapping("/capabilities") public Result<com.fasterxml.jackson.databind.JsonNode> capabilities(){return owned((actor,current)->
+        Result.ok(resources.resources(new AgentCall(actor,"capabilities","capabilities",UUID.randomUUID().toString(),Instant.now().plusSeconds(15),()->false))));}
     @GetMapping("/sessions") public Result<List<SessionView>> sessions(){return owned((actor,current)->Result.ok(repository.sessions(actor).stream().map(AgentWorkbenchController::session).toList()));}
     @PostMapping("/sessions") public Result<SessionView> create(HttpServletRequest request){var input=body(request,Create.class);return owned((actor,current)->Result.ok(session(repository.create(actor,input.title()))));}
     @GetMapping("/sessions/{sessionId}") public Result<SessionView> session(@PathVariable String sessionId){uuid(sessionId);return owned((actor,current)->Result.ok(session(repository.session(actor,sessionId))));}

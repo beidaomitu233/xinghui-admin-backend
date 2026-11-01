@@ -27,6 +27,18 @@ class AgentWorkbenchHttpTest {
         mvc=MockMvcBuilders.standaloneSetup(controller).addFilters(new AiRuntimeBoundaryFilter(fixture.json)).build();
     }
     @AfterEach void close(){fixture.close();}
+    @Test void capabilityIndexUsesAuthenticatedActorAndIsReadOnly()throws Exception{
+        var registry=mock(AgentResourceRegistry.class);
+        when(registry.resources(any())).thenReturn(fixture.json.readTree("[{\"resource\":\"users\",\"name\":\"用户\",\"operations\":[\"query\"],\"readOnly\":true}]"));
+        var identity=mock(AiInvocationIdentity.class);when(identity.current()).thenReturn(new TrustedActor("1","tenant_a",Set.of("ai:agent:invoke"),null));
+        var controller=new AgentWorkbenchController(identity,fixture.access,new AiRuntimeBodyCodec(),repository,workbench,scenes);
+        org.springframework.test.util.ReflectionTestUtils.setField(controller,"resources",registry);
+        var http=MockMvcBuilders.standaloneSetup(controller).addFilters(new AiRuntimeBoundaryFilter(fixture.json)).build();
+        http.perform(get("/system/ai/workbench/capabilities")).andExpect(status().isOk()).andExpect(jsonPath("$.data[0].operations[0]").value("query"));
+        verify(registry).resources(argThat(call->call.actor().equals(fixture.a)));
+        fixture.permissions.remove("ai:agent:invoke");http.perform(get("/system/ai/workbench/capabilities")).andExpect(status().isForbidden());
+        verifyNoInteractions(repository,workbench,scenes);
+    }
     @Test void admissionAndStatusNeverExposeInternalInputAndReadsDoNotExecuteAgain()throws Exception{
         var record=new JdbcAgentRepository.Run(run,session,"RUNNING","scene.agent","DO-NOT-RETURN-PRIVATE-INPUT",null,Instant.now().plusSeconds(60));
         when(workbench.submit(eq(fixture.a),eq(session),anyString(),eq("Synthetic task"),eq("scene.agent"),eq(List.of()),eq("EXECUTE"))).thenReturn(new JdbcAgentRepository.Admission(record,true));

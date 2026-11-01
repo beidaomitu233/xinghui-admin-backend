@@ -27,6 +27,19 @@ class NativeAdminAgentResourcesTest {
     @AfterEach void close(){validation.close();fixture.close();}
     AgentResourceRegistry registry(AgentResourceProvider provider){return new AgentResourceRegistry(List.of(provider),fixture.access,fixture.json);}
 
+    @Test void capabilityCatalogUsesLiveOperationPermissionsAndNeverQueriesBusinessRecords(){
+        fixture.permissions.addAll(Set.of("system:user:list","system:user:edit"));
+        var controller=mock(SysUserController.class);
+        var gateway=registry(factory.userAgentResources(controller,fixture.access,fixture.json,validation.getValidator(),jdbc));
+        var call=fixture.call(fixture.platform);
+        assertThat(gateway.resources(call).get(0).path("operations").toString()).contains("query","update").doesNotContain("create","delete");
+        fixture.permissions.remove("system:user:edit");
+        var read=gateway.resources(call).get(0);assertThat(read.path("readOnly").asBoolean()).isTrue();
+        assertThat(read.path("operations").toString()).doesNotContain("update");
+        fixture.permissions.remove("system:user:list");assertThat(gateway.resources(call)).isEmpty();
+        verifyNoInteractions(controller);
+    }
+
     @Test void dictionaryItemPreviewUsesTheItemAndParentTypeInsteadOfTreatingItemIdAsTypeId(){
         fixture.permissions.addAll(Set.of("system:dict:list","system:dict:item:edit"));
         var controller=mock(DictionaryAdminController.class);

@@ -23,7 +23,18 @@ public class AgentResourceRegistry implements AgentResourceGateway,AgentHistoryA
     }
     public JsonNode resources(AgentCall call){return execute(call,()->{
         var entries=json.createArrayNode();for(var provider:providers.values()){
-            JsonNode catalog=provider.catalog(call);if(catalog==null||!catalog.isArray())throw new IllegalStateException("Invalid resource catalog");catalog.forEach(entries::add);
+            JsonNode catalog=provider.catalog(call);if(catalog==null||!catalog.isArray())throw new IllegalStateException("Invalid resource catalog");
+            for(var item:catalog){
+                var entry=((com.fasterxml.jackson.databind.node.ObjectNode)item).deepCopy();
+                var definition=provider.describe(call,item.path("resource").asText());
+                var operations=definition.path("operations");
+                if(!operations.isArray())throw new IllegalStateException("Invalid resource operations");
+                entry.set("operations",operations.deepCopy());
+                entry.put("readOnly",java.util.stream.Stream.concat(java.util.stream.StreamSupport.stream(operations.spliterator(),false),
+                        java.util.stream.StreamSupport.stream(entry.path("recordOperations").spliterator(),false))
+                        .allMatch(op->Set.of("query","get").contains(op.asText())));
+                entries.add(entry);
+            }
         }return entries;
     });}
     public JsonNode describe(AgentCall call,String resource){return execute(call,()->provider(resource).describe(call,resource));}

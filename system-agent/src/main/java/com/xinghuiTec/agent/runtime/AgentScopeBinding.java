@@ -46,7 +46,8 @@ public final class AgentScopeBinding implements AutoCloseable {
         this.call = new AgentCall(call.actor(), call.sessionId(), call.runId(), call.callId(), call.deadline(),
                 () -> stopped.get() || call.cancelled().getAsBoolean());
         this.context = RuntimeContext.builder().userId(call.actor().stateUserId()).sessionId(call.sessionId()).build();
-        var toolkit=hub?SkillBusinessTools.create(this.call,resources,json):BusinessTools.create(this.call,resources,json);
+        var catalog=hub?resources.resources(this.call):null;
+        var toolkit=hub?SkillBusinessTools.create(this.call,resources,json,catalog):BusinessTools.create(this.call,resources,json);
         if(hub) {
             // Harness's plan middleware captures its pre-ReAct toolkit copy. Seed metadata
             // there too; ReAct re-registers the native meta tool against its final tool groups.
@@ -55,7 +56,7 @@ public final class AgentScopeBinding implements AutoCloseable {
         }
         var builder = HarnessAgent.builder()
                 .name("AI工作台").agentId("business-agent")
-                .sysPrompt(Objects.requireNonNull(systemPrompt))
+                .sysPrompt(Objects.requireNonNull(systemPrompt)+(hub?"\n系统提供的当前账号业务能力目录："+catalog+"\n仅能使用目录内当前授权的业务能力。操作和字段以实时describe为准；写入必须经过具体预览与原用户确认，以实际回执核实结果。未开放的接口、Shell、任意SQL、主机文件、已有密钥读取均不可执行。不要承诺或虚构目录之外的能力；遇到未接入业务须说明边界。": ""))
                 .model(new GatewayModel(models, this.call))
                 .toolkit(toolkit)
                 .stateStore(Objects.requireNonNull(stateStore))

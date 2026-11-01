@@ -12,6 +12,9 @@ import java.util.*;
 /** Native deferred tool groups; no schema flood and no keyword/intent router. */
 final class SkillBusinessTools {
     static Toolkit create(AgentCall call, AgentResourceGateway gateway, ObjectMapper json) {
+        return create(call,gateway,json,gateway.resources(call));
+    }
+    static Toolkit create(AgentCall call, AgentResourceGateway gateway, ObjectMapper json,com.fasterxml.jackson.databind.JsonNode catalog) {
         var toolkit=new Toolkit();
         toolkit.registerAgentTool(new AgentTool(){
             public String getName(){return "resources_list";}
@@ -20,7 +23,6 @@ final class SkillBusinessTools {
             public boolean isReadOnly(){return true;}
             public Mono<ToolResultBlock> callAsync(ToolCallParam ignored){return Mono.fromCallable(()->ToolResultBlock.text(gateway.resources(call).toString())).subscribeOn(Schedulers.boundedElastic());}
         });
-        var catalog=gateway.resources(call);
         var namespaces=new LinkedHashSet<String>();
         catalog.forEach(item->namespaces.add(item.path("resource").asText().split(":",2)[0]));
         for(String namespace:namespaces) {
