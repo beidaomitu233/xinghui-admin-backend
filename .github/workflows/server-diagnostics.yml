@@ -1,0 +1,47 @@
+name: Server diagnostics
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: server-diagnostics
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Record server status without changing services
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: bash deploy/server/diagnose-server.sh > host-status.json
+      - name: Show status summary
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          status = json.loads(pathlib.Path('host-status.json').read_text())
+          assert status['schemaVersion'] == 1
+          assert status['privileged'] is False, 'Status must run without root'
+          values = [
+              ('Available memory (MiB)', status['availableMemoryMiB']),
+              ('Swap used (MiB)', status['swapUsedMiB']),
+              ('Disk used (%)', status['diskUsedPercent']),
+              ('Load (1 minute)', round(status['load'][0], 2)),
+              ('Local web HTTP', status['endpoints']['web']),
+              ('Local API HTTP', status['endpoints']['api']),
+          ]
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## Server status\n\n| Metric | Value |\n| --- | --- |\n')
+              for label, value in values:
+                  assert value is None or isinstance(value, (int, float))
+                  summary.write(f'| {label} | {value} |\n')
+              summary.write('\nUnprivileged status check. Use the server console for full incident logs.\n')
+          assert all(value == 200 for value in status['endpoints'].values()), 'Local service check failed'
+          PY
