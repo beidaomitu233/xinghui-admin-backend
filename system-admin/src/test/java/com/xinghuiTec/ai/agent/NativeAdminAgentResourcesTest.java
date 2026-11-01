@@ -104,4 +104,48 @@ class NativeAdminAgentResourcesTest {
         assertThat(gateway.query(call,"menus",fixture.json.createObjectNode())).isEmpty();
         verify(controller).getMenuList(any());
     }
+    @Test void partialMenuEditKeepsRoutesAndCannotInjectAnotherTargetId(){
+        fixture.permissions.addAll(Set.of("system:menu:list","system:menu:query","system:menu:edit"));
+        var controller=mock(SysMenuController.class);var menu=new com.xinghuiTec.domain.entity.SysMenu();
+        menu.setMenuId(18L);menu.setMenuName("商品管理");menu.setMenuType("C");menu.setPath("products");menu.setComponent("views/products/index");menu.setOrderNum(4);
+        when(controller.getMenuById(18L)).thenReturn(Result.ok(menu));when(controller.updateMenu(any())).thenReturn(Result.ok());
+        jdbc.execute("CREATE TABLE sys_menu(menu_id BIGINT PRIMARY KEY,is_deleted INT)");jdbc.update("INSERT INTO sys_menu VALUES(18,0)");
+        var reads=new NativeReadAgentResources(fixture.access,fixture.json,validation.getValidator(),jdbc);
+        var gateway=registry(reads.menuAgentResources(controller));var call=fixture.call(fixture.a);
+        var args=fixture.json.createObjectNode().put("operation","update").put("id","18");args.putObject("data").put("menuName","产品管理");
+        assertThat(tx.execute(s->gateway.changeSnapshot(call,"menus",args)).path("path").asText()).isEqualTo("products");
+        gateway.mutate(call,"menu-write","menus",args);
+        var value=ArgumentCaptor.forClass(com.xinghuiTec.domain.dto.SysMenuAddDTO.class);verify(controller).updateMenu(value.capture());
+        assertThat(value.getValue().getMenuId()).isEqualTo(18L);assertThat(value.getValue().getComponent()).isEqualTo("views/products/index");
+        args.withObject("data").put("menuId",99);assertThatThrownBy(()->gateway.mutate(call,"bad-target","menus",args)).isInstanceOf(AgentProblem.class);
+        fixture.permissions.remove("system:menu:edit");assertThatThrownBy(()->gateway.mutate(call,"revoked","menus",args)).isInstanceOf(AgentProblem.class);
+        verify(controller,times(1)).updateMenu(any());
+    }
+    @Test void formPublishingUsesNativeRevisionAndNeverGrantsTenantIdentityDesignAccess(){
+        fixture.permissions.addAll(Set.of("lowcode:form:query","lowcode:form:publish"));
+        var controller=mock(com.xinghuiTec.lowcode.LowcodeFormController.class);
+        when(controller.get(2)).thenReturn(Result.ok(Map.of("id","2","revision",7,"status","draft")));
+        when(controller.publish(eq(2L),any())).thenReturn(Result.ok(Map.of("id","2","revision",8,"publishedVersion",1)));
+        jdbc.execute("CREATE TABLE sys_lowcode_form(id BIGINT PRIMARY KEY,is_deleted INT)");jdbc.update("INSERT INTO sys_lowcode_form VALUES(2,0)");
+        var reads=new NativeReadAgentResources(fixture.access,fixture.json,validation.getValidator(),jdbc);
+        var gateway=registry(reads.formDefinitionAgentResources(controller));var args=fixture.json.createObjectNode().put("operation","publish").put("id","2");args.putObject("data").put("revision",7);
+        var call=fixture.call(fixture.platform);assertThat(tx.execute(s->gateway.changeSnapshot(call,"form-definitions",args)).path("revision").asInt()).isEqualTo(7);
+        assertThat(gateway.mutate(call,"publish","form-definitions",args).path("publishedVersion").asInt()).isEqualTo(1);
+        var value=ArgumentCaptor.forClass(com.xinghuiTec.lowcode.LowcodeService.VersionRequest.class);verify(controller).publish(eq(2L),value.capture());assertThat(value.getValue().revision()).isEqualTo(7);
+        assertThatThrownBy(()->gateway.mutate(fixture.call(fixture.a),"tenant-publish","form-definitions",args)).isInstanceOf(AgentProblem.class);
+        fixture.permissions.remove("lowcode:form:publish");assertThatThrownBy(()->gateway.mutate(call,"revoked-publish","form-definitions",args)).isInstanceOf(AgentProblem.class);
+        verify(controller,times(1)).publish(anyLong(),any());
+    }
+    @Test void inboxRetainsNativeOwnerScopeAndRejectsCallerSuppliedRecipients(){
+        fixture.json.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        var controller=mock(NotificationInboxController.class);var item=new com.xinghuiTec.notification.NotificationInboxService.Item(51,"qa","qa-51","QA通知","验收消息","/system/user",java.time.LocalDateTime.now(),null);
+        when(controller.detail(51)).thenReturn(Result.ok(item));
+        jdbc.execute("CREATE TABLE sys_notification_inbox(notification_id BIGINT PRIMARY KEY,tenant_id VARCHAR(20),recipient_user_id BIGINT)");jdbc.update("INSERT INTO sys_notification_inbox VALUES(51,'tenant_a',1)");
+        var gateway=registry(new InboxAgentResources(controller,fixture.access,fixture.json,jdbc));var call=fixture.call(fixture.a);
+        var args=fixture.json.createObjectNode().put("operation","markRead").put("id","51");
+        assertThat(tx.execute(s->gateway.changeSnapshot(call,"inbox",args)).path("title").asText()).isEqualTo("QA通知");
+        assertThatThrownBy(()->tx.execute(s->gateway.changeSnapshot(fixture.call(fixture.b),"inbox",args))).isInstanceOf(AgentProblem.class);
+        args.put("recipientUserId","2");assertThatThrownBy(()->gateway.mutate(call,"bad-recipient","inbox",args)).isInstanceOf(AgentProblem.class);args.remove("recipientUserId");
+        assertThat(gateway.mutate(call,"read","inbox",args).path("read").asBoolean()).isTrue();verify(controller).markRead(51);
+    }
 }

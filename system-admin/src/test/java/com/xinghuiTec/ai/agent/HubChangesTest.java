@@ -21,6 +21,7 @@ class HubChangesTest {
     AgentAdapterFixture fixture;JdbcTemplate jdbc;JdbcAgentRepository repository;AgentChanges changes;AgentCall call;
     AtomicInteger writes=new AtomicInteger();
     AtomicBoolean failWrite=new AtomicBoolean();
+    java.util.concurrent.atomic.AtomicReference<JsonNode> snapshot=new java.util.concurrent.atomic.AtomicReference<>();
     @BeforeEach void setup(){
         fixture=new AgentAdapterFixture();fixture.permissions.add("lowcode:record:add");
         var ds=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=MySQL;DB_CLOSE_DELAY=-1","sa","");
@@ -33,7 +34,7 @@ class HubChangesTest {
             public void requireReadable(AgentActor actor,String r){fixture.access.current(actor).require("ai:agent:invoke");}
             public JsonNode catalog(AgentCall c){return fixture.json.createArrayNode().addObject().put("resource","forms");}
             public JsonNode describe(AgentCall c,String r){requireReadable(c.actor(),r);var node=fixture.json.createObjectNode().put("name","测试商品");var operations=node.putArray("operations").add("query");if(fixture.permissions.contains("lowcode:record:add"))operations.add("create");return node;}
-            public JsonNode query(AgentCall c,String r,JsonNode a){requireReadable(c.actor(),r);return fixture.json.createObjectNode().put("count",writes.get());}
+            public JsonNode query(AgentCall c,String r,JsonNode a){requireReadable(c.actor(),r);return snapshot.get()==null?fixture.json.createObjectNode().put("count",writes.get()):snapshot.get().deepCopy();}
             public JsonNode mutate(AgentCall c,String r,JsonNode a){requireReadable(c.actor(),r);fixture.access.current(c.actor()).require("lowcode:record:add");jdbc.update("INSERT INTO business_ledger(id) VALUES(42)");if(failWrite.get())throw new AgentProblem("BUSINESS_VALIDATION","QA库存已变化");writes.incrementAndGet();return fixture.json.createObjectNode().put("id","42").put("created",true);}
         };
         var registry=new AgentResourceRegistry(List.of(provider),fixture.access,fixture.json);
@@ -123,5 +124,17 @@ class HubChangesTest {
         String id=changes.preview(call,"stale-1","forms:1",input).path("changeId").asText();writes.set(2);
         assertThat(changes.decide(fixture.a,id,true).path("status").asText()).isEqualTo("FAILED");
         assertThat(changes.awaitDecision(call,id).path("result").path("code").asText()).isEqualTo("VERSION_CONFLICT");assertThat(writes).hasValue(2);
+    }
+    @Test void storedSnapshotAcceptsEquivalentNativeDecimalAndLongNodesButRejectsChangedValues(){
+        var original=fixture.json.createObjectNode().put("id",7L).put("revision",0L);
+        original.putObject("data").put("price",new java.math.BigDecimal("39.00"));
+        original.putObject("schema").put("min",new java.math.BigDecimal("0"));snapshot.set(original);
+        var input=fixture.json.createObjectNode().put("operation","create").put("id","7");
+        String first=changes.preview(call,"decimal-snapshot","forms:1",input).path("changeId").asText();
+        assertThat(changes.decide(fixture.a,first,true).path("status").asText()).isEqualTo("EXECUTED");assertThat(writes).hasValue(1);
+        String second=changes.preview(call,"changed-price","forms:1",input).path("changeId").asText();
+        original.withObject("data").put("price",new java.math.BigDecimal("39.01"));
+        assertThat(changes.decide(fixture.a,second,true).path("status").asText()).isEqualTo("FAILED");
+        assertThat(changes.awaitDecision(call,second).path("result").path("code").asText()).isEqualTo("VERSION_CONFLICT");assertThat(writes).hasValue(1);
     }
 }

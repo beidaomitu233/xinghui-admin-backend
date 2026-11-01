@@ -6,6 +6,7 @@ import com.xinghuiTec.agent.api.*;
 import com.xinghuiTec.controller.*;
 import com.xinghuiTec.domain.dto.*;
 import com.xinghuiTec.lowcode.LowcodeFormController;
+import com.xinghuiTec.lowcode.LowcodeService;
 import com.xinghuiTec.quartz.controller.SysJobLogController;
 import com.xinghuiTec.utils.Result;
 import jakarta.validation.Validator;
@@ -21,9 +22,18 @@ public class NativeReadAgentResources {
     public NativeReadAgentResources(AgentAccess access,ObjectMapper json,Validator validator,JdbcTemplate jdbc){this.access=access;this.json=json;this.validator=validator;this.jdbc=jdbc;}
 
     @Bean AgentResourceProvider menuAgentResources(SysMenuController menus){
-        return view("menus","系统菜单与入口","system:menu",false,SysMenuQueryDTO.class,
-            a->a.hasNonNull("id")?menus.getMenuById(id(a)):menus.getMenuList(dto(a,SysMenuQueryDTO.class)),
-            Map.of("id","可选；读取单个菜单。列表可按原生menuName/status等字段缩小范围"));
+        Function<JsonNode,JsonNode> merged=a->{
+            AgentArguments.object(a.get("data"));if(a.path("data").has("menuId"))throw AgentArguments.invalid("目标ID只能在顶层id中填写");
+            var current=menus.getMenuById(id(a));if(current.getData()==null)throw AgentArguments.invalid("菜单不存在或无访问权限");
+            var value=json.createObjectNode();var original=json.valueToTree(current.getData());
+            for(String field:List.of("menuName","parentId","orderNum","path","component","isFrame","menuType","visible","status","perms","icon"))if(original.has(field))value.set(field,original.get(field));
+            a.path("data").fields().forEachRemaining(e->value.set(e.getKey(),e.getValue()));return value;
+        };
+        return new NativeAdminAgentResources.NativeResource("menus","系统菜单与入口","system:menu",false,access,json,validator,jdbc,
+            new NativeAdminAgentResources.Query(SysMenuQueryDTO.class,a->a.hasNonNull("id")?menus.getMenuById(id(a)):menus.getMenuList(dto(a,SysMenuQueryDTO.class)),Map.of("id","可选；读取单个菜单。列表可按menuName/status等原生字段查询")),
+            Map.of("create",new NativeAdminAgentResources.Mutation("system:menu:add",SysMenuAddDTO.class,a->menus.addMenu(dto(a.path("data"),SysMenuAddDTO.class))),
+                "update",new NativeAdminAgentResources.Mutation("system:menu:edit",SysMenuAddDTO.class,a->{var value=dto(merged.apply(a),SysMenuAddDTO.class);value.setMenuId(id(a));return menus.updateMenu(value);},merged),
+                "delete",new NativeAdminAgentResources.Mutation("system:menu:remove",null,a->menus.deleteMenu(id(a)))));
     }
     @Bean AgentResourceProvider fileAgentResources(SysOssController files){
         return view("files","当前账号的文件元数据","system:oss",false,null,a->{
@@ -45,10 +55,14 @@ public class NativeReadAgentResources {
         },Map.of("id","可选；单条执行ID，否则分页查询","pageNum","默认1","pageSize","1至100，默认20","jobId","可选，任务ID","jobName","可选，任务名称","status","可选，执行状态","triggerType","可选，触发类型"));
     }
     @Bean AgentResourceProvider formDefinitionAgentResources(LowcodeFormController forms){
-        return view("form-definitions","业务表单定义与发布状态","lowcode:form",true,null,a->{
+        return new NativeAdminAgentResources.NativeResource("form-definitions","业务表单定义与发布状态","lowcode:form",true,access,json,validator,jdbc,new NativeAdminAgentResources.Query(null,a->{
             AgentArguments.only(a,"id","pageNum","pageSize","name");
             return a.hasNonNull("id")?forms.get(id(a)):forms.list(page(a),size(a),text(a,"name",128),"createTime","desc");
-        },Map.of("id","可选；表单定义ID。查询实际业务记录请使用forms Skill","pageNum","默认1","pageSize","1至100，默认20","name","可选，表单名称"));
+        },Map.of("id","可选；表单定义ID。查询实际业务记录请使用forms Skill","pageNum","默认1","pageSize","1至100，默认20","name","可选，表单名称")),
+            Map.of("create",new NativeAdminAgentResources.Mutation("lowcode:form:add",LowcodeService.Draft.class,a->forms.create(dto(a.path("data"),LowcodeService.Draft.class))),
+                "update",new NativeAdminAgentResources.Mutation("lowcode:form:edit",LowcodeService.Draft.class,a->forms.update(id(a),dto(a.path("data"),LowcodeService.Draft.class))),
+                "publish",new NativeAdminAgentResources.Mutation("lowcode:form:publish",LowcodeService.VersionRequest.class,a->forms.publish(id(a),dto(a.path("data"),LowcodeService.VersionRequest.class))),
+                "delete",new NativeAdminAgentResources.Mutation("lowcode:form:remove",LowcodeService.VersionRequest.class,a->forms.remove(id(a),dto(a.path("data"),LowcodeService.VersionRequest.class).revision()))));
     }
     @Bean AgentResourceProvider tenantAgentResources(SysTenantController tenants){
         return view("tenants","租户状态与容量","system:tenant",true,null,a->{

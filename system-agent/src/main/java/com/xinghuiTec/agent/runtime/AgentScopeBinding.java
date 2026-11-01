@@ -32,6 +32,7 @@ public final class AgentScopeBinding implements AutoCloseable {
     private final HarnessAgent agent;
     private final RuntimeContext context;
     private final AgentCall call;
+    private final String mode;
     private final AtomicBoolean stopped = new AtomicBoolean();
 
     public AgentScopeBinding(AgentCall call, String systemPrompt, Path workspace, AgentStateStore stateStore,
@@ -41,6 +42,7 @@ public final class AgentScopeBinding implements AutoCloseable {
     public AgentScopeBinding(AgentCall call, String systemPrompt, Path workspace, AgentStateStore stateStore,
                         AgentModelGateway models, AgentResourceGateway resources, ObjectMapper json, boolean hub, String mode, DistributedStore distributed) {
         Objects.requireNonNull(call);
+        this.mode=mode;
         this.call = new AgentCall(call.actor(), call.sessionId(), call.runId(), call.callId(), call.deadline(),
                 () -> stopped.get() || call.cancelled().getAsBoolean());
         this.context = RuntimeContext.builder().userId(call.actor().stateUserId()).sessionId(call.sessionId()).build();
@@ -96,9 +98,10 @@ public final class AgentScopeBinding implements AutoCloseable {
                 permissions.addAllowRule(name,new PermissionRule(name,null,PermissionBehavior.ALLOW,"application"));
             if("EXECUTE".equals(mode))permissions.addAllowRule("plan_exit",
                     new PermissionRule("plan_exit",null,PermissionBehavior.ALLOW,"userSelectedExecute"));
+            else permissions.addAskRule("plan_exit",new PermissionRule("plan_exit",null,PermissionBehavior.ASK,"userMustSelectExecute"));
             agent.getDelegate().replacePermissionContext(context.getUserId(),context.getSessionId(),permissions.build());
-            // plan_exit remains the official ASK tool. DONT_ASK denies autonomous approval;
-            // only an authenticated user turn selecting EXECUTE authorizes leaving plan mode.
+            // Explicit ASK uses the SDK's persisted permission pause, not a DENIED retry loop.
+            // Only a subsequent authenticated EXECUTE turn confirms that exact native request.
             if("PLAN".equals(mode))agent.enterPlanMode(context);else agent.exitPlanMode(context);
         }
     }
@@ -132,7 +135,19 @@ public final class AgentScopeBinding implements AutoCloseable {
             var content=new java.util.ArrayList<io.agentscope.core.message.ContentBlock>();
             if(!input.isBlank())content.add(io.agentscope.core.message.TextBlock.builder().text(input).build());
             images.forEach(url->content.add(new io.agentscope.core.message.ImageBlock(new io.agentscope.core.message.URLSource(url))));
-            messages.add(new io.agentscope.core.message.UserMessage(content));
+            var message=io.agentscope.core.message.UserMessage.builder().content(content);
+            var history=agent.getDelegate().getAgentState(context).getContext();
+            for(int i=history.size()-1;i>=0;i--){
+                var prior=history.get(i);if(prior.getRole()!=io.agentscope.core.message.MsgRole.ASSISTANT)continue;
+                var asking=prior.getContentBlocks(io.agentscope.core.message.ToolUseBlock.class).stream()
+                    .filter(tool->tool.getState()==io.agentscope.core.message.ToolCallState.ASKING).toList();
+                if(!asking.isEmpty()){
+                    if(asking.stream().anyMatch(tool->!"plan_exit".equals(tool.getName())))throw new AgentProblem("INVALID_CONFIRMATION","待确认工具不是中台计划请求");
+                    message.metadata(Map.of(io.agentscope.core.message.Msg.METADATA_CONFIRM_RESULTS,
+                        asking.stream().map(tool->new ConfirmResult("EXECUTE".equals(mode),tool)).toList()));
+                }break;
+            }
+            messages.add(message.build());
             return RunCancellation.guard(agent.streamEvents(messages, context), call)
                     .concatMapIterable(this::publicEvents);
         });
@@ -142,6 +157,11 @@ public final class AgentScopeBinding implements AutoCloseable {
             return List.of(new AgentEventView("TEXT_DELTA", Map.of("delta", text.getDelta(), "replyId", text.getReplyId())));
         if (event instanceof ModelCallStartEvent)
             return List.of(new AgentEventView("PHASE", Map.of("phase", "MODEL")));
+        if (event instanceof RequireUserConfirmEvent confirm) {
+            if(confirm.getToolCalls().stream().anyMatch(tool->!"plan_exit".equals(tool.getName())))
+                throw new AgentProblem("INVALID_CONFIRMATION","待确认工具不是中台计划请求");
+            return List.of(new AgentEventView("PLAN_READY",Map.of("awaitingExecution",true)));
+        }
         if (event instanceof ModelCallEndEvent model && model.getUsage() != null) {
             var usage = model.getUsage();
             return List.of(new AgentEventView("USAGE", Map.of("inputTokens", usage.getInputTokens(),

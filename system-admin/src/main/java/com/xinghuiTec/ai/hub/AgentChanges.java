@@ -119,7 +119,7 @@ public class AgentChanges {
             if(approve){
                 var preview=read(cipher.open(purpose(actor,id,"preview"),(String)row.get("preview_payload")));
                 var before=resources.changeSnapshot(call,resource,args);
-                if(preview.has("before")&&!preview.get("before").equals(redact(before)))throw new AgentProblem("VERSION_CONFLICT","记录已变化，请重新查询并生成变更预览");
+                if(preview.has("before")&&!preview.get("before").equals(AgentChanges::compareSnapshotValue,redact(before)))throw new AgentProblem("VERSION_CONFLICT","记录已变化，请重新查询并生成变更预览");
                 // Original services recheck permissions, target ownership, revision and all business constraints.
                 result=resources.mutate(call,call.callId(),resource,args);next="EXECUTED";
             }
@@ -165,6 +165,12 @@ public class AgentChanges {
     }
     private void targetId(JsonNode value,Set<String> ids){if(ids.size()<100&&value.isValueNode()&&value.asText().matches("[A-Za-z0-9_.:-]{1,80}"))ids.add(value.asText());}
     private static long elapsed(long started){return Math.max(0,(System.nanoTime()-started)/1_000_000);}
+    // Stored JSON rehydrates Long/BigDecimal nodes as Int/Double nodes. Compare exact
+    // numeric values, not Jackson implementation classes; real value/version changes still conflict.
+    private static int compareSnapshotValue(JsonNode left,JsonNode right){
+        if(left.isNumber()&&right.isNumber())return left.decimalValue().compareTo(right.decimalValue());
+        return left.equals(right)?0:1;
+    }
     private JsonNode read(String value){try{return json.readTree(value);}catch(Exception invalid){throw new IllegalStateException("Invalid change state",invalid);}}
     private static String purpose(AgentActor actor,String id,String field){return "hub-change:"+actor.stateUserId()+":"+id+":"+field;}
 }

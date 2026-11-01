@@ -74,8 +74,7 @@ class HubEngineTest {
             }
             if(step==2){assertThat(wire).contains("QA纸杯");return tool("plan_write","{\"content\":\"查询商品后等待用户批准新增。\"}");}
             if(step==3){assertThat(wire).contains("Plan saved");return tool("plan_exit","{\"summary\":\"请批准计划\"}");}
-            if(step==4){assertThat(wire).contains("plan_exit");return tool("forms_preview","{\"resource\":\"forms:1\",\"arguments\":{\"operation\":\"create\"}}");}
-            return text("计划完成，请切换到执行后继续。");
+            throw new AssertionError("Native ASK must stop without another model round");
         };
         var owner=call();
         try(var runtime=new AgentScopeBinding(owner,"先计划",workspace,state(),model,resources(),json,true,"PLAN",distributed())){
@@ -83,7 +82,41 @@ class HubEngineTest {
             var context=io.agentscope.core.agent.RuntimeContext.builder().userId(owner.actor().stateUserId()).sessionId(owner.sessionId()).build();
             assertThat(runtime.nativeAgent().getDelegate().getAgentState(context).getPlanModeContext().isPlanActive()).isTrue();
         }
-        assertThat(turn).hasValue(6);
+        assertThat(turn).hasValue(4);
+        assertThat(mutations).hasValue(0);
+    }
+    @Test void nativePlanPauseResumesOnlyAfterAuthenticatedExecutionAndSurvivesRecreation(){
+        var persisted=state();var kv=distributed();var step=new AtomicInteger();
+        AgentModelGateway model=(c,wire)->switch(step.getAndIncrement()){
+            case 0->tool("plan_write","{\"content\":\"核对价格并提交改价预览。\"}");
+            case 1->tool("plan_exit","{\"summary\":\"计划已就绪\"}");
+            default->{assertThat(wire).contains("Plan approved");yield text("继续执行并等待具体业务确认。");}
+        };
+        try(var runtime=new AgentScopeBinding(call(),"先计划",workspace,persisted,model,resources(),json,true,"PLAN",kv)){
+            var events=runtime.run("把杯子改成35元").collectList().block(Duration.ofSeconds(25));
+            assertThat(events).anyMatch(event->event.type().equals("PLAN_READY"));
+            assertThat(step).hasValue(2);assertThat(mutations).hasValue(0);
+        }
+        try(var runtime=new AgentScopeBinding(call(),"执行已确认计划",workspace,persisted,model,resources(),json,true,"EXECUTE",kv)){
+            runtime.run("按计划继续执行").blockLast(Duration.ofSeconds(25));
+        }
+        assertThat(step).hasValue(3);assertThat(mutations).hasValue(0);
+    }
+    @Test void textSayingExecuteDoesNotApproveNativePlanWhileUserKeepsPlanMode(){
+        var persisted=state();var kv=distributed();var step=new AtomicInteger();
+        AgentModelGateway model=(c,wire)->switch(step.getAndIncrement()){
+            case 0->tool("plan_write","{\"content\":\"先核对商品价格。\"}");
+            case 1->tool("plan_exit","{\"summary\":\"请求执行\"}");
+            default->{assertThat(wire).contains("Permission denied by user");yield text("仍保留计划，未提交业务变更。");}
+        };
+        try(var runtime=new AgentScopeBinding(call(),"先计划",workspace,persisted,model,resources(),json,true,"PLAN",kv)){
+            runtime.run("改价前先做计划").blockLast(Duration.ofSeconds(25));
+        }
+        try(var runtime=new AgentScopeBinding(call(),"继续计划",workspace,persisted,model,resources(),json,true,"PLAN",kv)){
+            runtime.run("执行").blockLast(Duration.ofSeconds(25));
+            var context=io.agentscope.core.agent.RuntimeContext.builder().userId(call().actor().stateUserId()).sessionId(call().sessionId()).build();
+            assertThat(runtime.nativeAgent().isPlanModeActive(context)).isTrue();
+        }
         assertThat(mutations).hasValue(0);
     }
     @Test void nativeRemoteKvSurvivesAgentRecreationAndKeepsSessionWorkspacesSeparateWithoutShell(){

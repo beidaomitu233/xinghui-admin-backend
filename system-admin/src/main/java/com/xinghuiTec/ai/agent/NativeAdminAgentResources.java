@@ -84,6 +84,8 @@ public class NativeAdminAgentResources {
             var operations=result.putArray("operations").add("query");var mutations=result.putObject("mutation");
             changes.forEach((operation,change)->{if(current.has(change.permission())){operations.add(operation);var description=mutations.putObject(operation);description.put("operation",operation).put("id","修改、删除、状态切换或执行时提供查询返回的目标ID字符串");description.set("data",fields(change.type()));}});
             if(namespace.equals("users")&&mutations.has("update"))((ObjectNode)mutations.get("update")).put("description","data只填写要修改的字段，未提供的字段保留原值；不要把mobileMasked/emailMasked写回手机号或邮箱，不需要读取原始密码。");
+            if(namespace.equals("menus")&&mutations.has("update"))((ObjectNode)mutations.get("update")).put("description","data只填写要修改的原生菜单字段，未提供的字段保留原值。目标menuId只在顶层id中提供。");
+            if(namespace.equals("form-definitions"))result.put("design","先读取当前表单的schema和revision。update需保留已有字段和formKey，并提供完整name/formKey/status/revision/schema；publish和delete的data只含revision。字段类型和发布兼容性由原表单服务校验，保存草稿不会自动发布。");
             if(namespace.equals("dictionary")){
                 if(mutations.has("updateItem"))((ObjectNode)mutations.get("updateItem")).put("id","条目ID，不是类型ID").put("typeId","必填；条目所属的字典类型ID");
                 if(mutations.has("createItem"))((ObjectNode)mutations.get("createItem")).put("id","父级字典类型ID");
@@ -113,9 +115,11 @@ public class NativeAdminAgentResources {
                 case "notices"->"SELECT notice_id FROM sys_notice WHERE notice_id=? AND tenant_id=? FOR UPDATE";
                 case "jobs"->"SELECT job_id FROM sys_job WHERE job_id=? FOR UPDATE";
                 case "dictionary"->"updateItem".equals(args.path("operation").asText())?"SELECT item_id FROM sys_dict_item WHERE item_id=? AND type_id=? FOR UPDATE":"SELECT type_id FROM sys_dict_type WHERE type_id=? FOR UPDATE";
+                case "menus"->"SELECT menu_id FROM sys_menu WHERE menu_id=? AND is_deleted=0 FOR UPDATE";
+                case "form-definitions"->"SELECT id FROM sys_lowcode_form WHERE id=? AND is_deleted=0 FOR UPDATE";
                 default->throw new IllegalStateException("No native snapshot lock");
             };
-            Object[] params=!platform?new Object[]{id(args),call.actor().tenantId()}:namespace.equals("dictionary")&&"updateItem".equals(args.path("operation").asText())?new Object[]{id(args),AgentArguments.id(args,"typeId")}:new Object[]{id(args)};
+            Object[] params=!platform&&!namespace.equals("menus")?new Object[]{id(args),call.actor().tenantId()}:namespace.equals("dictionary")&&"updateItem".equals(args.path("operation").asText())?new Object[]{id(args),AgentArguments.id(args,"typeId")}:new Object[]{id(args)};
             if(locks.queryForList(sql,params).size()!=1)throw AgentArguments.invalid("目标不存在或无访问权限");
         }
         public JsonNode mutate(AgentCall call,String resource,JsonNode args){var change=validate(call,resource,args);
@@ -124,7 +128,7 @@ public class NativeAdminAgentResources {
         private ObjectNode fields(Class<?> type){var result=json.createObjectNode();if(type==null)return result;
             var descriptor=validator.getConstraintsForClass(type);
             for(var property:json.getDeserializationConfig().introspect(json.constructType(type)).findProperties()){
-                if(Set.of("userId","roleId","noticeId").contains(property.getName()))continue;
+                if(Set.of("userId","roleId","noticeId","menuId").contains(property.getName()))continue;
                 var field=result.putObject(property.getName());field.put("type",property.getPrimaryType().getRawClass().getSimpleName());var constraints=descriptor.getConstraintsForProperty(property.getName());
                 if(constraints!=null){var rules=field.putArray("rules");constraints.getConstraintDescriptors().forEach(rule->{var r=rules.addObject().put("constraint",rule.getAnnotation().annotationType().getSimpleName());rule.getAttributes().forEach((key,value)->{if(Set.of("min","max","regexp","value").contains(key))r.put(key,String.valueOf(value));});});}
             }return result;
@@ -137,7 +141,7 @@ public class NativeAdminAgentResources {
         }
     }
     private static long id(JsonNode args){return AgentArguments.id(args,"id");}
-    private static JsonNode data(JsonNode args){var data=args.get("data");AgentArguments.object(data);if(data.has("userId")||data.has("roleId")||data.has("noticeId"))throw AgentArguments.invalid("目标ID只能在顶层id中填写");return data;}
+    private static JsonNode data(JsonNode args){var data=args.get("data");AgentArguments.object(data);if(data.has("userId")||data.has("roleId")||data.has("noticeId")||data.has("menuId"))throw AgentArguments.invalid("目标ID只能在顶层id中填写");return data;}
     private static <T>T dto(ObjectMapper json,Validator validator,JsonNode input,Class<T> type){
         try{var value=json.readerFor(type).with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(input);var errors=validator.validate(value);if(!errors.isEmpty())throw AgentArguments.invalid(errors.iterator().next().getMessage());return type.cast(value);}
         catch(AgentProblem safe){throw safe;}catch(Exception invalid){throw AgentArguments.invalid("请按资源定义填写字段和类型");}
