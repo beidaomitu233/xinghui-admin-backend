@@ -76,6 +76,12 @@ jobs:
           --health-interval 10s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      - name: Configure explicit TIMESTAMP defaults on legacy MySQL
+        if: matrix.mysql == '5.7'
+        env:
+          MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+          MYSQL_PWD: oss04_ci_root_fixture
+        run: docker exec -e MYSQL_PWD "$MYSQL_CONTAINER" mysql --user=root --execute='SET GLOBAL explicit_defaults_for_timestamp=ON'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
