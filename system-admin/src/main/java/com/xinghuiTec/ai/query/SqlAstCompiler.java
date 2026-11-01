@@ -225,6 +225,7 @@ public final class SqlAstCompiler {
                         : type(function.getParameters().get(0));
             }
             if (expression instanceof LongValue) return "INTEGER";
+            if (expression instanceof BooleanValue) return "BOOLEAN";
             if (expression instanceof DoubleValue || expression instanceof BinaryExpression) return "DECIMAL";
             return "STRING";
         }
@@ -292,6 +293,8 @@ public final class SqlAstCompiler {
                 return quoted(columnSource(column).alias()) + "." + quoted(field.name());
             }
             if (expression instanceof NullValue) return "NULL";
+            if (expression instanceof BooleanValue value)
+                return literal(value.getValue(), value.getValue() ? "TRUE" : "FALSE");
             if (expression instanceof StringValue value) {
                 if (value.getPrefix() != null && !value.getPrefix().isEmpty()) fail(UNSUPPORTED_SYNTAX);
                 return literal(value.getNotExcapedValue(), value.toString());

@@ -13,8 +13,13 @@ import static com.xinghuiTec.ai.contract.AiTypes.*;
 public class AiConfiguredProviderRuntime implements AiProviderRuntime {
     private final AiConfigurationService configs;
     private final OpenRouterTransport transport;
+    private final AiToolCapabilities tools;
     public AiConfiguredProviderRuntime(AiConfigurationService configs,OpenRouterTransport transport) {
-        this.configs=configs; this.transport=transport;
+        this(configs,transport,null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public AiConfiguredProviderRuntime(AiConfigurationService configs,OpenRouterTransport transport,AiToolCapabilities tools) {
+        this.configs=configs; this.transport=transport;this.tools=tools;
     }
     @Override public List<AvailableModel> availableModels(Requirements requirements) {
         var rows=configs.jdbc.query("SELECT config_id,active_version_id FROM sys_ai_configuration WHERE status='ACTIVE' AND active_version_id IS NOT NULL",
@@ -24,8 +29,11 @@ public class AiConfiguredProviderRuntime implements AiProviderRuntime {
             var h=configs.head(row[0],false); var s=configs.snapshot(row[0],row[1]); var pairs=configs.pairs(row[1]);
             for(var m:s.models()) {
                 var capabilities=OpenRouterCapabilities.forModel(m);
-                if(!capabilities.supports(requirements)) continue;
-                int count=(int)pairs.stream().filter(p->p.modelRef().equals(m.modelRef())).filter(p->s.keys().stream().anyMatch(k->matches(p,k)&&AiConfigurationService.associated(m,k)&&credentialUsable(k)&&p.proofHash().equals(configs.proof(s,m,k)))).count();
+                if(!capabilities.supports(new Requirements(requirements.outputFormat(),requirements.streaming(),false))) continue;
+                boolean toolCapable=tools!=null&&s.keys().stream().anyMatch(k->capabilities(row[0],s,m,k).tools());
+                capabilities=new Capabilities(capabilities.outputFormats(),capabilities.streaming(),toolCapable);
+                if(!capabilities.supports(requirements))continue;
+                int count=(int)pairs.stream().filter(p->p.modelRef().equals(m.modelRef())).filter(p->s.keys().stream().anyMatch(k->matches(p,k)&&AiConfigurationService.associated(m,k)&&credentialUsable(k)&&(!requirements.tools()||capabilities(row[0],s,m,k).tools())&&p.proofHash().equals(configs.proof(s,m,k)))).count();
                 if(count>0) result.add(new AvailableModel(new ModelVersionRef(m.modelRef(),s.configVersion()),Long.toString(row[0]),h.name(),s.providerCode(),m.modelCode(),capabilities,count));
             }
         }
@@ -53,7 +61,7 @@ public class AiConfiguredProviderRuntime implements AiProviderRuntime {
         for(int index=0;index<bindings.size();index++) {
             try {
                 var binding=bindings.get(index); var selected=selected(binding.model(),true);
-                if(!OpenRouterCapabilities.forModel(selected.model()).supports(requirements)) violations.add(new Violation("models["+index+"].requirements",ErrorCode.CAPABILITY_UNSUPPORTED));
+                if(selected.snapshot().keys().stream().noneMatch(k->capabilities(selected.configId(),selected.snapshot(),selected.model(),k).supports(requirements))) violations.add(new Violation("models["+index+"].requirements",ErrorCode.CAPABILITY_UNSUPPORTED));
                 var requestedKeys=new HashSet<>(binding.allowedKeys());
                 if(binding.fixedKey()!=null) requestedKeys.add(binding.fixedKey());
                 requestedKeys.addAll(binding.fallbackKeys());
@@ -64,7 +72,7 @@ public class AiConfiguredProviderRuntime implements AiProviderRuntime {
                     public java.time.Instant deadline() { return java.time.Instant.now().plusSeconds(10); }
                     public boolean cancelled() { return false; }
                 };
-                if(resolveTargets(binding,Set.of(),control).isEmpty()) violations.add(new Violation("models["+index+"]",ErrorCode.NO_USABLE_KEY));
+                if(resolveTargets(binding,Set.of(),control).stream().noneMatch(target->target.capabilities().supports(requirements))) violations.add(new Violation("models["+index+"]",ErrorCode.NO_USABLE_KEY));
             } catch(RuntimeException failure) { violations.add(new Violation("models["+index+"]",ErrorCode.MODEL_UNAVAILABLE)); }
         }
         return new Validation(violations);
@@ -78,7 +86,7 @@ public class AiConfiguredProviderRuntime implements AiProviderRuntime {
             if(!AiConfigurationService.associated(s.model(),key)||attemptedKeys.contains(ref)||(!binding.allowedKeys().isEmpty()&&!binding.allowedKeys().contains(ref))
                     ||(binding.keyMode()==KeyMode.FIXED&&!fixed.contains(ref))) continue;
             if(s.pairs().stream().noneMatch(p->p.modelRef().equals(binding.model().modelRef())&&matches(p,key)&&p.proofHash().equals(configs.proof(s.snapshot(),s.model(),key)))||!credentialUsable(key)) continue;
-            candidates.add(new Target(binding.model(),ref,s.snapshot().providerCode(),s.model().modelCode(),key.label(),OpenRouterCapabilities.forModel(s.model())));
+            candidates.add(new Target(binding.model(),ref,s.snapshot().providerCode(),s.model().modelCode(),key.label(),capabilities(s.configId(),s.snapshot(),s.model(),key)));
         }
         if(binding.keyMode()==KeyMode.FIXED) candidates.sort(Comparator.comparingInt(t->fixed.indexOf(t.key())));
         return List.copyOf(candidates);
@@ -104,5 +112,36 @@ public class AiConfiguredProviderRuntime implements AiProviderRuntime {
             return outcome;
         } catch(AiRuntimeException classified) { throw classified; }
         catch(RuntimeException failure) { throw new AiRuntimeException(ErrorCode.CREDENTIAL_UNAVAILABLE); }
+    }
+    private Capabilities capabilities(long configId,Snapshot snapshot,ModelSpec model,KeySpec key) {
+        return tools==null?OpenRouterCapabilities.forModel(model):tools.forKey(configId,snapshot,model,key);
+    }
+    @Override public ExecutionOutcome executeTools(ToolExecutionRequest request,ToolStreamObserver observer,InvocationControl control) {
+        control.check();
+        try {
+            var selected=selected(request.target().model(),false);var target=request.target();
+            var key=selected.snapshot().keys().stream().filter(k->k.keyRef().equals(target.key().keyRef())&&k.keyVersion().equals(target.key().keyVersion()))
+                    .findFirst().orElseThrow(()->new AiRuntimeException(ErrorCode.NO_USABLE_KEY));
+            if(!AiConfigurationService.associated(selected.model(),key)||!configs.keyUsable(key))throw new AiRuntimeException(ErrorCode.NO_USABLE_KEY);
+            if(!capabilities(selected.configId(),selected.snapshot(),selected.model(),key).tools())throw new AiRuntimeException(ErrorCode.CAPABILITY_UNSUPPORTED);
+            String secret=configs.resolveSecret(key);
+            if(selected.pairs().stream().noneMatch(p->p.modelRef().equals(target.model().modelRef())&&matches(p,key)&&p.proofHash().equals(configs.proof(selected.snapshot(),selected.model(),key,secret))))throw new AiRuntimeException(ErrorCode.NO_USABLE_KEY);
+            if(!"ACTIVE".equals(configs.currentHead(selected.configId()).status()))throw new AiRuntimeException(ErrorCode.MODEL_UNAVAILABLE);
+            control.check();
+            var snapshot=selected.snapshot();
+            var result=transport.callTools(snapshot.providerCode(),snapshot.endpointUrl(),selected.model().modelCode(),snapshot.timeoutSeconds(),secret,
+                    request.requestJson(),request.maxTokens(),observer,control);
+            if(result.errorCode()==ErrorCode.AUTH_FAILED)configs.keyRejected(key);
+            return result;
+        }catch(AiRuntimeException classified){throw classified;}
+        catch(RuntimeException unavailable){throw new AiRuntimeException(ErrorCode.CREDENTIAL_UNAVAILABLE);}
+    }
+    @Override public boolean supportsImages(Target target,InvocationControl control){
+        control.check();
+        try{
+            var selected=selected(target.model(),false);
+            var key=selected.snapshot().keys().stream().filter(k->k.keyRef().equals(target.key().keyRef())&&k.keyVersion().equals(target.key().keyVersion())).findFirst().orElse(null);
+            return key!=null&&tools!=null&&tools.supportsImages(selected.configId(),selected.snapshot(),selected.model(),key);
+        }catch(AiRuntimeException unavailable){return false;}
     }
 }

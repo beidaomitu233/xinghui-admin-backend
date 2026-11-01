@@ -45,6 +45,11 @@ public class BusinessConfigService implements BusinessConfigSource {
     }
     public record View(String section,boolean enabled,Map<String,String> parameters,Map<String,Boolean> secretsConfigured,
                        int revision,String updateTime,String source,String effectiveState,boolean encryptionReady) {}
+    public record Description(String section,String name,Set<String> parameters,Set<String> secrets) {}
+    public List<Description> descriptions(){
+        var labels=Map.of("wechat","微信电脑网站登录","wechatMp","微信内H5登录","sms","短信服务","mail","邮件服务","oss","对象存储");
+        return List.of("wechat","wechatMp","sms","mail","oss").stream().map(section->new Description(section,labels.get(section),PARAMETERS.get(section),SECRET_FIELDS.get(section))).toList();
+    }
     public static class Failure extends RuntimeException {
         public final int status;
         public Failure(int status,String message) { super(message);this.status=status; }

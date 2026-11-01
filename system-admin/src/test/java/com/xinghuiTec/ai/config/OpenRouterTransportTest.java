@@ -22,6 +22,42 @@ class OpenRouterTransportTest {
     @BeforeEach void setup() {
         client=mock(HttpClient.class); transport=new OpenRouterTransport(new ObjectMapper(),new AiModelConfigRules(),client); output=new StringBuilder();
     }
+    @Test void reservedDnsAddressesRemainBlockedAndReportNetworkFailureBeforeAnyResponse() throws Exception {
+        for(String address:List.of("198.18.0.197","2001:2::be","127.0.0.1")) {
+            var error=assertThrows(com.xinghuiTec.ai.contract.AiRuntimeException.class,
+                    ()->transport.validateResolvedAddress(java.net.InetAddress.getByName(address)));
+            assertEquals(ErrorCode.NETWORK_ERROR,error.code());
+        }
+        assertDoesNotThrow(()->transport.validateResolvedAddress(java.net.InetAddress.getByName("1.1.1.1")));
+        verifyNoInteractions(client);
+    }
+    @Test void aStartedStreamUsesTheFullResponseBudgetInsteadOfTheSilentFallbackWindow() {
+        var initial=frame("商品信息",null);
+        var tail=frame("已查询完成","stop")+"data: [DONE]\n\n";
+        @SuppressWarnings("unchecked") HttpResponse<InputStream> upstream=mock(HttpResponse.class);
+        when(upstream.statusCode()).thenReturn(200);
+        when(upstream.body()).thenReturn(new InputStream(){
+            final byte[] first=initial.getBytes(StandardCharsets.UTF_8),last=tail.getBytes(StandardCharsets.UTF_8);
+            int index;boolean waited;volatile boolean closed;
+            public int read()throws IOException {
+                if(index==first.length&&!waited){
+                    waited=true;
+                    try{Thread.sleep(1000);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new IOException(e);}
+                }
+                if(closed)throw new IOException("controlled stream closed");
+                return index<first.length?first[index++]&255:index<first.length+last.length?last[index++-first.length]&255:-1;
+            }
+            public int read(byte[] bytes,int offset,int length)throws IOException {int value=read();if(value<0)return -1;bytes[offset]=(byte)value;return 1;}
+            public void close(){closed=true;}
+        });
+        when(client.sendAsync(any(HttpRequest.class),any(HttpResponse.BodyHandler.class))).thenReturn(CompletableFuture.completedFuture(upstream));
+        Instant silent=Instant.now().plusMillis(800),full=Instant.now().plusSeconds(5);
+        var budget=new InvocationControl(){public Instant deadline(){return full;}public Instant firstOutputDeadline(){return silent;}public boolean cancelled(){return false;}};
+        var result=transport.call("unit/model",5,"controlled-secret",List.of(new AiMessage(MessageRole.USER,"QA budget")),new Requirements(OutputFormat.TEXT,true,false),128,mock(StreamObserver.class),budget);
+        assertEquals(ExecutionStatus.SUCCEEDED,result.status());
+        assertTrue(result.outputStarted());
+        assertFalse(result.retryable());
+    }
     void response(int status,String body) {
         HttpResponse<InputStream> response=mock(HttpResponse.class);
         when(response.statusCode()).thenReturn(status); when(response.body()).thenReturn(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
@@ -121,20 +157,22 @@ class OpenRouterTransportTest {
         assertFalse(result.retryable());
         verify(client, times(1)).sendAsync(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
-    @Test void fourOfficialProvidersUseTheirOwnTokenAndRoutingParameters()throws Exception {
+    @Test void officialProvidersUseTheirOwnTokenAndRoutingParameters()throws Exception {
         for(var preset:AiProviderPresets.all()) {
             response(200,"{\"model\":\"unit/model\",\"choices\":[{\"message\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}");
             var result=transport.callForProvider(preset.code(),preset.chatEndpoint(),"unit/model",5,"controlled-secret",List.of(new AiMessage(MessageRole.USER,"synthetic")),
                     new Requirements(OutputFormat.TEXT,false,false),128,mock(StreamObserver.class),control);
             assertEquals(ExecutionStatus.SUCCEEDED,result.status(),preset.code());
         }
-        var captured=org.mockito.ArgumentCaptor.forClass(HttpRequest.class);verify(client,times(4)).sendAsync(captured.capture(),any(HttpResponse.BodyHandler.class));
-        for(int index=0;index<4;index++) {
+        var captured=org.mockito.ArgumentCaptor.forClass(HttpRequest.class);verify(client,times(AiProviderPresets.all().size())).sendAsync(captured.capture(),any(HttpResponse.BodyHandler.class));
+        for(int index=0;index<AiProviderPresets.all().size();index++) {
             var preset=AiProviderPresets.all().get(index);var request=captured.getAllValues().get(index);var body=new ObjectMapper().readTree(requestBody(request));
             assertEquals(preset.chatEndpoint(),request.uri().toString());assertEquals("Bearer controlled-secret",request.headers().firstValue("Authorization").orElseThrow());
-            assertEquals(128,body.path(preset.code().equals("openai")?"max_completion_tokens":"max_tokens").intValue());
-            assertFalse(body.has(preset.code().equals("openai")?"max_tokens":"max_completion_tokens"));
-            assertEquals(preset.code().equals("openrouter"),body.has("provider"));assertEquals(preset.code().equals("deepseek"),body.has("thinking"));
+            boolean completionTokens=java.util.Set.of("openai","mimo").contains(preset.code());
+            assertEquals(128,body.path(completionTokens?"max_completion_tokens":"max_tokens").intValue());
+            assertFalse(body.has(completionTokens?"max_tokens":"max_completion_tokens"));
+            assertEquals(preset.code().equals("openrouter"),body.has("provider"));assertEquals(java.util.Set.of("deepseek","mimo").contains(preset.code()),body.has("thinking"));
+            if(preset.code().equals("mimo"))assertEquals("disabled",body.path("thinking").path("type").asText());
         }
     }
 

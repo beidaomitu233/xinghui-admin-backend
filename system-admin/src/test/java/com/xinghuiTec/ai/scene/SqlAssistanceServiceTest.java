@@ -74,6 +74,7 @@ class SqlAssistanceServiceTest {
         throw new AssertionError("controlled SQL assistance did not finish");
     }
     @Test void approvedCandidateIsDurableButHiddenPromptAndRawStreamNeverBecomePublic()throws Exception {
+        http.output="```json\n"+http.output+"\n```";
         var accepted=service.start(input(),actor);var result=finished(accepted.requestId());
         assertEquals(SqlAssistanceDtos.Status.SUCCEEDED,result.status());assertEquals("Alpha",result.query().parameters().get("term"));
         assertTrue(http.systemMessage.contains("SCHEMA_PRIVATE_SENTINEL"));assertTrue(http.systemMessage.contains("SQL_ASSIST_GUARD_"));assertFalse(http.systemMessage.contains("tenant_a"));

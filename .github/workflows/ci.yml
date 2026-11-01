@@ -76,6 +76,12 @@ jobs:
           --health-interval 10s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      - name: Configure explicit TIMESTAMP defaults on legacy MySQL
+        if: matrix.mysql == '5.7'
+        env:
+          MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+          MYSQL_PWD: oss04_ci_root_fixture
+        run: docker exec -e MYSQL_PWD "$MYSQL_CONTAINER" mysql --user=root --execute='SET GLOBAL explicit_defaults_for_timestamp=ON'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -113,6 +119,15 @@ jobs:
       - name: Reject missing or skipped smoke tests
         shell: pwsh
         run: ./scripts/quality/Verify-Build.ps1 -TestsOnly -RequiredClass ReleaseServicesIT
+      - name: Verify official no-shell Harness with real Redis and restored sessions
+        env:
+          CI: "true"
+          REDIS_PORT: "6379"
+          REDIS_DATABASE: "15"
+          REDIS_PASSWORD: oss04_ci_cache_fixture
+        run: >-
+          mvn -B -ntp -pl system-admin -am test
+          -Dtest=AgentScopeRemoteKvIT -Dsurefire.failIfNoSpecifiedTests=false
       - name: Exercise AI configuration HTTP through Druid Wall on migrated MySQL
         env:
           CI: "true"
@@ -149,7 +164,17 @@ jobs:
         run: >-
           mvn -B -ntp -pl system-admin -am test
           -Dtest=LowcodeSharingMySqlIT -Dsurefire.failIfNoSpecifiedTests=false
-      - name: Reject missing or skipped service regressions
+      - name: Exercise typed lowcode and AI latency sorting through Druid Wall
+        env:
+          CI: "true"
+          DB_URL: jdbc:mysql://127.0.0.1:3306/xinghui_oss04_ci?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+          DB_USERNAME: oss04_ci
+          DB_PASSWORD: oss04_ci_database_fixture
+          UI_NATIVE_MYSQL_SORT: "1"
+        run: >-
+          mvn -B -ntp -pl system-admin -am test
+          -Dtest=LowcodeSortingMySqlIT,AiCallLogMysqlSortIT -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Require every migrated MySQL regression report
         shell: pwsh
         run: ./scripts/quality/Verify-Build.ps1 -TestsOnly -RequiredList scripts/quality/required-service-tests.txt
   quality:

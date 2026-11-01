@@ -28,7 +28,7 @@ public class SceneRuntimeService {
     public SceneRuntimeService(SceneStore scenes,SceneManagementService management,SceneExecutionStore execution,AiRuntimeService runtime,
             AiApplicationReferences references,ObjectProvider<AiSceneDataRuntime> data){this.scenes=scenes;this.management=management;this.execution=execution;this.runtime=runtime;this.references=references;this.data=data;}
     public List<SceneDtos.Entry> candidates(SceneDtos.Kind kind,String formId,TrustedActor actor){
-        caller(actor);return scenes.candidates(kind,formId).stream().filter(h->visible(h,actor)).map(h->entry(h,actor)).toList();
+        caller(actor);return scenes.candidates(kind,formId).stream().filter(h->h.kind()!=SceneDtos.Kind.AGENT&&visible(h,actor)).map(h->entry(h,actor)).toList();
     }
     public SceneDtos.Entry recordSummary(String formId,TrustedActor actor){
         caller(actor);SceneStore.decimal(formId);var candidates=scenes.candidates(SceneDtos.Kind.RECORD_SUMMARY,formId).stream().filter(h->visible(h,actor)).toList();
@@ -44,7 +44,7 @@ public class SceneRuntimeService {
     private SceneDtos.Request submit(String key,Integer expected,Integer model,SceneDtos.Submission input,TrustedActor actor){
         caller(actor);
         Selected selected=references.withReferenceGuard(()->{
-            var head=scenes.head(key,true);require(head.currentVersion()!=null,409,"SCENE_UNCONFIGURED");require(head.enabled(),409,"SCENE_DISABLED");
+            var head=scenes.head(key,true);require(head.kind()!=SceneDtos.Kind.AGENT,409,"USE_AGENT_WORKBENCH");require(head.currentVersion()!=null,409,"SCENE_UNCONFIGURED");require(head.enabled(),409,"SCENE_DISABLED");
             require("MAPPED".equals(head.compatibilityStatus()),409,"AMBIGUOUS_LEGACY_MAPPING");
             if(head.appId()!=null){
                 require(input!=null && input.inputs()!=null,400,"INVALID_INPUT");SceneStore.mutationId(input.idempotencyKey());

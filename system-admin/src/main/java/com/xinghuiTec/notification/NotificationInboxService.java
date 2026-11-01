@@ -34,10 +34,20 @@ public class NotificationInboxService {
     public record Page(List<Item> items, long total, int pageNum, int pageSize) {}
 
     public Page page(int pageNum, int pageSize, boolean unreadOnly) {
+        return page(pageNum, pageSize, unreadOnly, null, null);
+    }
+
+    public Page page(int pageNum, int pageSize, boolean unreadOnly, String orderBy, String order) {
         Owner owner = owner();
         if (pageNum < 1 || pageNum > 10_000 || pageSize < 1 || pageSize > 100) {
             throw new ServiceException("页码或每页数量无效（每页最多 100 条）");
         }
+        String key = orderBy == null || orderBy.isBlank() ? "createTime" : orderBy;
+        String column = java.util.Map.of("id", "notification_id", "title", "title", "createTime", "create_time", "readTime", "read_time").get(key);
+        if (column == null) throw new ServiceException("不支持此排序字段");
+        String direction = order == null || order.isBlank() ? "desc" : order;
+        if (!Set.of("asc", "desc").contains(direction)) throw new ServiceException("排序方向须为asc或desc");
+        String sort = column + ("asc".equals(direction) ? " ASC" : " DESC") + ("notification_id".equals(column) ? "" : ",notification_id DESC");
         String filter = unreadOnly ? " AND read_time IS NULL" : "";
         long total = jdbc.queryForObject("SELECT COUNT(*) FROM sys_notification_inbox "
                         + "WHERE tenant_id=? AND recipient_user_id=?" + filter,
@@ -45,7 +55,7 @@ public class NotificationInboxService {
         List<Item> items = jdbc.query("""
                 SELECT notification_id,event_code,event_key,title,body,target,create_time,read_time
                   FROM sys_notification_inbox WHERE tenant_id=? AND recipient_user_id=?
-                """ + filter + " ORDER BY create_time DESC,notification_id DESC LIMIT ? OFFSET ?",
+                """ + filter + " ORDER BY " + sort + " LIMIT ? OFFSET ?",
                 (rs, row) -> item(rs.getLong(1), rs.getString(2), rs.getString(3),
                         rs.getString(4), rs.getString(5), rs.getString(6),
                         rs.getTimestamp(7), rs.getTimestamp(8)),

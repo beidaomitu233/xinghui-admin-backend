@@ -36,7 +36,10 @@ public class SceneManagementService {
         this.mapper=mapper.copy().enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
     }
     public SceneDtos.Page page(int page,int size,String search) {
-        return new SceneDtos.Page(scenes.page(page,size,search).stream().map(this::summary).toList(),Long.toString(scenes.count(search)),page,size);
+        return page(page,size,search,null,null);
+    }
+    public SceneDtos.Page page(int page,int size,String search,String orderBy,String order) {
+        return new SceneDtos.Page(scenes.page(page,size,search,orderBy,order).stream().map(this::summary).toList(),Long.toString(scenes.count(search)),page,size);
     }
     public SceneDtos.Workspace workspace(int page,int size,String search,String selected,TrustedActor actor) {
         return references.withReferenceGuard(()->new SceneDtos.Workspace(page(page,size,search),selected==null?null:detail(selected,actor)));
@@ -99,16 +102,57 @@ public class SceneManagementService {
     }
     /** Internal immutable model selection for assistance; never serialized by a controller. */
     public record AssistanceRoute(String sceneKey,int revision,String appId,String appVersion,AiApplicationPolicy policy) {}
+    /** Internal only. Prompt bodies never appear in the workbench's preset list. */
+    public record AgentRoute(String sceneKey,int revision,String appId,String appVersion,String systemPrompt,AiApplicationPolicy policy) {
+        @Override public String toString(){return "AgentRoute[REDACTED]";}
+    }
+    public List<SceneDtos.Entry> agentChoices(TrustedActor actor) {
+        require(actor!=null&&actor.authorities().contains("ai:agent:invoke"),403,"FORBIDDEN");
+        return scenes.candidates(SceneDtos.Kind.AGENT,null).stream().filter(head->{
+            if(head.currentVersion()==null)return false;
+            try{return execution.policy(scenes.version(head.currentVersion()).appVersion()).permits(actor);}catch(RuntimeException unavailable){return false;}
+        }).map(head->new SceneDtos.Entry(head.key(),head.name(),head.kind(),head.formId(),head.currentVersion(),head.revision(),availability(head),false,null,null,false)).toList();
+    }
+    public AgentRoute agentRoute(String key,TrustedActor actor) {
+        require(actor!=null&&actor.authorities().contains("ai:agent:invoke"),403,"FORBIDDEN");
+        return references.withReferenceGuard(()->{
+            var head=scenes.head(key,true);
+            require(head.kind()==SceneDtos.Kind.AGENT&&head.enabled()&&head.currentVersion()!=null,409,"AGENT_PROMPT_UNAVAILABLE");
+            var version=scenes.version(head.currentVersion());var policy=execution.policy(version.appVersion());
+            require(policy.permits(actor),403,"FORBIDDEN");
+            var d=version.definition();
+            require(d!=null&&version.compiled()!=null,409,"AGENT_PROMPT_UNAVAILABLE");
+            require(policy.requirements().tools()&&policy.requirements().outputFormat()==OutputFormat.TEXT,409,"AGENT_PROMPT_UNAVAILABLE");
+            // Hub agents discover authorized data through business tools, never through manual prompt references.
+            return new AgentRoute(head.key(),head.revision(),head.appId(),version.appVersion(),d.promptText(),policy);
+        });
+    }
+    /** The existing data runtime resolves references under the caller's actual tenant and permissions. */
+    public List<String> agentContext(String key,TrustedActor actor,String task) {
+        agentRoute(key,actor);var head=scenes.head(key,false);var version=scenes.version(head.currentVersion());
+        var compiled=version.compiled();var definition=version.definition();
+        if(definition.dataObjects().isEmpty()&&definition.dataBindings().isEmpty()&&definition.sqlBindings().isEmpty()
+                &&compiled.inputVariables().isEmpty())return List.of();
+        var source=data.getIfUnique();require(source!=null,503,"DEPENDENCY_UNAVAILABLE");
+        var rendered=source.render(compiled,new AiSceneDataRuntime.SceneContext(key,version.id(),actor,new BusinessRef("ai.scene",key),UUID.randomUUID().toString()),
+                new AiInputs(Map.of("user_request",task)),control(10));
+        return rendered.messages().stream().filter(message->message.role()!=MessageRole.SYSTEM).map(AiMessage::content).toList();
+    }
     public AssistanceRoute assistanceRoute(SqlAssistanceDtos.Start input,TrustedActor actor) {
         return references.withReferenceGuard(()->{
             var h=scenes.head(input.sceneKey(),true);expected(h,input.expectedSceneRevision());
             AiApplicationPolicy policy;String version=null;
             if(h.currentVersion()!=null) {
-                require(input.initialModel()==null && input.businessModel()==null,409,"ROUTING_MANAGEMENT_REQUIRED");
+                require(input.initialModel()==null && input.businessModel()==null&&input.businessModels().isEmpty(),409,"ROUTING_MANAGEMENT_REQUIRED");
                 var current=scenes.version(h.currentVersion());version=current.appVersion();policy=execution.policy(version);
                 require(policy.permitsSubject(actor),403,"FORBIDDEN");
             }else {
-                require(input.initialModel()!=null || input.businessModel()!=null,409,"MODEL_REQUIRED");
+                require(input.initialModel()!=null || input.businessModel()!=null||!input.businessModels().isEmpty(),409,"MODEL_REQUIRED");
+                if(!input.businessModels().isEmpty()){
+                    require(input.initialModel()==null&&input.businessModel()==null&&modelHub!=null,400,"INVALID_INPUT");input.businessModels().forEach(modelHub::bySlug);
+                    policy=new AiApplicationPolicy(AiApplicationPolicy.ModelMode.FIXED,List.of(),input.businessModels().size()>1,null,Set.of("description"),new Requirements(OutputFormat.TEXT,true,false),AiApplicationPolicy.Scope.FRONTEND,Set.of(actor.subjectId()),Set.of(),null,120,8,2,1024,null,input.businessModels());
+                    return new AssistanceRoute(h.key(),h.revision(),null,null,policy);
+                }
                 if(input.businessModel()!=null){
                     require(input.initialModel()==null && modelHub!=null,400,"INVALID_INPUT");modelHub.bySlug(input.businessModel());
                     policy=new AiApplicationPolicy(AiApplicationPolicy.ModelMode.FIXED,List.of(),false,null,Set.of("description"),new Requirements(OutputFormat.TEXT,true,false),AiApplicationPolicy.Scope.FRONTEND,Set.of(actor.subjectId()),Set.of(),null,120,8,2,1024,input.businessModel());
@@ -119,7 +163,7 @@ public class SceneManagementService {
                         Set.of("description"),new Requirements(OutputFormat.TEXT,true,false),AiApplicationPolicy.Scope.FRONTEND,Set.of(actor.subjectId()),Set.of(),null,120,8,2,1024);
             }
             var provider=providers.getIfUnique();require(provider!=null,503,"DEPENDENCY_UNAVAILABLE");
-            require(policy.businessModel()!=null || provider.validateBindings(policy.models(),policy.requirements()).valid(),409,"ROUTING_UNAVAILABLE");
+            require(policy.hasBusinessModels() || provider.validateBindings(policy.models(),policy.requirements()).valid(),409,"ROUTING_UNAVAILABLE");
             return new AssistanceRoute(h.key(),h.revision(),h.appId(),version,policy);
         });
     }
@@ -127,33 +171,36 @@ public class SceneManagementService {
         return references.withReferenceGuard(()->{
             var head=scenes.head(key,true);
             var policy=head.currentVersion()==null?null:execution.policy(scenes.version(head.currentVersion()).appVersion());
-            return new SceneRoutingDtos.View(key,head.revision(),head.currentVersion(),policy==null?null:wirePolicy(policy),policy==null?null:policy.businessModel());
+            return new SceneRoutingDtos.View(key,head.revision(),head.currentVersion(),policy==null?null:wirePolicy(policy),policy==null?null:policy.businessModel(),policy==null?List.of():policy.businessModels());
         });
     }
     public SceneRoutingDtos.Saved routing(String key,SceneRoutingDtos.Change input,TrustedActor actor) {
-        require(input!=null && (input.modelPolicy()!=null || input.businessModel()!=null) && input.expectedRevision()>=0,400,"INVALID_INPUT");SceneStore.mutationId(input.clientMutationId());
+        require(input!=null && (input.modelPolicy()!=null || input.businessModel()!=null||!input.businessModels().isEmpty()) && input.expectedRevision()>=0,400,"INVALID_INPUT");SceneStore.mutationId(input.clientMutationId());
         return references.withReferenceGuard(()->{
             var head=scenes.head(key,true);String hash=fingerprint("ROUTING",input);
             var replay=scenes.mutation(key,input.clientMutationId());
             if(replay!=null) {
                 require(replay.fingerprint().equals(hash),409,"IDEMPOTENCY_CONFLICT");
                 var detail=replay.result().detail();
-                return new SceneRoutingDtos.Saved(new SceneRoutingDtos.View(key,detail.scene().revision(),detail.scene().currentVersionId(),detail.definition().modelPolicy(),detail.definition().businessModel()),input.clientMutationId(),replay.result().effectiveFrom());
+                return new SceneRoutingDtos.Saved(new SceneRoutingDtos.View(key,detail.scene().revision(),detail.scene().currentVersionId(),detail.definition().modelPolicy(),detail.definition().businessModel(),detail.definition().businessModels()),input.clientMutationId(),replay.result().effectiveFrom());
             }
             expected(head,input.expectedRevision());require(head.currentVersion()!=null,409,"SCENE_UNCONFIGURED");
             var current=scenes.version(head.currentVersion());require(current.definition()!=null && current.compiled()!=null,409,"LEGACY_EDITOR_UNAVAILABLE");
             var d=current.definition();
             if(input.businessModel()!=null){require(input.modelPolicy()==null && modelHub!=null,400,"INVALID_INPUT");modelHub.bySlug(input.businessModel());}
-            var definition=new SceneDtos.Definition(d.name(),d.purpose(),d.promptText(),d.outputRequirement(),d.dataObjects(),input.businessModel()==null?input.modelPolicy():businessPolicy(),d.dataBindings(),null,d.sqlBindings(),input.businessModel());
+            input.businessModels().forEach(slug->{require(modelHub!=null,503,"DEPENDENCY_UNAVAILABLE");modelHub.bySlug(slug);});
+            var routePolicy=input.businessModel()!=null?businessPolicy():input.modelPolicy();
+            if(!input.businessModels().isEmpty()){var previous=wirePolicy(execution.policy(current.appVersion()));routePolicy=new SceneDtos.ModelPolicy(SceneDtos.ModelMode.FIXED,List.of(),input.businessModels().size()>1,previous.outputFormat(),previous.timeoutSeconds(),previous.maxAttempts(),previous.maxConcurrent(),previous.maxTokens());}
+            var definition=new SceneDtos.Definition(d.name(),d.purpose(),d.promptText(),d.outputRequirement(),d.dataObjects(),routePolicy,d.dataBindings(),null,d.sqlBindings(),input.businessModel(),input.businessModels());
             validate(definition);var policy=policy(head,definition,current.compiled());
             var provider=providers.getIfUnique();require(provider!=null,503,"DEPENDENCY_UNAVAILABLE");
             var validation=provider.validateBindings(policy.models(),policy.requirements());
-            require(policy.businessModel()!=null || validation.valid(),409,"ROUTING_UNAVAILABLE");
+            require(policy.hasBusinessModels() || validation.valid(),409,"ROUTING_UNAVAILABLE");
             String appVersion=execution.append(head,policy,definition,actor.subjectId());
             var version=scenes.insertRoutingVersion(head,current,appVersion,definition,actor.subjectId());scenes.activate(head,version,definition);
             var detail=new SceneDtos.Detail(summary(scenes.head(key,false)),definition);
             var result=new SceneDtos.SaveResult(detail,input.clientMutationId(),version.createdAt());scenes.mutation(key,input.clientMutationId(),hash,result);
-            return new SceneRoutingDtos.Saved(new SceneRoutingDtos.View(key,detail.scene().revision(),version.id(),definition.modelPolicy(),definition.businessModel()),input.clientMutationId(),version.createdAt());
+            return new SceneRoutingDtos.Saved(new SceneRoutingDtos.View(key,detail.scene().revision(),version.id(),definition.modelPolicy(),definition.businessModel(),definition.businessModels()),input.clientMutationId(),version.createdAt());
         });
     }
     private boolean sameRouting(SceneDtos.ModelPolicy left,SceneDtos.ModelPolicy right) {
@@ -170,9 +217,20 @@ public class SceneManagementService {
     private SceneDtos.Definition bodyRouting(SceneStore.Head head,SceneDtos.Definition definition) {
         SceneDtos.ModelPolicy route=definition.modelPolicy();
         String businessModel=definition.businessModel();
+        if(!definition.businessModels().isEmpty()) {
+            require(modelHub!=null&&definition.initialModel()==null,400,"INVALID_INPUT");
+            definition.businessModels().forEach(modelHub::bySlug);
+            var previous=head.currentVersion()==null?(route==null?businessPolicy():route):wirePolicy(execution.policy(scenes.version(head.currentVersion()).appVersion()));
+            route=new SceneDtos.ModelPolicy(SceneDtos.ModelMode.FIXED,List.of(),definition.businessModels().size()>1,previous.outputFormat(),previous.timeoutSeconds(),previous.maxAttempts(),previous.maxConcurrent(),previous.maxTokens());
+            return new SceneDtos.Definition(definition.name(),definition.purpose(),definition.promptText(),definition.outputRequirement(),definition.dataObjects(),route,definition.dataBindings(),null,definition.sqlBindings(),null,definition.businessModels());
+        }
         if(head.currentVersion()!=null) {
             require(definition.initialModel()==null,409,"ROUTING_MANAGEMENT_REQUIRED");
             var oldPolicy=execution.policy(scenes.version(head.currentVersion()).appVersion());
+            if(!oldPolicy.businessModels().isEmpty()) {
+                require(businessModel==null&&route==null,409,"ROUTING_MANAGEMENT_REQUIRED");
+                return new SceneDtos.Definition(definition.name(),definition.purpose(),definition.promptText(),definition.outputRequirement(),definition.dataObjects(),wirePolicy(oldPolicy),definition.dataBindings(),null,definition.sqlBindings(),null,oldPolicy.businessModels());
+            }
             require(businessModel==null || Objects.equals(businessModel,oldPolicy.businessModel()),409,"ROUTING_MANAGEMENT_REQUIRED");
             businessModel=oldPolicy.businessModel();
             var preserved=wirePolicy(oldPolicy);
@@ -210,25 +268,30 @@ public class SceneManagementService {
         try {
             var version=scenes.version(h.currentVersion());var policy=execution.policy(version.appVersion());var provider=providers.getIfUnique();
             if(provider==null || data.getIfUnique()==null)return new SceneDtos.Availability(SceneDtos.AvailabilityState.UNAVAILABLE,List.of("DEPENDENCY_UNAVAILABLE"));
-            if(policy.businessModel()!=null){var model=modelHub==null?null:modelHub.bySlug(policy.businessModel());return new SceneDtos.Availability(model!=null&&model.health().ready()?SceneDtos.AvailabilityState.READY:SceneDtos.AvailabilityState.UNAVAILABLE,List.of("BUSINESS_MODEL_CONFIGURATION"));}
+            if(policy.hasBusinessModels()){boolean ready=modelHub!=null&&modelHub.ready(policy);return new SceneDtos.Availability(ready?SceneDtos.AvailabilityState.READY:SceneDtos.AvailabilityState.UNAVAILABLE,List.of("BUSINESS_MODEL_CONFIGURATION"));}
             var validation=provider.validateBindings(policy.models(),policy.requirements());
             return new SceneDtos.Availability(validation.valid()?SceneDtos.AvailabilityState.READY:SceneDtos.AvailabilityState.UNAVAILABLE,
                     validation.violations().stream().map(v->v.code().name()).distinct().toList());
         }catch(RuntimeException unavailable){return new SceneDtos.Availability(SceneDtos.AvailabilityState.UNAVAILABLE,List.of("MODEL_UNAVAILABLE"));}
     }
     private AiApplicationPolicy policy(SceneStore.Head h,SceneDtos.Definition d,AiSceneDataRuntime.CompiledScene compiled) {
+        if(h.kind()==SceneDtos.Kind.AGENT) {
+            require(d.dataObjects().isEmpty()&&d.dataBindings().isEmpty()&&d.sqlBindings().isEmpty(),400,"AGENT_USES_BUSINESS_TOOLS");
+            require(compiled.inputVariables().stream().noneMatch(variable->variable.required()&&!variable.name().equals("user_request")),400,"AGENT_INPUT_COMES_FROM_CHAT");
+            require(d.modelPolicy().outputFormat()==SceneDtos.OutputFormat.TEXT,400,"AGENT_REQUIRES_TEXT_MODEL");
+        }
         var p=d.modelPolicy();var models=p.models().stream().map(b->new AiProviderRuntime.ModelBinding(
                 new ModelVersionRef(b.model().modelRef(),b.model().configVersion()),AiProviderRuntime.KeyMode.valueOf(b.keyMode().name()),
                 b.allowedKeys().stream().map(k->new KeyRef(k.keyRef(),k.keyVersion())).collect(java.util.stream.Collectors.toSet()),
                 b.fixedKey()==null?null:new KeyRef(b.fixedKey().keyRef(),b.fixedKey().keyVersion()),b.fallbackKeys().stream().map(k->new KeyRef(k.keyRef(),k.keyVersion())).toList())).toList();
-        Set<String> subjects=Set.of();Set<String> authorities=Set.of("ai:scene:invoke");AiApplicationPolicy.Scope scope=AiApplicationPolicy.Scope.FRONTEND;
+        Set<String> subjects=Set.of();Set<String> authorities=Set.of(h.kind()==SceneDtos.Kind.AGENT?"ai:agent:invoke":"ai:scene:invoke");AiApplicationPolicy.Scope scope=AiApplicationPolicy.Scope.FRONTEND;
         // Migration never expands an existing application's permitted caller set or scope.
         if(h.legacyBaseVersion()!=null){var old=execution.policy(h.legacyBaseVersion());subjects=old.allowedSubjects();authorities=old.allowedAuthorities();scope=old.scope();}
         else if(h.currentVersion()!=null){var old=execution.policy(scenes.version(h.currentVersion()).appVersion());subjects=old.allowedSubjects();authorities=old.allowedAuthorities();scope=old.scope();}
         return new AiApplicationPolicy(AiApplicationPolicy.ModelMode.valueOf(p.mode().name()),models,p.fallback(),null,
                 compiled.inputVariables().stream().map(AiSceneDataRuntime.InputVariable::name).collect(java.util.stream.Collectors.toSet()),
-                new Requirements(OutputFormat.valueOf(p.outputFormat().name()),true,false),scope,subjects,authorities,h.formId(),
-                p.timeoutSeconds(),p.maxAttempts(),p.maxConcurrent(),p.maxTokens(),d.businessModel());
+                new Requirements(OutputFormat.valueOf(p.outputFormat().name()),true,h.kind()==SceneDtos.Kind.AGENT),scope,subjects,authorities,h.formId(),
+                p.timeoutSeconds(),p.maxAttempts(),p.maxConcurrent(),p.maxTokens(),d.businessModel(),d.businessModels());
     }
     private AiSceneLegacyTemplates.LegacyView legacyView(SceneStore.Head head,TrustedActor actor){
         var bridge=legacy==null?null:legacy.getIfUnique();require(bridge!=null,503,"DEPENDENCY_UNAVAILABLE");
@@ -262,9 +325,12 @@ public class SceneManagementService {
         require(d.dataBindings().size()+d.sqlBindings().size()<=16,400,"INVALID_INPUT");
         if(d.promptText()==null)throw SceneFailure.field("definition.promptText","REQUIRED");
         text(d.name(),128,"name");purpose(d.purpose());require(d.modelPolicy()!=null,400,"INVALID_INPUT");
-        var p=d.modelPolicy();require(p.mode()!=null && p.outputFormat()!=null && p.models()!=null && (!p.models().isEmpty()||d.businessModel()!=null) && p.models().size()<=16,400,"INVALID_INPUT");
+        var p=d.modelPolicy();require(p.mode()!=null && p.outputFormat()!=null && p.models()!=null && (!p.models().isEmpty()||d.hasBusinessModels()) && p.models().size()<=16,400,"INVALID_INPUT");
+        require(d.businessModels().size()<=16&&d.businessModels().stream().distinct().count()==d.businessModels().size(),400,"INVALID_INPUT");
+        require(d.businessModels().isEmpty()||(d.businessModel()==null&&p.models().isEmpty()),400,"INVALID_INPUT");
+        for(var slug:d.businessModels())require(slug!=null&&slug.matches("[a-z0-9][a-z0-9._:-]{0,79}"),400,"INVALID_INPUT");
         require(d.businessModel()==null || (p.models().isEmpty() && d.businessModel().matches("[a-z0-9][a-z0-9._:-]{0,79}")),400,"INVALID_INPUT");
-        require(d.businessModel()!=null || !(p.mode()==SceneDtos.ModelMode.FIXED && !p.fallback() && p.models().size()!=1),400,"INVALID_INPUT");
+        require(d.hasBusinessModels() || !(p.mode()==SceneDtos.ModelMode.FIXED && !p.fallback() && p.models().size()!=1),400,"INVALID_INPUT");
         require(p.timeoutSeconds()>=1 && p.timeoutSeconds()<=120 && p.maxAttempts()>=1 && p.maxAttempts()<=8 && p.maxConcurrent()>=1 && p.maxConcurrent()<=10 && p.maxTokens()>=1 && p.maxTokens()<=4096,400,"INVALID_INPUT");
         for(var b:p.models()){require(b!=null && b.model()!=null && b.keyMode()!=null,400,"INVALID_INPUT");SceneStore.decimal(b.model().modelRef());SceneStore.decimal(b.model().configVersion());
             require(b.allowedKeys().size()<=32 && b.fallbackKeys().size()<=32,400,"INVALID_INPUT");
@@ -275,7 +341,7 @@ public class SceneManagementService {
     static SceneDtos.Definition singlePrompt(SceneDtos.Definition d){
         String prompt=d.promptText();
         if(d.outputRequirement()!=null && !d.outputRequirement().isEmpty())prompt=(prompt==null?"":prompt)+"\n\n输出要求：\n"+d.outputRequirement();
-        return new SceneDtos.Definition(d.name(),d.purpose(),prompt,"",d.dataObjects(),d.modelPolicy(),d.dataBindings(),d.initialModel(),d.sqlBindings(),d.businessModel());
+        return new SceneDtos.Definition(d.name(),d.purpose(),prompt,"",d.dataObjects(),d.modelPolicy(),d.dataBindings(),d.initialModel(),d.sqlBindings(),d.businessModel(),d.businessModels());
     }
     private String fingerprint(String kind,Object input){try{return cipher.fingerprint("ai:scene-mutation:v1",mapper.writeValueAsBytes(Map.of("kind",kind,"input",input)));}catch(Exception invalid){throw new SceneFailure(503,"CREDENTIAL_UNAVAILABLE");}}
     private void text(String text,int limit,String field){if(text==null || text.isBlank() || text.length()>limit || text.codePoints().anyMatch(Character::isISOControl))throw SceneFailure.field(field,"INVALID_INPUT");}

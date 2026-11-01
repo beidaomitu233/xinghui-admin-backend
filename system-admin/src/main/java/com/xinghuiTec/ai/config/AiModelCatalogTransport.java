@@ -158,17 +158,29 @@ public class AiModelCatalogTransport {
                         continue;
                     }
                     boolean deepseek = "deepseek".equals(provider);
+                    boolean mimo = "mimo".equals(provider);
+                    if(mimo && Set.of("mimo-v2.5-asr","mimo-v2.5-tts","mimo-v2.5-tts-voiceclone","mimo-v2.5-tts-voicedesign").contains(code)) {
+                        reasons.merge("NON_TEXT_OUTPUT",1,Integer::sum);continue;
+                    }
+                    // MiMo's authenticated /models lists IDs only. Enrich only the exact models
+                    // documented by the official model list (2026-10-19); unknown IDs stay unknown.
+                    // https://mimo.mi.com/docs/zh-CN/quick-start/summary/model
+                    boolean documentedMiMo=mimo && Set.of("mimo-v2.6-flash","mimo-v2.6-pro","mimo-v2.6-pro-ultraspeed").contains(code);
                     var architecture = deepseek ? item : item.path("architecture");
                     var input = tokens(architecture.get("input_modalities"), secret);
                     var output = tokens(architecture.get("output_modalities"), secret);
+                    // The official MiMo image guide documents these /models IDs as vision-capable.
+                    // https://mimo.mi.com/docs/en-US/quick-start/usage-guide/multimodal-understanding/image-understanding
+                    if(documentedMiMo&&input.isEmpty())input=List.of("text","image");
+                    if(documentedMiMo&&output.isEmpty())output=List.of("text");
                     if (architecture.hasNonNull("output_modalities") && !output.contains("text")) {
                         reasons.merge("NON_TEXT_OUTPUT", 1, Integer::sum);
                         continue;
                     }
                     String name = item.hasNonNull("name") ? text(item.get("name"), 256, secret) : code;
-                    var model = new Model(code, name, positive(item.get(deepseek ? "context_window" : "context_length")),
-                            positive(deepseek ? item.get("max_output_tokens") : item.path("top_provider").get("max_completion_tokens")),
-                            input, output, tokens(item.get("supported_parameters"), secret));
+                    var model = new Model(code, name, documentedMiMo?Long.valueOf(1_000_000):positive(item.get(deepseek ? "context_window" : "context_length")),
+                            documentedMiMo?Long.valueOf(128_000):positive(deepseek ? item.get("max_output_tokens") : item.path("top_provider").get("max_completion_tokens")),
+                            input, output, documentedMiMo?List.of("max_completion_tokens","response_format","tool_choice","tools"):tokens(item.get("supported_parameters"), secret));
                     if (result.putIfAbsent(code, model) != null)
                         reasons.merge("DUPLICATE_MODEL_CODE", 1, Integer::sum);
                 } catch (AiModelCatalogException invalidRow) {

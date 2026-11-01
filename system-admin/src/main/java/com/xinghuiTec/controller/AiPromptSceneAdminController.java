@@ -57,8 +57,9 @@ public class AiPromptSceneAdminController {
                              @RequestParam(required = false) String appKey,
                              @RequestParam(required = false) String sceneKey,
                              @RequestParam(required = false) Boolean enabled,
-                             @RequestParam(required = false) Boolean published) {
-        return Result.ok(scenes.page(pageNum, pageSize, appKey, sceneKey, enabled, published));
+                             @RequestParam(required = false) Boolean published,
+                             @RequestParam(required = false) String orderBy,@RequestParam(required = false) String order) {
+        return Result.ok(scenes.page(pageNum, pageSize, appKey, sceneKey, enabled, published,orderBy,order));
     }
 
     @GetMapping("/models")

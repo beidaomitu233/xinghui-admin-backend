@@ -25,10 +25,11 @@ class AiConfigurationWiringTest {
             context.registerBean(ObjectMapper.class,()->new ObjectMapper());
             context.registerBean(DataSource.class,()->new DriverManagerDataSource("jdbc:h2:mem:ai_wiring;MODE=MySQL","sa",""));
             context.registerBean(JdbcTemplate.class,()->new JdbcTemplate(context.getBean(DataSource.class)));
-            context.registerBean(TransactionTemplate.class,()->new TransactionTemplate(new DataSourceTransactionManager(context.getBean(DataSource.class))));
+            context.registerBean(org.springframework.transaction.PlatformTransactionManager.class,()->new DataSourceTransactionManager(context.getBean(DataSource.class)));
+            context.registerBean(TransactionTemplate.class,()->new TransactionTemplate(context.getBean(org.springframework.transaction.PlatformTransactionManager.class)));
             context.register(SecretCipher.class,AiModelConfigRules.class,AiModelConfigService.class,AiModelCredentialService.class,
                     OpenRouterTransport.class,AiConfigurationService.class,AiConfigurationTests.class,
-                    AiConfiguredProviderRuntime.class,AiConfigurationController.class);
+                    AiModelCatalogStore.class,AiToolCapabilities.class,AiConfiguredProviderRuntime.class,AiConfigurationController.class);
             context.refresh();
             var transport=context.getBean(OpenRouterTransport.class);
             assertSame(context.getBean(ObjectMapper.class),ReflectionTestUtils.getField(transport,"json"));

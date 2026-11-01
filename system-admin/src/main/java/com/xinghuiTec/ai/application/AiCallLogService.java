@@ -18,7 +18,7 @@ import java.util.*;
 /** One row per upstream interaction; bodies are fetched only after a separate current access check. */
 @Service
 public class AiCallLogService {
-    public enum EntryType { REQUEST_ATTEMPT, CONFIGURATION_TEST, MODEL_DISCOVERY }
+    public enum EntryType { REQUEST_ATTEMPT, CONFIGURATION_TEST, MODEL_DISCOVERY, AGENT_MODEL }
     public record Filters(AiRequestLogService.Scope scope,Instant from,Instant to,String requestId,String modelRef,
                           String providerCode,AiRequestStatus status,EntryType entryType,String tenantRef,String subjectRef,String appId,String sceneKey) {}
     public record Page(List<Map<String,Object>> records,long total,int pageNum,int pageSize) {}
@@ -27,7 +27,8 @@ public class AiCallLogService {
         @Override public String toString(){return "Response[REDACTED]";}
     }
     public record Statistics(long calls,long succeeded,long failed,Long knownInputTokens,Long knownOutputTokens,long unknownInputCalls,long unknownOutputCalls) {}
-    private record Where(String sql,List<Object> args,boolean empty) {}
+    record Where(String sql,List<Object> args,boolean empty) {}
+    Where analyticsScope(TrustedActor actor,boolean platform,Filters filters,String action,String id){return where(actor,platform,filters,action,id);}
     private final JdbcTemplate jdbc;
     private final AiCallLogStore store;
     private final AiRequestLogService requestLogs;
@@ -35,15 +36,30 @@ public class AiCallLogService {
     private final AiRuntimeService runtime;
     private final SqlAssistanceService sql;
     private final ModelHubTestService modelTests;
+    private AiAgentCallAccess agentAccess;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void agentAccess(AiAgentCallAccess agentAccess){this.agentAccess=agentAccess;}
     public AiCallLogService(JdbcTemplate jdbc,AiCallLogStore store,AiRequestLogService requestLogs,AiRequestStore requests,
                             AiRuntimeService runtime,SqlAssistanceService sql,ModelHubTestService modelTests){
         this.jdbc=jdbc;this.store=store;this.requestLogs=requestLogs;this.requests=requests;this.runtime=runtime;this.sql=sql;this.modelTests=modelTests;
     }
     public Page page(TrustedActor actor,boolean platform,Filters filters,int page,int size){
+        return page(actor,platform,filters,page,size,null,null);
+    }
+    public Page page(TrustedActor actor,boolean platform,Filters filters,int page,int size,String orderBy,String order){
         if(page<1||page>100_000||size<1||size>100)throw failure(ErrorCode.INVALID_INPUT);
-        var where=where(actor,platform,filters,"list",null);if(where.empty())return new Page(List.of(),0,page,size);
+        var where=where(actor,platform,filters,"list",null);
+        String ordering;
+        try{ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,Map.of(
+                "startedAt","c.started_at","entryType","c.entry_type","status","c.status",
+                "inputTokens","c.input_tokens","outputTokens","c.output_tokens",
+                "elapsedMs","CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(c.metadata_json,'$.elapsedMs')),'null') AS DECIMAL(20,0))",
+                "firstOutputMs","CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(c.metadata_json,'$.firstOutputMs')),'null') AS DECIMAL(20,0))"),
+                "c.started_at DESC,c.call_id DESC","c.call_id");}
+        catch(com.xinghuiTec.exception.ServiceException invalid){throw failure(ErrorCode.INVALID_INPUT);}
+        if(where.empty())return new Page(List.of(),0,page,size);
         var args=new ArrayList<>(where.args());args.add(size);args.add((page-1)*size);
-        var rows=jdbc.query(select()+where.sql()+" ORDER BY c.started_at DESC,c.call_id DESC LIMIT ? OFFSET ?",this::row,args.toArray());
+        var rows=jdbc.query(select()+where.sql()+ordering+" LIMIT ? OFFSET ?",this::row,args.toArray());
         return new Page(decorate(rows,actor,platform,filters.scope()),count(where),page,size);
     }
     public List<Map<String,Object>> export(TrustedActor actor,boolean platform,Filters filters){
@@ -89,22 +105,27 @@ public class AiCallLogService {
         if(f.status()!=null){query.append(" AND c.status=?");args.add(f.status().name());}
         if(f.entryType()!=null){query.append(" AND c.entry_type=?");args.add(f.entryType().name());}
         if(present(f.requestId())){query.append(" AND c.request_id=?");args.add(AiApplicationService.positiveId(f.requestId()));}
-        if(present(f.appId())){query.append(" AND r.app_id=?");args.add(AiApplicationService.positiveId(f.appId()));}
-        equal(query,args,"r.scene_key",f.sceneKey(),128);
+        if(present(f.appId())){query.append(" AND COALESCE(r.app_id,c.agent_app_id)=?");args.add(AiApplicationService.positiveId(f.appId()));}
+        equal(query,args,"COALESCE(r.scene_key,c.agent_scene_key)",f.sceneKey(),128);
         boolean management=management(actor,platform);
-        if(f.entryType()!=null&&f.entryType()!=EntryType.REQUEST_ATTEMPT&&!management)throw failure(ErrorCode.FORBIDDEN);
-        if(f.scope()==AiRequestLogService.Scope.AUDIT){if(!management)query.append(" AND c.entry_type='REQUEST_ATTEMPT'");return new Where(query.toString(),args,false);}
+        boolean agent=actor.authorities().contains("ai:agent:invoke");
+        if(f.entryType()==EntryType.AGENT_MODEL&&f.scope()==AiRequestLogService.Scope.OWN&&!agent)throw failure(ErrorCode.FORBIDDEN);
+        if(f.entryType()!=null&&f.entryType()!=EntryType.REQUEST_ATTEMPT&&f.entryType()!=EntryType.AGENT_MODEL&&!management)throw failure(ErrorCode.FORBIDDEN);
+        if(f.scope()==AiRequestLogService.Scope.AUDIT){if(!management)query.append(" AND c.entry_type IN ('REQUEST_ATTEMPT','AGENT_MODEL')");return new Where(query.toString(),args,false);}
         // Preserve the existing application-version SQL boundary without enumerating requests before pagination.
         // Current resource/schema permission is checked independently before making a response available.
         var base=f.entryType()!=null&&f.entryType()!=EntryType.REQUEST_ATTEMPT?null:requestLogs.where(actor,platform,
                 new AiRequestLogService.Filters(f.scope(),f.appId(),f.requestId(),null,null,null,
                         f.tenantRef(),f.subjectRef(),start,to,f.sceneKey(),null),action);
         if(base==null||base.empty()){
-            if(!management)return new Where(query.toString(),args,true);
-            query.append(" AND c.entry_type IN ('CONFIGURATION_TEST','MODEL_DISCOVERY')");
+            if(!management&&!agent)return new Where(query.toString(),args,true);
+            query.append(" AND (");
+            if(management)query.append("c.entry_type IN ('CONFIGURATION_TEST','MODEL_DISCOVERY')");
+            if(agent)query.append(management?" OR c.entry_type='AGENT_MODEL'":"c.entry_type='AGENT_MODEL'");query.append(")");
         }else{
             query.append(" AND (c.request_id IN (SELECT r.request_id FROM sys_ai_request r").append(base.sql()).append(")");args.addAll(base.args());
-            if(management)query.append(" OR c.entry_type IN ('CONFIGURATION_TEST','MODEL_DISCOVERY')");query.append(")");
+            if(management)query.append(" OR c.entry_type IN ('CONFIGURATION_TEST','MODEL_DISCOVERY')");
+            if(agent)query.append(" OR c.entry_type='AGENT_MODEL'");query.append(")");
         }
         return new Where(query.toString(),args,false);
     }
@@ -124,7 +145,10 @@ public class AiCallLogService {
             if(actor.authorities().contains("ai:request:query")&&Boolean.TRUE.equals(row.get("responseAvailable"))
                     &&owner.tenantRef().equals(row.get("tenantRef"))&&owner.subjectRef().equals(row.get("subjectRef"))){
                 if(row.get("requestId")!=null){long request=Long.parseLong((String)row.get("requestId"));allowed=permissions.computeIfAbsent(request,k->canReadRequest(k,actor));}
-                else allowed=management(actor,platform);
+                else if("AGENT_MODEL".equals(row.get("entryType"))){
+                    try{allowed=agentAccess!=null&&agentAccess.canRead(actor,(String)row.get("agentSessionId"),(String)row.get("agentRunId"));}
+                    catch(RuntimeException denied){allowed=false;}
+                }else allowed=management(actor,platform);
             }
             if(!allowed&&Boolean.TRUE.equals(row.get("responseAvailable"))&&row.get("requestId")!=null
                     &&scope==AiRequestLogService.Scope.AUDIT&&platform&&actor.authorities().containsAll(Set.of("ai:request:query","ai:request:audit")))
@@ -152,7 +176,7 @@ public class AiCallLogService {
     }
     private long count(Where where){return Objects.requireNonNull(jdbc.queryForObject("SELECT COUNT(*)"+from()+where.sql(),Long.class,where.args().toArray()));}
     private String select(){return "SELECT c.*"+from();}
-    private String from(){return " FROM sys_ai_call_log c LEFT JOIN sys_ai_request r ON r.request_id=c.request_id";}
+    String from(){return " FROM sys_ai_call_log c LEFT JOIN sys_ai_request r ON r.request_id=c.request_id";}
     private Map<String,Object> object(String value){return AiCallLogArchiveJson.object(value);}
     private static String instant(ResultSet rs,String column)throws SQLException{var time=rs.getTimestamp(column);return time==null?null:time.toInstant().toString();}
     private static boolean present(String value){return value!=null&&!value.isBlank();}

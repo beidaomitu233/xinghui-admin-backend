@@ -58,15 +58,22 @@ public class SysOperLogServiceImpl extends ServiceImpl<SysOperLogMapper, SysOper
         wrapper.le(queryDTO.getOperTimeEnd() != null,
                 SysOperLog::getOperTime, queryDTO.getOperTimeEnd());
 
-        // 动态排序
-        if ("asc".equalsIgnoreCase(queryDTO.getOrder())) {
-            wrapper.orderByAsc(SysOperLog::getOperTime);
-        } else {
-            wrapper.orderByDesc(SysOperLog::getOperTime);
+        // 白名单排序，oper_id 尾键保证同值稳定次序
+        boolean ascending = "asc".equals(queryDTO.getOrder());
+        switch (queryDTO.getOrderBy() == null ? "operTime" : queryDTO.getOrderBy()) {
+            case "title" -> wrapper.orderBy(true, ascending, SysOperLog::getTitle);
+            case "businessType" -> wrapper.orderBy(true, ascending, SysOperLog::getBusinessType);
+            case "operName" -> wrapper.orderBy(true, ascending, SysOperLog::getOperName);
+            case "status" -> wrapper.orderBy(true, ascending, SysOperLog::getStatus);
+            case "costTime" -> wrapper.orderBy(true, ascending, SysOperLog::getCostTime);
+            default -> wrapper.orderBy(true, ascending, SysOperLog::getOperTime);
         }
+        wrapper.orderByAsc(SysOperLog::getOperId);
 
         // 执行查询
-        return this.page(page, wrapper);
+        var result=this.page(page, wrapper);
+        result.getRecords().forEach(com.xinghuiTec.aop.BusinessLogDetails::enrich);
+        return result;
     }
 
     /**

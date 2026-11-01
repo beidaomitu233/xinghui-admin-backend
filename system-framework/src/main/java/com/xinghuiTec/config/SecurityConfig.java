@@ -13,7 +13,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -33,7 +32,7 @@ public class SecurityConfig {
 
     // 更改默认的spring security密码加密方式
     @Bean
-    public PasswordEncoder bcPasswordEncoder() {
+    public BCryptPasswordEncoder bcPasswordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
@@ -70,6 +69,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/lowcode/fill/*").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/lowcode/fill/*").permitAll()
                         .requestMatchers("/auth/wechat/capability", "/auth/wechat/authorize", "/auth/wechat/callback").permitAll()
+                        .requestMatchers("/auth/sms/capability", "/auth/sms/code", "/auth/sms/login").anonymous()
                         .requestMatchers("/auth/wechat/login-capability", "/auth/wechat/flow", "/auth/wechat/flow/status",
                                 "/auth/wechat/flow/cancel", "/auth/wechat/flow/complete", "/auth/wechat/mp-callback").permitAll()
                         .requestMatchers(HttpConstants.PATH_LOGIN, HttpConstants.PATH_ROOT, HttpConstants.PATH_CAPTCHA)

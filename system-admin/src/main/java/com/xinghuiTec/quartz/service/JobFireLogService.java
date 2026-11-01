@@ -37,7 +37,7 @@ public class JobFireLogService {
     }
 
     public FirePage list(Integer pageNum, Integer pageSize, Long jobId, String jobName,
-            String status, String triggerType) {
+            String status, String triggerType, String orderBy, String order) {
         int page = pageNum == null ? 1 : pageNum;
         int size = pageSize == null ? 10 : pageSize;
         if (page < 1 || page > 100000 || size < 1 || size > MAX_PAGE) {
@@ -51,6 +51,24 @@ public class JobFireLogService {
         if (triggerType != null && !triggerType.isBlank() && !TRIGGERS.contains(triggerType)) {
             throw new ServiceException("triggerType 无效");
         }
+        String sortField = orderBy == null || orderBy.isBlank() ? "fireId" : orderBy;
+        String direction = "asc".equals(order) ? "ASC" : "DESC";
+        // 固定白名单映射到真实列，客户端字段不进入 SQL；fire_id 尾键保证同值稳定次序。
+        String sortExpression = switch (sortField) {
+            case "jobName" -> "COALESCE(f.job_name_snapshot,j.job_name)";
+            case "jobGroup" -> "COALESCE(f.job_group_snapshot,j.job_group)";
+            case "triggerType" -> "f.trigger_type";
+            case "scheduledFireTime" -> "f.scheduled_fire_time";
+            case "status" -> "f.status";
+            case "attemptCount" -> "f.attempt_count";
+            case "startedAt" -> "f.started_at";
+            case "completedAt" -> "f.completed_at";
+            case "fireId" -> "f.fire_id";
+            default -> throw new ServiceException("不支持的执行记录排序字段");
+        };
+        String orderClause = "fireId".equals(sortField)
+                ? " ORDER BY f.fire_id " + direction
+                : " ORDER BY " + sortExpression + " " + direction + ",f.fire_id DESC";
         StringBuilder where = new StringBuilder(" WHERE f.tenant_id='000000'");
         List<Object> params = new ArrayList<>();
         if (jobId != null) { where.append(" AND f.job_id=?"); params.add(jobId); }
@@ -68,7 +86,7 @@ public class JobFireLogService {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(size);
         pageParams.add((page - 1) * size);
-        List<FireLog> records = jdbc.query(select() + from + where + " ORDER BY f.fire_id DESC LIMIT ? OFFSET ?",
+        List<FireLog> records = jdbc.query(select() + from + where + orderClause + " LIMIT ? OFFSET ?",
                 (rs, row) -> new FireLog(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getString(4),
                         rs.getString(5), rs.getObject(6, LocalDateTime.class), rs.getString(7), rs.getInt(8),
                         rs.getObject(9, LocalDateTime.class), rs.getObject(10, LocalDateTime.class),

@@ -36,7 +36,10 @@ public class AiSettingsService implements AiConfigurationTestObserver {
         return page(page, size, null);
     }
     public Page page(int page, int size, String search) {
-        var rows = configs.page(page, size, search, null, null, null);
+        return page(page,size,search,null,null);
+    }
+    public Page page(int page,int size,String search,String orderBy,String order) {
+        var rows = configs.page(page, size, search, null, null, null,orderBy,order);
         return new Page(rows.records().stream().map(row -> get(Long.parseLong(row.id()))).toList(),
                 Long.toString(rows.total()), page, size);
     }

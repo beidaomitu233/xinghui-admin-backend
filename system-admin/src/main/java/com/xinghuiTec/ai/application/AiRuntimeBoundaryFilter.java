@@ -27,7 +27,8 @@ public class AiRuntimeBoundaryFilter extends OncePerRequestFilter {
     public AiRuntimeBoundaryFilter(ObjectMapper mapper) { this.mapper = mapper; }
 
     private boolean target(String path) {
-        return path.startsWith("/system/ai/settings/model-hub/models") || path.startsWith("/system/ai/settings/scene-routes/") || path.startsWith("/ai/applications/") || path.startsWith("/ai/requests/")
+        return path.equals("/system/ai/workbench") || path.startsWith("/system/ai/workbench/")
+                || path.startsWith("/system/ai/settings/model-hub/models") || path.startsWith("/system/ai/settings/scene-routes/") || path.startsWith("/ai/applications/") || path.startsWith("/ai/requests/")
                 || path.equals("/system/ai/scenes") || path.startsWith("/system/ai/scenes/")
                 || path.equals("/ai/scenes") || path.startsWith("/ai/scenes/")
                 || path.equals("/ai/conversations") || path.startsWith("/ai/conversations/")
@@ -48,8 +49,8 @@ public class AiRuntimeBoundaryFilter extends OncePerRequestFilter {
         try {
             String path = request.getServletPath();
             if (path.isEmpty()) path = request.getRequestURI().substring(request.getContextPath().length());
-            boolean sceneConfig=(path.startsWith("/system/ai/settings/model-hub/models") || path.equals("/system/ai/scenes") || path.startsWith("/system/ai/scenes/") || path.startsWith("/system/ai/settings/scene-routes/"))
-                    && ("PUT".equals(request.getMethod()) || ("POST".equals(request.getMethod()) && !path.endsWith("/preview") && !path.endsWith("/test-requests")));
+            boolean sceneConfig=(path.startsWith("/system/ai/workbench/") || path.startsWith("/system/ai/settings/model-hub/models") || path.equals("/system/ai/scenes") || path.startsWith("/system/ai/scenes/") || path.startsWith("/system/ai/settings/scene-routes/"))
+                    && ("PUT".equals(request.getMethod()) || ("POST".equals(request.getMethod()) && !path.matches("/system/ai/workbench/sessions/[a-f0-9-]{36}/images") && !path.endsWith("/preview") && !path.endsWith("/test-requests")));
             if (sceneConfig || ("POST".equals(request.getMethod()) && (path.equals("/ai/scenes/sql-assistance") || path.matches("/ai/scenes/sql-assistance/[0-9]+/cancel") || path.equals("/ai/conversations") || path.startsWith("/ai/conversations/") || path.endsWith("/requests") || path.endsWith("/test-requests") || path.endsWith("/preview")))) {
                 String type = request.getContentType(), encoding = request.getHeader("Content-Encoding");
                 if (type == null || !type.split(";", 2)[0].trim().equalsIgnoreCase("application/json")

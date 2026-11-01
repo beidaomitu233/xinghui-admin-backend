@@ -393,7 +393,7 @@ public class DatabaseBindingReader {
             }
             String expression = f.field().equals("id")?"id":"JSON_UNQUOTE(JSON_EXTRACT(data_json, ?))";
             if (!f.field().equals("id"))args.add("$."+f.field());
-            if (field.type().equals("number"))expression = "CAST("+expression+" AS DECIMAL(20,6))";
+            if (LowcodeSchema.numericType(field.type()))expression = "CAST("+expression+" AS DECIMAL(20,6))";
             var actual = field.type().equals("switch") && f.value() instanceof Boolean?new DataFilter(f.field(), f.operator(), f.value().toString()):f;
             appendFilter(where, args, expression, actual);
         }
@@ -750,8 +750,8 @@ public class DatabaseBindingReader {
 
     private static String typeGroup(String raw) {
         String t = raw.toLowerCase(Locale.ROOT);
-        if (t.contains("int") || t.contains("decimal") || t.contains("numeric") || t.equals("number") || t.contains("double") || t.contains("float"))return "number";
-        if (t.contains("char") || t.contains("text") || t.equals("select"))return "text";
+        if (t.contains("int") || t.contains("decimal") || t.contains("numeric") || LowcodeSchema.numericType(t) || t.contains("double") || t.contains("float"))return "number";
+        if (t.contains("char") || t.contains("text") || Set.of("select", "radio", "color").contains(t))return "text";
         return "complex";
     }
 

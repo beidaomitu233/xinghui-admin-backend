@@ -19,10 +19,11 @@ class AiCallLogMethodSecurityTest {
     @Test void eachEndpointRequiresItsExactExistingActionGrant(){
         try(var context=new AnnotationConfigApplicationContext()){
             context.register(Security.class);context.registerBean(AiCallLogService.class,()->mock(AiCallLogService.class));
+            context.registerBean(AiStatisticsService.class,()->mock(AiStatisticsService.class));
             var identity=mock(AiInvocationIdentity.class);when(identity.current()).thenReturn(new TrustedActor("101","tenant-a",Set.of("ai:request:list"),null));
             context.registerBean(AiInvocationIdentity.class,()->identity);context.registerBean(PlatformAccessService.class,()->mock(PlatformAccessService.class));
             context.registerBean(AiCallLogController.class);context.refresh();var api=context.getBean(AiCallLogController.class);
-            var query=new AiCallLogController.Query(null,null,null,null,null,null,null,null,null,null,null,null,null,null);
+            var query=new AiCallLogController.Query(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null);
             SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("fixture",null,List.of(new SimpleGrantedAuthority("ai:request:list"))));
             assertDoesNotThrow(()->api.list(query));assertDoesNotThrow(()->api.statistics(query));
             assertThrows(org.springframework.security.access.AccessDeniedException.class,()->api.export(query));

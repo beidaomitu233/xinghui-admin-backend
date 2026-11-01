@@ -37,8 +37,9 @@ public class AiSettingsController {
     @GetMapping
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAnyAuthority('ai:config:list','ai:model:list')")
     public Result<AiSettingsDtos.Page> page(@RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "20") int pageSize,@RequestParam(required=false) String search) {
-        return Result.ok(service.page(pageNum, pageSize,search));
+            @RequestParam(defaultValue = "20") int pageSize,@RequestParam(required=false) String search,
+            @RequestParam(required=false) String orderBy,@RequestParam(required=false) String order) {
+        return Result.ok(service.page(pageNum, pageSize,search,orderBy,order));
     }
 
     @GetMapping("/{id}")

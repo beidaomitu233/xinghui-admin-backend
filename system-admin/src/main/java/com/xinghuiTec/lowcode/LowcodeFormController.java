@@ -44,8 +44,9 @@ public class LowcodeFormController {
     @GetMapping
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('lowcode:form:list')")
     public Result<LowcodeService.Page> list(@RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "10") int pageSize, @RequestParam(required = false) String name) {
-        return Result.ok(service.forms(pageNum, pageSize, name));
+            @RequestParam(defaultValue = "10") int pageSize, @RequestParam(required = false) String name,
+            @RequestParam(required = false) String orderBy, @RequestParam(required = false) String order) {
+        return Result.ok(service.forms(pageNum, pageSize, name, orderBy, order));
     }
 
     @GetMapping("/{id}")

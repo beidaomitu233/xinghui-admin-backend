@@ -33,9 +33,10 @@ public class ConversationController {
     public Result<ConversationDtos.Page> page(@RequestParam(defaultValue = "OWN") String scope,
             @RequestParam(required = false) String sceneKey, @RequestParam(required = false) String requestKind,
             @RequestParam(required = false) String search, @RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "20") int pageSize) {
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String orderBy,@RequestParam(required = false) String order) {
         return Result.ok(service.page(identity.current(), platform.isPlatformIdentity(), scope, sceneKey, requestKind,
-                search, pageNum, pageSize));
+                search, pageNum, pageSize,orderBy,order));
     }
     @GetMapping("/{id}")
     public Result<ConversationDtos.Detail> detail(@PathVariable String id,

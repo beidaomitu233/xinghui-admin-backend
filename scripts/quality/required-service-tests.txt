@@ -1,4 +1,7 @@
 ReleaseServicesIT
+AgentScopeRemoteKvIT
 AiConfigurationDruidMySqlIT
 AiSceneSqlDruidMySqlIT
 LowcodeSharingMySqlIT
+LowcodeSortingMySqlIT
+AiCallLogMysqlSortIT

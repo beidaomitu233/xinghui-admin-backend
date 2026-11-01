@@ -99,6 +99,8 @@ public final class AiTypes {
     /** Check before each new side effect. Providers must also interrupt in-flight I/O on cancel. */
     public interface InvocationControl {
         Instant deadline();
+        /** Reserve fallback capacity while silent, without cutting an already-started response short. */
+        default Instant firstOutputDeadline() { return deadline(); }
         boolean cancelled();
         default void check() {
             if (cancelled()) throw new AiRuntimeException(ErrorCode.CANCELLED);

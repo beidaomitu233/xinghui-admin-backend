@@ -9,6 +9,7 @@ import com.xinghuiTec.quartz.service.JobEngine;
 import com.xinghuiTec.utils.Result;
 import com.xinghuiTec.constants.TenantConstants;
 import jakarta.annotation.Resource;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.util.StringUtils;
@@ -23,6 +24,7 @@ import jakarta.validation.constraints.NotBlank;
  * @author beidoa23
  * @since 2026-01-25
  */
+@Validated
 @RestController
 @RequestMapping("/monitor/job")
 public class SysJobController {
@@ -67,12 +69,29 @@ public class SysJobController {
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('monitor:job:list')")
     public Result<Page<SysJob>> list(SysJob job,
             @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize) {
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(defaultValue = "createTime")
+            @Pattern(regexp = "^(jobName|jobGroup|status|nextFireTime|createTime|updateTime)$", message = "不支持的任务排序字段")
+            String orderBy,
+            @RequestParam(defaultValue = "desc")
+            @Pattern(regexp = "^(asc|desc)$", message = "排序方向只能是 asc 或 desc")
+            String order) {
         LambdaQueryWrapper<SysJob> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StringUtils.hasText(job.getJobName()), SysJob::getJobName, job.getJobName())
                 .eq(SysJob::getTenantId, TenantConstants.DEFAULT_TENANT_ID)
                 .eq(StringUtils.hasText(job.getJobGroup()), SysJob::getJobGroup, job.getJobGroup())
                 .eq(StringUtils.hasText(job.getStatus()), SysJob::getStatus, job.getStatus());
+
+        boolean ascending = "asc".equals(order);
+        switch (orderBy) {
+            case "jobName" -> wrapper.orderBy(true, ascending, SysJob::getJobName);
+            case "jobGroup" -> wrapper.orderBy(true, ascending, SysJob::getJobGroup);
+            case "status" -> wrapper.orderBy(true, ascending, SysJob::getStatus);
+            case "nextFireTime" -> wrapper.orderBy(true, ascending, SysJob::getNextFireTime);
+            case "updateTime" -> wrapper.orderBy(true, ascending, SysJob::getUpdateTime);
+            default -> wrapper.orderBy(true, ascending, SysJob::getCreateTime);
+        }
+        wrapper.orderByAsc(SysJob::getJobId);
 
         Page<SysJob> page = new Page<>(pageNum, pageSize);
         return Result.ok(sysJobService.page(page, wrapper));

@@ -1,6 +1,7 @@
 package com.xinghuiTec.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xinghuiTec.constants.TenantConstants;
 import com.xinghuiTec.domain.dto.ConfigChangeRequest;
@@ -55,6 +56,29 @@ public class SysConfigServiceImpl extends ServiceImpl<SysConfigMapper, SysConfig
     @Override
     public ConfigView getManaged(Integer id) {
         return view(requireManaged(id));
+    }
+    @Override public List<SysConfigService.Definition> managedDefinitions(){
+        return CATALOG.entrySet().stream().sorted(Map.Entry.comparingByKey()).map(entry->new SysConfigService.Definition(entry.getKey(),entry.getValue().name(),entry.getValue().choices(),entry.getValue().creatable())).toList();
+    }
+    @Override @Transactional
+    public void updateManagedExpected(Integer id,String expectedValue,ConfigChangeRequest request){
+        var row=requireManaged(id);
+        if(expectedValue==null||!java.util.Objects.equals(row.getConfigValue(),expectedValue))throw new ServiceException("参数已更新，请查询当前值后重试");
+        if(request==null||!row.getConfigKey().equals(request.configKey()))throw new ServiceException("参数键不可修改");
+        validateValue(request.configKey(),request.configValue());
+        var change=new LambdaUpdateWrapper<SysConfig>().eq(SysConfig::getConfigId,id)
+                .eq(SysConfig::getTenantId,TenantConstants.DEFAULT_TENANT_ID).eq(SysConfig::getConfigValue,expectedValue)
+                .set(SysConfig::getConfigValue,request.configValue());
+        if(CAPTCHA_KEY.equals(row.getConfigKey()))change.set(SysConfig::getRuntimeActive,1);
+        if(!update(change))throw new ServiceException("参数已更新，请查询当前值后重试");
+        invalidateAfterCommit(row.getConfigKey());
+    }
+    @Override @Transactional
+    public void removeManagedExpected(Integer id,String expectedValue){
+        var row=requireManaged(id);var spec=requireSpec(row.getConfigKey());
+        if(!spec.creatable()||"Y".equals(row.getConfigType()))throw new ServiceException("内置参数不可删除");
+        if(expectedValue==null||baseMapper.deleteOptionalFooterExpected(id,expectedValue)!=1)throw new ServiceException("参数已更新，请查询当前值后重试");
+        invalidateAfterCommit(row.getConfigKey());
     }
 
     @Override

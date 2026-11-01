@@ -16,4 +16,7 @@ public interface SysConfigMapper extends BaseMapper<SysConfig>{
     @Delete("DELETE FROM sys_config WHERE config_id = #{id} AND tenant_id = '000000' " +
             "AND config_key = 'sys.index.footerText' AND config_type = 'N'")
     int deleteOptionalFooter(@Param("id") Integer id);
+    @Delete("DELETE FROM sys_config WHERE config_id = #{id} AND tenant_id = '000000' " +
+            "AND config_key = 'sys.index.footerText' AND config_type = 'N' AND config_value = #{expected}")
+    int deleteOptionalFooterExpected(@Param("id") Integer id,@Param("expected") String expected);
 }

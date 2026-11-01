@@ -169,6 +169,84 @@ class LowcodeServiceTest {
         assertThrows(ServiceException.class, () -> schemas.validateValue(number, schemas.data("1e9999"), true));
     }
 
+    @Test
+    void formSortingPrecedesPagingWithStableTiesAndRejectsSqlFragments() {
+        var first = service.create(new LowcodeService.Draft("Zulu", "sort_z", "draft", 0, schema("text", "值")));
+        var earlier = service.create(new LowcodeService.Draft("Alpha", "sort_a1", "draft", 0, schema("text", "值")));
+        var middle = service.create(new LowcodeService.Draft("Mike", "sort_m", "draft", 0, schema("text", "值")));
+        var later = service.create(new LowcodeService.Draft("Alpha", "sort_a2", "draft", 0, schema("text", "值")));
+        assertEquals(List.of(later, earlier), service.forms(1, 2, null, "name", "asc").records().stream().map(row -> row.get("id")).toList());
+        assertEquals(List.of(middle, first), service.forms(2, 2, null, "name", "asc").records().stream().map(row -> row.get("id")).toList());
+        assertEquals(List.of(first, middle), service.forms(1, 2, null, "name", "desc").records().stream().map(row -> row.get("id")).toList());
+        assertEquals("4", service.forms(2, 2, null, "name", "asc").total());
+        for (String key : List.of("name desc; DELETE FROM sys_lowcode_form", "tenant_id", "data.field_1"))
+            assertThrows(ServiceException.class, () -> service.forms(1, 10, null, key, "asc"));
+        assertThrows(ServiceException.class, () -> service.forms(1, 10, null, "name", "DESC; SELECT 1"));
+        assertEquals("4", service.forms(1, 10, null).total());
+    }
+
+    @Test
+    void recordMetadataSortingCoversAllPagesAndRetainsTenantPartition() {
+        long form = Long.parseLong(service.create(draft(schema("text", "姓名"), 0, "draft")));
+        service.publish(form, 0);
+        var ids = new java.util.ArrayList<String>();
+        for (int index = 0; index < 25; index++)
+            ids.add((String) service.addRecord(form, submission(1, 0, "{\"field_1\":\"row" + index + "\"}")).get("id"));
+        when(identity.tenant()).thenReturn("tenant_b");
+        service.addRecord(form, submission(1, 0, "{\"field_1\":\"foreign\"}"));
+        when(identity.tenant()).thenReturn("tenant_a");
+        var found = new java.util.ArrayList<Object>();
+        for (int page = 1; page <= 3; page++) {
+            var result = service.records(form, page, 10, null, null, "schemaVersion", "asc");
+            assertEquals("25", result.total());
+            found.addAll(result.records().stream().map(row -> row.get("id")).toList());
+        }
+        java.util.Collections.reverse(ids);
+        assertEquals(ids, found);
+        assertEquals(25, new java.util.HashSet<>(found).size());
+        assertThrows(ServiceException.class, () -> service.records(form, 1, 10, null, null, "data.unknown", "asc"));
+        assertThrows(ServiceException.class, () -> service.records(form, 1, 10, null, null, "schemaVersion", "random"));
+        assertThrows(ServiceException.class, () -> service.records(form, 1, 10, null, null, "id; SELECT 1", "asc"));
+    }
+
+    @Test
+    void visualDesignerPropertiesAndNewControlsSurvivePublishingAndTenantScopedFilling() {
+        var definition = schemas.validate(schemas.decode("""
+                {"layout":{"labelPosition":"top","labelWidth":100},"fields":[
+                  {"fieldKey":"contact","label":"联系人","type":"text","required":true,"ui":{"placeholder":"请填写联系人","clearable":true,"showWordLimit":true,"span":12}},
+                  {"fieldKey":"choice","label":"单选","type":"radio","options":[{"label":"甲","value":"a"}]},
+                  {"fieldKey":"choices","label":"多选","type":"checkbox","options":[{"label":"甲","value":"a"}]},
+                  {"fieldKey":"hours","label":"时间范围","type":"timerange"},
+                  {"fieldKey":"days","label":"日期范围","type":"daterange"},
+                  {"fieldKey":"score","label":"评分","type":"rate"},
+                  {"fieldKey":"progress","label":"进度","type":"slider","min":0,"max":100},
+                  {"fieldKey":"color","label":"颜色","type":"color"}
+                ]}
+                """));
+        long id = Long.parseLong(service.create(draft(definition, 0, "draft")));
+        service.publish(id, 0);
+        var published = (LowcodeSchema.Schema) service.runtime(id).get("schema");
+        assertEquals(schemas.data(schemas.encode(definition, 262144, "配置")),
+                schemas.data(schemas.encode(published, 262144, "配置")));
+        assertEquals(12, published.fields().get(0).ui().span());
+        String values = """
+                {"contact":"QA contact","choice":"a","choices":["a"],"hours":["09:00:00","18:30:00"],
+                 "days":["2026-10-24","2026-10-25"],"score":3.5,"progress":65,"color":"#3366ff"}
+                """;
+        var saved = service.addRecord(id, submission(1, 0, values));
+        long record = Long.parseLong((String) saved.get("id"));
+        assertEquals(schemas.data(values), service.record(id, record).get("data"));
+        assertThrows(ServiceException.class, () -> service.addRecord(id,
+                submission(1, 0, values.replace("18:30:00", "08:30:00"))));
+        assertThrows(ServiceException.class, () -> service.addRecord(id,
+                submission(1, 0, values.replace("3.5", "6"))));
+        assertThrows(ServiceException.class, () -> service.addRecord(id,
+                submission(1, 0, values.replace("#3366ff", "javascript:alert(1)"))));
+        when(identity.tenant()).thenReturn("tenant_b");
+        assertThrows(ServiceException.class, () -> service.record(id, record));
+        assertEquals("0", service.records(id, 1, 10, null, null).total());
+    }
+
     private static LowcodeSchema.Schema schema(String type,String label) {
         return new LowcodeSchema.Schema(List.of(new LowcodeSchema.Field("field_1",label,type,true,null,List.of(),"",200,null,null,true,true)));
     }

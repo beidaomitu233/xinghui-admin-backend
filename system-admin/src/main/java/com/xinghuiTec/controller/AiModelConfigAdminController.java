@@ -49,8 +49,10 @@ public class AiModelConfigAdminController {
                              @RequestParam(defaultValue = "20") Integer pageSize,
                              @RequestParam(required = false) String providerCode,
                              @RequestParam(required = false) String modelCode,
-                             @RequestParam(required = false) Boolean enabled) {
-        return Result.ok(models.page(pageNum, pageSize, providerCode, modelCode, enabled));
+                             @RequestParam(required = false) Boolean enabled,
+                             @RequestParam(required = false) String orderBy,
+                             @RequestParam(required = false) String order) {
+        return Result.ok(models.page(pageNum, pageSize, providerCode, modelCode, enabled, orderBy, order));
     }
 
     @GetMapping("/{id}")

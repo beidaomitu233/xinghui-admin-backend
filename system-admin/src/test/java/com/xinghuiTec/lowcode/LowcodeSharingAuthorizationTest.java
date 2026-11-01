@@ -53,7 +53,7 @@ class LowcodeSharingAuthorizationTest {
                 if (loggedIn) login("000000", List.of());
                 assertDoesNotThrow(() -> filling.view("a".repeat(43)));
                 assertDoesNotThrow(() -> filling.submit("a".repeat(43), null));
-                assertThrows(AccessDeniedException.class, () -> records.list(1, 1, 10, null, null));
+                assertThrows(AccessDeniedException.class, () -> records.list(1, 1, 10, null, null, null, null));
                 assertThrows(AccessDeniedException.class, () -> records.get(1, 2));
                 assertThrows(AccessDeniedException.class, () -> records.create(1, null));
                 assertThrows(AccessDeniedException.class, () -> records.update(1, 2, null));

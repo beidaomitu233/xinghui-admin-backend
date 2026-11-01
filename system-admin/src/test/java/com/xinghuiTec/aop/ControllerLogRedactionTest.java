@@ -69,6 +69,25 @@ class ControllerLogRedactionTest {
     }
 
     @Test
+    void recordsUsefulBusinessTargetWithoutContactDetailsAndRecognizesBusinessFailure() throws Throwable {
+        var request=new MockHttpServletRequest("PUT","/system/user/update");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        var user=new SysUserAddDTO();user.setUserId(123L);user.setPassword("private-password");user.setEmail("private@example.invalid");
+        var point=mock(ProceedingJoinPoint.class);var signature=mock(MethodSignature.class);
+        when(signature.getMethod()).thenReturn(SysUserController.class.getMethod("updateUser",SysUserAddDTO.class));
+        when(signature.getName()).thenReturn("updateUser");when(point.getSignature()).thenReturn(signature);
+        when(point.getTarget()).thenReturn(new SysUserController());when(point.getArgs()).thenReturn(new Object[]{user});
+        when(point.proceed()).thenReturn(Result.fail(409,"private-response-detail"));
+        var service=mock(SysOperLogService.class);var aspect=new LogAspect();ReflectionTestUtils.setField(aspect,"sysOperLogService",service);
+        aspect.doAround(point);
+        var captured=org.mockito.ArgumentCaptor.forClass(SysOperLog.class);verify(service).saveOperLog(captured.capture());
+        var saved=captured.getValue();BusinessLogDetails.enrich(saved);
+        assertEquals("userId:123",saved.getBusinessTarget());assertEquals("管理接口",saved.getOperationSource());assertEquals(1,saved.getStatus());
+        assertTrue(saved.getBusinessAction().contains("修改"));
+        for(String secret:new String[]{"private-password","private@example.invalid","private-response-detail"})assertFalse(saved.toString().contains(secret));
+    }
+
+    @Test
     void persistedOperationLogOmitsUserPasswordAndResponseToken(CapturedOutput output) throws Throwable {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(
                 new MockHttpServletRequest("POST", "/system/user/add")));
