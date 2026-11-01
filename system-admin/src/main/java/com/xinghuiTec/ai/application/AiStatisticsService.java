@@ -41,6 +41,7 @@ public class AiStatisticsService {
     public Map<String,Object> summary(TrustedActor actor,boolean platform,AiCallLogService.Filters filters){
         var scope=logs.analyticsScope(actor,platform,filters,"list",null);
         String where=scope.empty()?" WHERE 1=0":scope.sql();
+        if(filters==null||filters.entryType()==null)where+=" AND c.entry_type<>'MODEL_DISCOVERY'";
         Object[] args=scope.empty()?new Object[0]:scope.args().toArray();
         String base=from()+where;
         var totals=new LinkedHashMap<>(jdbc.queryForMap("SELECT "+AGGREGATES+base,args));
