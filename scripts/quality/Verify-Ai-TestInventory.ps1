@@ -51,5 +51,8 @@ foreach ($module in Get-ChildItem -Directory) {
 }
 $scoped = @(Get-ChildItem system-admin/src/test/java/com/xinghuiTec/ai -Recurse -File -Filter '*.java' | Where-Object BaseName -Match '(Test|IT)$' | ForEach-Object BaseName)
 $scoped += @(Get-ChildItem system-admin/src/test/java/com/xinghuiTec/security -File -Filter 'Ai*Test.java' | ForEach-Object BaseName)
+if (Test-Path system-agent/src/test/java) {
+    $scoped += @(Get-ChildItem system-agent/src/test/java -Recurse -File -Filter '*.java' | Where-Object BaseName -Match '(Test|IT)$' | ForEach-Object BaseName)
+}
 Assert-Inventory $required $services $native $scoped $sources
 Write-Output "AI inventory verified: scoped=$($scoped.Count), requiredTotal=$($required.Count), services=$($services.Count), nativeExcluded=$($native.Count)"

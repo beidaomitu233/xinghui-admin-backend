@@ -68,6 +68,22 @@ public class AiCallLogStore {
         });return id[0];
     }
     public void completeConfigurationPair(String callId,ExecutionOutcome outcome){if(callId!=null)safe(()->complete(callId,outcome));}
+    /** Trusted application adapter supplies the Agent association; no client DTO can write this entry. */
+    public String beginAgentCall(TrustedActor actor,String sceneKey,String appId,String sessionId,String runId,String modelCallId,
+                                 com.xinghuiTec.ai.contract.AiProviderRuntime.Target target,int attempt,String reason){
+        final String[] id={null};safe(()->{
+            var info=blank();info.put("requestKind","AGENT");info.put("sceneKey",sceneKey);info.put("appId",appId);
+            info.put("agentSessionId",sessionId);info.put("agentRunId",runId);info.put("agentModelCallId",modelCallId);
+            info.put("modelCode",target.modelCode());info.put("maskedKeyLabel",target.maskedKeyLabel());
+            info.put("attemptNumber",attempt);info.put("switchReason",reason);
+            id[0]=transaction.execute(tx->{
+                String call=insert(null,null,null,null,"AGENT_MODEL",AiRuntimeService.owner(actor),target.model().modelRef(),target.providerCode(),Instant.now(),info);
+                jdbc.update("UPDATE sys_ai_call_log SET agent_session_id=?,agent_run_id=?,agent_model_call_id=?,agent_app_id=?,agent_scene_key=? WHERE call_id=?",
+                        sessionId,runId,modelCallId,Long.parseLong(appId),sceneKey,call);return call;
+            });
+        });return id[0];
+    }
+    public void completeAgentCall(String callId,ExecutionOutcome outcome){if(callId!=null)safe(()->complete(callId,outcome));}
     public String beginDiscovery(TrustedActor actor,String provider){
         if(actor==null)return null;final String[] id={null};safe(()->id[0]=insert(null,null,null,null,"MODEL_DISCOVERY",
                 AiRuntimeService.owner(actor),null,provider,Instant.now(),blank()));return id[0];

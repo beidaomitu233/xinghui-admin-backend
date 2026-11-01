@@ -33,6 +33,8 @@ public class WechatAccountService {
         var user=enabled(id,tenant);
         String token=JwtUtil.createJWT(String.valueOf(id),tenant);user.setToken(token);
         redis.setCacheObject(ADMIN_LOGIN_PREFIX+id,user,Math.toIntExact(TimeUnit.MILLISECONDS.toSeconds(TOKEN_EXPIRATION)),TimeUnit.SECONDS);
+        redis.deleteObject(com.xinghuiTec.constants.RedisConstants.USER_INFO_PREFIX+id);
+        redis.deleteObject(com.xinghuiTec.constants.RedisConstants.USER_ROUTER_PREFIX+id);
         return token;
     }
 }

@@ -25,6 +25,9 @@ public class ModelHubService {
     private final ObjectProvider<AiProviderRuntime> providers;
     private final AiApplicationReferences guard;
     private final SecretCipher cipher;
+    private AiModelCatalogService catalogs;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void catalogs(AiModelCatalogService catalogs){this.catalogs=catalogs;}
     public ModelHubService(JdbcTemplate jdbc,ObjectMapper json,AiConfigurationService configs,ObjectProvider<AiProviderRuntime> providers,AiApplicationReferences guard,SecretCipher cipher){this.jdbc=jdbc;this.json=json.copy();this.configs=configs;this.providers=providers;this.guard=guard;this.cipher=cipher;}
     public static void check(boolean value,int status,String code){if(!value)throw new SceneFailure(status,code);}
     public static long id(String value){check(value!=null&&value.matches("[1-9][0-9]{0,18}"),400,"INVALID_INPUT");try{return Long.parseLong(value);}catch(NumberFormatException invalid){throw new SceneFailure(400,"INVALID_INPUT");}}
@@ -42,6 +45,12 @@ public class ModelHubService {
         check(values.size()==1,404,"MODEL_NOT_FOUND");return stored(values.get(0),lock);
     }
     public Page page(int page,int size,String search){
+        return page(page,size,search,null,null);
+    }
+    public Page page(int page,int size,String search,String orderBy,String order){
+        String ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,Map.of(
+                "name","JSON_UNQUOTE(JSON_EXTRACT(definition_json,'$.name'))","slug","slug","updateTime","update_time"),
+                "model_id ASC","model_id",()->new SceneFailure(400,"INVALID_INPUT"));
         check(page>=1&&page<=100000&&size>=1&&size<=100&&(search==null||search.length()<=128),400,"INVALID_INPUT");
         String term=search==null?"":search.toLowerCase(Locale.ROOT).strip();
         String where=" WHERE deleted=FALSE";var args=new ArrayList<Object>();
@@ -51,7 +60,7 @@ public class ModelHubService {
         }
         Long count=jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_business_model"+where,Long.class,args.toArray());
         args.add(size);args.add((long)(page-1)*size);
-        var selected=jdbc.query("SELECT * FROM sys_ai_business_model"+where+" ORDER BY model_id LIMIT ? OFFSET ?",(r,n)->readStored(r),args.toArray());
+        var selected=jdbc.query("SELECT * FROM sys_ai_business_model"+where+ordering+" LIMIT ? OFFSET ?",(r,n)->readStored(r),args.toArray());
         var context=healthContext(selected,new Requirements(OutputFormat.TEXT,true,false));
         return new Page(selected.stream().map(s->view(s,context)).toList(),Long.toString(Objects.requireNonNull(count)),page,size);
     }
@@ -76,7 +85,8 @@ public class ModelHubService {
         if(!enableOnly)for(var route:input.routes()){
             AiConfigurationDtos.View channel;
             try{channel=configs.get(id(route.channelId()));}catch(RuntimeException missing){throw new SceneFailure(400,"CHANNEL_UNAVAILABLE");}
-            check(channel.draft()!=null&&channel.draft().models().stream().anyMatch(m->m.modelCode().equals(route.upstreamModel())),400,"UPSTREAM_NOT_CONFIGURED");
+            boolean configured=channel.draft()!=null&&channel.draft().models().stream().anyMatch(m->m.modelCode().equals(route.upstreamModel()));
+            check(configured||(catalogs!=null&&catalogs.containsCurrentModel(route.channelId(),route.upstreamModel())),400,"UPSTREAM_NOT_CONFIGURED");
         }
         var routes=input.routes().stream().map(r->new Route(r.routeId()==null?UUID.randomUUID().toString():r.routeId(),r.channelId(),r.upstreamModel(),r.enabled())).toList();
         var normalized=new Change(null,null,input.name(),input.slug(),input.capabilities(),input.contextWindow(),input.enabled(),input.strategy(),input.fallback(),routes);
@@ -95,7 +105,10 @@ public class ModelHubService {
     public void delete(String value,int revision){guard.withReferenceGuard(()->{
         var old=stored(value,true);check(old.revision()==revision,409,"VERSION_CONFLICT");
         var definitions=jdbc.query("SELECT v.definition_json FROM sys_ai_scene s JOIN sys_ai_scene_version v ON v.scene_version_id=s.current_version_id",(r,n)->r.getString(1));
-        for(String definition:definitions)try{check(!old.definition().slug().equals(json.readTree(definition).path("businessModel").asText()),409,"SCENE_MODEL_IN_USE");}catch(java.io.IOException corrupt){throw new SceneFailure(503,"STATE_UNAVAILABLE");}
+        for(String definition:definitions)try{
+            var saved=json.readTree(definition);check(!old.definition().slug().equals(saved.path("businessModel").asText()),409,"SCENE_MODEL_IN_USE");
+            for(var selected:saved.path("businessModels"))check(!old.definition().slug().equals(selected.asText()),409,"SCENE_MODEL_IN_USE");
+        }catch(java.io.IOException corrupt){throw new SceneFailure(503,"STATE_UNAVAILABLE");}
         jdbc.update("UPDATE sys_ai_business_model SET deleted=TRUE,enabled=FALSE,revision=revision+1,update_time=CURRENT_TIMESTAMP(3) WHERE model_id=?",id(value));return true;
     });}
     private void validate(Change d){
@@ -141,8 +154,38 @@ public class ModelHubService {
         var reasons=new ArrayList<String>();if(!s.enabled())reasons.add("MODEL_DISABLED");if(ready==0)reasons.add("NO_READY_BINDING");
         return new Model(s.id(),s.revision(),d.name(),d.slug(),d.capabilities(),d.contextWindow(),s.enabled(),d.strategy(),d.fallback(),List.copyOf(routes),new Health(s.enabled()&&ready>0,ready,distinct.size(),s.enabled()&&distinct.size()>=2&&d.fallback(),List.copyOf(reasons)),s.updated());
     }
-    public record Frozen(String modelId,int revision,AiApplicationPolicy policy) {}
+    public record Selection(String modelId,int revision) {}
+    public record Frozen(String modelId,int revision,AiApplicationPolicy policy,List<Selection> selections) {
+        public Frozen(String modelId,int revision,AiApplicationPolicy policy){this(modelId,revision,policy,List.of(new Selection(modelId,revision)));}
+        public Frozen { selections=List.copyOf(selections); }
+    }
+    /** Readiness uses actual requested capabilities without consuming a round-robin cursor. */
+    public boolean ready(String slug,Requirements requirements) {
+        var stored=find(slug,false);return view(stored,healthContext(List.of(stored),requirements)).health().ready();
+    }
+    public boolean ready(AiApplicationPolicy policy){
+        var selected=policy.selectedBusinessModels();
+        if(selected.isEmpty())return false;
+        return (policy.modelFallback()?selected:List.of(selected.get(0))).stream().anyMatch(slug->{try{return ready(slug,policy.requirements());}catch(SceneFailure unavailable){return false;}});
+    }
+    public boolean unchanged(Frozen frozen){return frozen.selections().stream().allMatch(selection->{var model=get(selection.modelId());return model.enabled()&&model.revision()==selection.revision();});}
+    /** A scene orders model cards; each card retains its own suppliers, keys and switching policy. */
     public Frozen freeze(AiApplicationPolicy base){return guard.withReferenceGuard(()->{
+        var selected=base.selectedBusinessModels();check(!selected.isEmpty(),409,"BUSINESS_MODEL_NOT_READY");
+        var choices=base.modelFallback()?selected:List.of(selected.get(0));
+        var states=new ArrayList<Selection>();var bindings=new ArrayList<AiProviderRuntime.ModelBinding>();boolean supplierFallback=false;
+        for(var slug:choices){
+            try{
+                var single=new AiApplicationPolicy(AiApplicationPolicy.ModelMode.FIXED,List.of(),false,base.template(),base.inputNames(),base.requirements(),base.scope(),base.allowedSubjects(),base.allowedAuthorities(),base.formId(),base.timeoutSeconds(),base.maxAttempts(),base.maxConcurrent(),base.maxTokens(),slug);
+                var one=freezeOne(single);states.addAll(one.selections());supplierFallback|=one.policy().modelFallback();
+                for(var binding:one.policy().models())if(bindings.stream().noneMatch(existing->existing.model().equals(binding.model())))bindings.add(binding);
+            }catch(SceneFailure unavailable){if(!base.modelFallback()||!Set.of("BUSINESS_MODEL_NOT_READY","MODEL_NOT_FOUND").contains(unavailable.getMessage()))throw unavailable;}
+        }
+        check(!bindings.isEmpty(),409,"BUSINESS_MODEL_NOT_READY");
+        var concrete=new AiApplicationPolicy(AiApplicationPolicy.ModelMode.FIXED,bindings,base.modelFallback()||supplierFallback,base.template(),base.inputNames(),base.requirements(),base.scope(),base.allowedSubjects(),base.allowedAuthorities(),base.formId(),base.timeoutSeconds(),base.maxAttempts(),base.maxConcurrent(),base.maxTokens());
+        return new Frozen(states.get(0).modelId(),states.get(0).revision(),concrete,states);
+    });}
+    private Frozen freezeOne(AiApplicationPolicy base){return guard.withReferenceGuard(()->{
         var s=find(base.businessModel(),true);var context=healthContext(List.of(s),base.requirements());var model=view(s,context);check(model.health().ready(),409,"BUSINESS_MODEL_NOT_READY");
         var available=context.available();var bindings=new ArrayList<AiProviderRuntime.ModelBinding>();
         for(var r:model.routes())if(r.health().ready()){

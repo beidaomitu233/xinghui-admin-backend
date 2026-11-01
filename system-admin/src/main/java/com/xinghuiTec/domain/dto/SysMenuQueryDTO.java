@@ -38,7 +38,7 @@ public class SysMenuQueryDTO {
      * F: 按钮
      * null: 查询全部
      */
-    @Pattern(regexp = "^[MCF]$", message = "菜单类型只能是M（目录）、C（菜单）或F（按钮）")
+    @Pattern(regexp = "^[MCGF]$", message = "菜单类型只能是M（目录）、C（菜单）、G（业务模块）或F（操作权限）")
     private String menuType;
 
     /**

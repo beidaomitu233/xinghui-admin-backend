@@ -26,6 +26,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Real configured provider/executor/ledger; HTTP alone is controlled. Not native DB or live vendor evidence. */
 public class ModelHubRuntimeTest {
+    @Test void acceptsDirectoryModelWithoutPretendingItsUnconfiguredKeyIsReady() {
+        var catalog=mock(AiModelCatalogService.class);
+        when(catalog.containsCurrentModel(channelA,"supplier/new-document-model")).thenReturn(true);
+        hub.catalogs(catalog);
+        var saved=hub.save(null,change(null,true,ModelHubDtos.Strategy.PRIORITY,true,
+                List.of(new ModelHubDtos.Route(null,channelA,"supplier/new-document-model",true))),actor);
+        assertEquals("supplier/new-document-model",saved.routes().get(0).upstreamModel());
+        assertFalse(saved.health().ready());
+        assertTrue(saved.routes().get(0).health().reasons().contains("UPSTREAM_NOT_CONFIGURED"));
+    }
     private SceneTestSupport f;
     private AiConfigurationService configs;
     private AiConfigurationTests probes;
@@ -57,6 +67,20 @@ public class ModelHubRuntimeTest {
         configs.activate(id,new AiConfigurationDtos.Activate(created.revision(),created.draft().configVersion(),false));return created.id();
     }
     @AfterEach void close(){SecurityContextHolder.clearContext();if(http!=null)http.release();if(probes!=null)probes.close();if(f!=null)f.close();}
+    @Test void promptOrdersModelCardsAndRetainsEachCardsProviderConfiguration(){
+        var a=hub.save(null,new ModelHubDtos.Change(null,UUID.randomUUID().toString(),"Primary card","primary-card","对话","128K",true,ModelHubDtos.Strategy.PRIORITY,true,List.of(new ModelHubDtos.Route(null,channelA,"unit/model-a",true))),actor);
+        var b=hub.save(null,new ModelHubDtos.Change(null,UUID.randomUUID().toString(),"Backup card","backup-card","对话","128K",true,ModelHubDtos.Strategy.PRIORITY,true,List.of(new ModelHubDtos.Route(null,channelB,"unit/model-b",true))),actor);
+        var scene=f.management.create(new SceneDtos.Create("商品助手","",SceneDtos.Kind.GENERAL,null,UUID.randomUUID().toString()),actor);
+        var definition=new SceneDtos.Definition("商品助手","","帮用户处理商品问题", "",List.of(),null,List.of(),null,List.of(),null,List.of("backup-card","primary-card"));
+        var saved=f.management.save(scene.scene().sceneKey(),new SceneDtos.Save(0,UUID.randomUUID().toString(),definition),actor).detail();
+        assertEquals(List.of("backup-card","primary-card"),saved.definition().businessModels());
+        var policy=f.execution.policy(f.scenes.version(saved.scene().currentVersionId()).appVersion());
+        var frozen=hub.freeze(policy);
+        assertEquals(List.of(b.modelId(),a.modelId()),frozen.selections().stream().map(ModelHubService.Selection::modelId).toList());
+        assertEquals(2,frozen.policy().models().size());assertTrue(hub.unchanged(frozen));
+        assertEquals("SCENE_MODEL_IN_USE",assertThrows(SceneFailure.class,()->hub.delete(b.modelId(),b.revision())).getMessage());
+        assertEquals(a.routes(),hub.get(a.modelId()).routes());assertEquals(b.routes(),hub.get(b.modelId()).routes());
+    }
     private List<ModelHubDtos.Route> routes(){return List.of(new ModelHubDtos.Route(null,channelA,"unit/model-a",true),new ModelHubDtos.Route(null,channelB,"unit/model-b",true));}
     private ModelHubDtos.Change change(Integer revision,boolean enabled,ModelHubDtos.Strategy strategy,boolean fallback,List<ModelHubDtos.Route> routes){return new ModelHubDtos.Change(revision,UUID.randomUUID().toString(),"Independent model","business-chat","对话 / 推理","128K",enabled,strategy,fallback,routes);}
     private ModelHubDtos.Model model(ModelHubDtos.Strategy strategy,boolean fallback){return hub.save(null,change(null,true,strategy,fallback,routes()),actor);}

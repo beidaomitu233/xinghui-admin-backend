@@ -10,9 +10,10 @@ public final class SqlAssistanceDtos {
     public enum Status { QUEUED,RUNNING,VALIDATING,SUCCEEDED,FAILED,CANCELLED,TIMED_OUT,INCOMPLETE }
     public record Start(String sceneKey,int expectedSceneRevision,String description,List<String> datasetKeys,
                         SceneDtos.BusinessRef businessRef,SceneDtos.ModelRef initialModel,String expectedSchemaFingerprint,
-                        boolean confirmedCosts,String clientMutationId,int maxRows,String businessModel) {
+                        boolean confirmedCosts,String clientMutationId,int maxRows,String businessModel,List<String> businessModels) {
+        public Start(String sceneKey,int expectedSceneRevision,String description,List<String> datasetKeys,SceneDtos.BusinessRef businessRef,SceneDtos.ModelRef initialModel,String expectedSchemaFingerprint,boolean confirmedCosts,String clientMutationId,int maxRows,String businessModel){this(sceneKey,expectedSceneRevision,description,datasetKeys,businessRef,initialModel,expectedSchemaFingerprint,confirmedCosts,clientMutationId,maxRows,businessModel,List.of());}
         public Start(String sceneKey,int expectedSceneRevision,String description,List<String> datasetKeys,SceneDtos.BusinessRef businessRef,SceneDtos.ModelRef initialModel,String expectedSchemaFingerprint,boolean confirmedCosts,String clientMutationId,int maxRows){this(sceneKey,expectedSceneRevision,description,datasetKeys,businessRef,initialModel,expectedSchemaFingerprint,confirmedCosts,clientMutationId,maxRows,null);}
-        public Start {datasetKeys=datasetKeys==null?List.of():List.copyOf(datasetKeys);if(maxRows==0)maxRows=20;}
+        public Start {datasetKeys=datasetKeys==null?List.of():List.copyOf(datasetKeys);businessModels=businessModels==null?List.of():List.copyOf(businessModels);if(maxRows==0)maxRows=20;}
         @Override public String toString(){return "SqlAssistanceStart[REDACTED]";}
     }
     public record Accepted(String requestId,Status status,String scopeDescription,String schemaFingerprint) {}

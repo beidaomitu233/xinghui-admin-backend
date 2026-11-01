@@ -44,6 +44,10 @@ public class RuntimeSmsService {
     public SmsResponse send(String phone,LinkedHashMap<String,String> variables) {
         var provider=source.getIfAvailable();
         var snapshot=provider==null?null:provider.current("sms").orElse(null);
+        return send(snapshot,phone,variables);
+    }
+    /** A configuration test uses the exact revision the administrator reviewed. */
+    public SmsResponse send(Snapshot snapshot,String phone,LinkedHashMap<String,String> variables) {
         if(snapshot==null || !snapshot.enabled()) throw new ServiceException("短信服务已停用");
         if(phone==null || !phone.matches("[0-9+]{6,20}")) throw new ServiceException("手机号格式无效");
         try {

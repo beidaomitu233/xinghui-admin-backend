@@ -17,7 +17,10 @@ class LowcodeSharingServiceTest {
     }
     @Test void sharingIsOffByDefaultAndPublicRepliesAreIndependentWhitelists() throws Exception {
         try (var fixture = new LowcodeSharingFixture()) {
-            long id = fixture.form();
+            long id = fixture.form(new LowcodeSchema.Schema(List.of(new LowcodeSchema.Field(
+                    "name", "姓名", "text", true, null, List.of(), "", 100, null, null, true, true,
+                    new LowcodeSchema.Presentation("请填写姓名", true, false, false, true, 12))),
+                    new LowcodeSchema.Layout("top", 100)));
             assertFalse(fixture.sharing.settings(id).enabled());
             status(410, () -> fixture.sharing.view("a".repeat(43)));
             var link = fixture.configure(id, true, "public", false);
@@ -26,8 +29,10 @@ class LowcodeSharingServiceTest {
             assertFalse(fixture.jdbc.queryForObject("SELECT token_ciphertext FROM sys_lowcode_form_share", String.class).contains(link.token()));
             guest();
             var view = fixture.json.valueToTree(fixture.sharing.view(link.token()));
-            assertEquals(Set.of("title", "schemaVersion", "accessMode", "fields"), names(view));
-            assertEquals(Set.of("fieldKey", "label", "type", "required", "defaultValue", "options", "help", "maxLength", "min", "max"), names(view.path("fields").get(0)));
+            assertEquals(Set.of("title", "schemaVersion", "accessMode", "fields", "layout"), names(view));
+            assertEquals(Set.of("fieldKey", "label", "type", "required", "defaultValue", "options", "help", "maxLength", "min", "max", "ui"), names(view.path("fields").get(0)));
+            assertEquals(12, view.path("fields").get(0).path("ui").path("span").asInt());
+            assertEquals("top", view.path("layout").path("labelPosition").asText());
             var receipt = fixture.sharing.submit(link.token(), fixture.submission(KEY, "{\"name\":\"填写人\"}"));
             assertEquals(Set.of("submitted", "receipt"), names(fixture.json.valueToTree(receipt)));
             var row = fixture.jdbc.queryForMap("SELECT tenant_id,creator FROM sys_lowcode_record");

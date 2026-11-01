@@ -7,7 +7,7 @@ import java.util.Map;
 /** AI-UX public wire types. A scene/version is its own identity, never an application ID alias. */
 public final class SceneDtos {
     private SceneDtos() {}
-    public enum Kind { GENERAL, RECORD_SUMMARY }
+    public enum Kind { GENERAL, RECORD_SUMMARY, AGENT }
     public enum Source { NATIVE, LEGACY_V04 }
     public enum ModelMode { FIXED, ROUND_ROBIN }
     public enum KeyMode { AUTO, FIXED }
@@ -30,12 +30,15 @@ public final class SceneDtos {
         public DataObject { fields=List.copyOf(fields); }
     }
     public record Definition(String name,String purpose,String promptText,String outputRequirement,
-                             List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings,ModelRef initialModel,List<com.xinghuiTec.ai.contract.AiSceneQueryRuntime.QueryBinding> sqlBindings,String businessModel) {
+                             List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings,ModelRef initialModel,List<com.xinghuiTec.ai.contract.AiSceneQueryRuntime.QueryBinding> sqlBindings,String businessModel,List<String> businessModels) {
+        public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings,ModelRef initialModel,List<com.xinghuiTec.ai.contract.AiSceneQueryRuntime.QueryBinding> sqlBindings,String businessModel){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,dataBindings,initialModel,sqlBindings,businessModel,List.of());}
         public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings,ModelRef initialModel,List<com.xinghuiTec.ai.contract.AiSceneQueryRuntime.QueryBinding> sqlBindings){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,dataBindings,initialModel,sqlBindings,null);}
         public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings,ModelRef initialModel){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,dataBindings,initialModel,List.of());}
         public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy,List<com.xinghuiTec.ai.contract.AiSceneDataRuntime.DataBinding> dataBindings){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,dataBindings,null);}
         public Definition(String name,String purpose,String promptText,String outputRequirement,List<DataObject> dataObjects,ModelPolicy modelPolicy){this(name,purpose,promptText,outputRequirement,dataObjects,modelPolicy,List.of());}
-        public Definition { dataObjects=dataObjects==null?List.of():List.copyOf(dataObjects);dataBindings=dataBindings==null?List.of():List.copyOf(dataBindings);sqlBindings=sqlBindings==null?List.of():List.copyOf(sqlBindings); }
+        public Definition { dataObjects=dataObjects==null?List.of():List.copyOf(dataObjects);dataBindings=dataBindings==null?List.of():List.copyOf(dataBindings);sqlBindings=sqlBindings==null?List.of():List.copyOf(sqlBindings);businessModels=businessModels==null?List.of():List.copyOf(businessModels); }
+        public List<String> selectedBusinessModels(){return businessModels.isEmpty()?(businessModel==null?List.of():List.of(businessModel)):businessModels;}
+        public boolean hasBusinessModels(){return !selectedBusinessModels().isEmpty();}
         @Override public String toString() { return "SceneDefinition[REDACTED]"; }
     }
     /** Creates a stable unconfigured identity. Enabled is intent only until a valid executable save. */
@@ -92,7 +95,7 @@ public final class SceneDtos {
     /** Business callers receive no prompt, model key material, internal application or template IDs. */
     public record Entry(String sceneKey,String name,Kind kind,String formId,String currentVersionId,
                         int revision,Availability availability,boolean contextRequired,String contextSourceKey,String contextSourceLabel,boolean canStartFromMonitor) {
-        public Entry(String sceneKey,String name,Kind kind,String formId,String currentVersionId,int revision,Availability availability){this(sceneKey,name,kind,formId,currentVersionId,revision,availability,kind==Kind.RECORD_SUMMARY,null,null,kind!=Kind.RECORD_SUMMARY);}
+        public Entry(String sceneKey,String name,Kind kind,String formId,String currentVersionId,int revision,Availability availability){this(sceneKey,name,kind,formId,currentVersionId,revision,availability,kind==Kind.RECORD_SUMMARY,null,null,kind==Kind.GENERAL);}
     }
     public record Request(String requestId,String sceneKey,String sceneVersionId,String kind,BusinessRef businessRef,
                           String status,String stage,String errorCode,boolean outputStarted,int attemptCount,

@@ -6,7 +6,7 @@
     <parent>
         <groupId>com.xinghuiTec</groupId>
         <artifactId>xinghui-admin</artifactId>
-        <version>1.1.0-SNAPSHOT</version>
+        <version>2.0.0</version>
     </parent>
 
     <artifactId>system-admin</artifactId>
@@ -18,6 +18,23 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-extensions-redis</artifactId>
+            <version>${agentscope.version}</version>
+            <!-- This binding uses the native Jedis backend; retain the application's managed Redis clients. -->
+            <exclusions>
+                <exclusion><groupId>org.redisson</groupId><artifactId>redisson</artifactId></exclusion>
+                <exclusion><groupId>io.lettuce</groupId><artifactId>lettuce-core</artifactId></exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Official AgentScope binding in the existing module; business/security adapters stay here. -->
+        <dependency>
+            <groupId>com.xinghuiTec</groupId>
+            <artifactId>system-agent</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

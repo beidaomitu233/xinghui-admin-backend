@@ -35,7 +35,7 @@ class AiModelConfigMethodSecurityTest {
             authenticate("000001", "000001", "ai:model:list", "ai:model:query", "ai:model:add",
                     "ai:model:edit", "ai:model:remove");
 
-            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null));
+            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null, null, null));
             assertThrows(AccessDeniedException.class, () -> controller.get(1));
             assertThrows(AccessDeniedException.class, () -> controller.create(create()));
             assertThrows(AccessDeniedException.class, () -> controller.update(1, update()));
@@ -51,15 +51,15 @@ class AiModelConfigMethodSecurityTest {
             var controller = context.getBean(AiModelConfigAdminController.class);
             var service = context.getBean(AiModelConfigService.class);
             authenticate("000000", "000000");
-            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null));
+            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null, null, null));
             assertThrows(AccessDeniedException.class, () -> controller.get(1));
             verifyNoInteractions(service);
 
             authenticate("000000", "000000", "ai:model:list");
-            assertDoesNotThrow(() -> controller.page(1, 20, null, null, null));
+            assertDoesNotThrow(() -> controller.page(1, 20, null, null, null, null, null));
             assertThrows(AccessDeniedException.class, () -> controller.get(1));
             assertThrows(AccessDeniedException.class, () -> controller.create(create()));
-            verify(service).page(1, 20, null, null, null);
+            verify(service).page(1, 20, null, null, null, null, null);
             verify(service, never()).get(anyLong());
             verify(service, never()).create(any());
         }
@@ -73,8 +73,8 @@ class AiModelConfigMethodSecurityTest {
             authenticate("000001", "000001", "ai:model:add");
             assertDoesNotThrow(() -> controller.create(create()));
             verify(service).create(any());
-            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null));
-            verify(service, never()).page(any(), any(), any(), any(), any());
+            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null, null, null));
+            verify(service, never()).page(any(), any(), any(), any(), any(), any(), any());
         }
     }
 

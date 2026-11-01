@@ -100,6 +100,7 @@ public final class SqlReadOnlyExecutor {
                         }
                     }
                 }, 0, 25, TimeUnit.MILLISECONDS);
+                QueryResult output;
                 try (var result = statement.executeQuery()) {
                     var metadata = result.getMetaData();
                     if (metadata.getColumnCount() != plan.columns().size()) throw new SqlQueryException(SCHEMA_CHANGED);
@@ -108,7 +109,8 @@ public final class SqlReadOnlyExecutor {
                     int bytes = 2;
                     boolean truncated = false;
                     while (result.next()) {
-                        control.check();
+                        // Cancellation may read request state through JDBC. The watchdog uses its own
+                        // connection; never issue that read on this thread while a MySQL stream is open.
                         if (!Instant.now().isBefore(deadline)) throw new SqlQueryException(QUERY_TIMEOUT);
                         if (rows.size() >= plan.maxRows()) { truncated = true; break; }
                         var row = new LinkedHashMap<String, Object>();
@@ -122,9 +124,8 @@ public final class SqlReadOnlyExecutor {
                         if (bytes > MAX_BYTES) throw new SqlQueryException(RESULT_LIMIT);
                         rows.add(row);
                     }
-                    var output = new QueryResult(plan.columns(), rows, rows.size(), truncated, notices.stream().distinct().toList());
+                    output = new QueryResult(plan.columns(), rows, rows.size(), truncated, notices.stream().distinct().toList());
                     if (encoded(output) > MAX_BYTES) throw new SqlQueryException(RESULT_LIMIT);
-                    return output;
                 } catch (SQLException failure) {
                     control.check();
                     if (timedOut.get() || failure instanceof SQLTimeoutException || failure.getErrorCode() == 3024 || failure.getErrorCode() == 1317)
@@ -133,6 +134,8 @@ public final class SqlReadOnlyExecutor {
                 } finally {
                     synchronized (lock) { running.set(false); watchdog.cancel(false); }
                 }
+                control.check();
+                return output;
             }
         });
     }

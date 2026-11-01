@@ -19,13 +19,29 @@ import java.util.regex.Pattern;
 @Component
 public class LowcodeSchema {
     public record Option(String label, String value) {}
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public record Presentation(String placeholder, Boolean clearable, Boolean readOnly,
+                               Boolean disabled, Boolean showWordLimit,
+                               @JsonDeserialize(using = LowcodeIntegerDeserializer.class) Integer span) {}
+    public record Layout(String labelPosition, @JsonDeserialize(using = LowcodeIntegerDeserializer.class) Integer labelWidth) {}
     public record Field(String fieldKey, String label, String type, boolean required,
                         JsonNode defaultValue, List<Option> options, String help,
                         @JsonDeserialize(using = LowcodeIntegerDeserializer.class) Integer maxLength, BigDecimal min, BigDecimal max,
-                        boolean listVisible, boolean searchable) {}
-    public record Schema(List<Field> fields) {}
+                        boolean listVisible, boolean searchable, Presentation ui) {
+        public Field(String fieldKey, String label, String type, boolean required, JsonNode defaultValue,
+                     List<Option> options, String help, Integer maxLength, BigDecimal min, BigDecimal max,
+                     boolean listVisible, boolean searchable) {
+            this(fieldKey, label, type, required, defaultValue, options, help, maxLength, min, max, listVisible, searchable, null);
+        }
+    }
+    public record Schema(List<Field> fields, Layout layout) {
+        public Schema(List<Field> fields) { this(fields, null); }
+    }
 
-    private static final Set<String> TYPES = Set.of("text", "textarea", "number", "date", "select", "multiselect", "switch");
+    private static final Set<String> TYPES = Set.of("text", "textarea", "number", "date", "select", "multiselect", "switch",
+            "radio", "checkbox", "time", "timerange", "daterange", "slider", "rate", "color");
+    private static final Set<String> ARRAYS = Set.of("multiselect", "checkbox", "timerange", "daterange");
+    private static final Set<String> CHOICES = Set.of("select", "multiselect", "radio", "checkbox");
     private static final Set<String> RESERVED = Set.of("id", "formid", "schemaversion", "tenantid", "creator",
             "revision", "createtime", "updatetime", "isdeleted", "proto", "constructor", "prototype");
     private static final Pattern KEY = Pattern.compile("[a-z][a-z0-9_]{0,49}");
@@ -40,6 +56,10 @@ public class LowcodeSchema {
             throw invalid("字段数量须在1至100之间");
         }
         Set<String> keys = new HashSet<>();
+        if (schema.layout() != null && (!Set.of("left", "right", "top").contains(schema.layout().labelPosition() == null ? "" : schema.layout().labelPosition())
+                || schema.layout().labelWidth() == null || schema.layout().labelWidth() < 40 || schema.layout().labelWidth() > 240)) {
+            throw invalid("表单标签布局不正确");
+        }
         for (Field field : schema.fields()) {
             if (field == null || field.fieldKey() == null || !KEY.matcher(field.fieldKey()).matches()
                     || RESERVED.contains(field.fieldKey().replace("_", "").toLowerCase()) || !keys.add(field.fieldKey())) {
@@ -52,6 +72,10 @@ public class LowcodeSchema {
             if (field.help() != null && field.help().length() > 500) {
                 throw invalid("字段帮助最多500字符");
             }
+            if (field.ui() != null && ((field.ui().placeholder() != null && field.ui().placeholder().length() > 200)
+                    || (field.ui().span() != null && !Set.of(6, 8, 12, 24).contains(field.ui().span())))) {
+                throw invalid("字段占位文字或布局宽度不正确");
+            }
             int maxLength = limit(field);
             if (maxLength < 1 || maxLength > (field.type().equals("textarea") ? 5000 : 2000)) {
                 throw invalid("文本长度限制不正确");
@@ -61,7 +85,7 @@ public class LowcodeSchema {
                     || (field.min() != null && field.max() != null && field.min().compareTo(field.max()) > 0)) {
                 throw invalid("数字范围不正确");
             }
-            boolean choice = field.type().equals("select") || field.type().equals("multiselect");
+            boolean choice = CHOICES.contains(field.type());
             if (choice) {
                 if (field.options() == null || field.options().isEmpty() || field.options().size() > 100) {
                     throw invalid("选项数量须在1至100之间");
@@ -76,8 +100,8 @@ public class LowcodeSchema {
             } else if (field.options() != null && !field.options().isEmpty()) {
                 throw invalid("当前类型不支持选项");
             }
-            if (field.searchable() && field.type().equals("multiselect")) {
-                throw invalid("多选字段暂不支持查询条件");
+            if (field.searchable() && ARRAYS.contains(field.type())) {
+                throw invalid("数组字段不支持单值查询条件");
             }
             if (field.defaultValue() != null && !field.defaultValue().isNull()) {
                 validateValue(field, field.defaultValue(), false);
@@ -86,7 +110,7 @@ public class LowcodeSchema {
         var normalized = new Schema(schema.fields().stream().map(field -> new Field(
                 field.fieldKey(), field.label(), field.type(), field.required(), field.defaultValue(),
                 field.options() == null ? List.of() : field.options(), field.help() == null ? "" : field.help(),
-                limit(field), field.min(), field.max(), field.listVisible(), field.searchable())).toList());
+                limit(field), field.min(), field.max(), field.listVisible(), field.searchable(), field.ui())).toList(), schema.layout());
         encode(normalized, 262144, "表单配置");
         return normalized;
     }
@@ -129,20 +153,39 @@ public class LowcodeSchema {
         }
         boolean valid = switch (field.type()) {
             case "text", "textarea" -> value.isTextual() && value.textValue().length() <= limit(field);
-            case "number" -> value.isNumber() && Double.isFinite(value.doubleValue())
+            case "number", "slider", "rate" -> value.isNumber() && Double.isFinite(value.doubleValue())
                     && value.decimalValue().abs().compareTo(new BigDecimal("1000000000000")) <= 0
                     && (field.min() == null || value.decimalValue().compareTo(field.min()) >= 0)
                     && (field.max() == null || value.decimalValue().compareTo(field.max()) <= 0)
-                    && value.decimalValue().scale() <= 6;
+                    && value.decimalValue().scale() <= 6
+                    && (!field.type().equals("rate") || (value.doubleValue() >= 0 && value.doubleValue() <= 5));
             case "date" -> validDate(value);
-            case "select" -> value.isTextual() && field.options().stream().anyMatch(o -> o.value().equals(value.textValue()));
-            case "multiselect" -> validChoices(field, value);
+            case "time" -> validTime(value);
+            case "daterange", "timerange" -> validRange(value, field.type().equals("daterange"));
+            case "color" -> value.isTextual() && value.textValue().matches("#[a-fA-F0-9]{6}");
+            case "select", "radio" -> value.isTextual() && field.options().stream().anyMatch(o -> o.value().equals(value.textValue()));
+            case "multiselect", "checkbox" -> validChoices(field, value);
             case "switch" -> value.isBoolean();
             default -> false;
         };
         if (!valid) {
             throw invalid(field.label() + "类型、范围或选项不正确");
         }
+    }
+
+    public static boolean arrayType(String type) { return ARRAYS.contains(type); }
+    public static boolean numericType(String type) { return Set.of("number", "slider", "rate").contains(type); }
+
+    private static boolean validTime(JsonNode value) {
+        if (!value.isTextual() || !value.textValue().matches("\\d{2}:\\d{2}:\\d{2}")) return false;
+        try { java.time.LocalTime.parse(value.textValue()); return true; }
+        catch (java.time.DateTimeException invalid) { return false; }
+    }
+
+    private static boolean validRange(JsonNode value, boolean date) {
+        return value.isArray() && (value.isEmpty() || (value.size() == 2
+                && (date ? validDate(value.get(0)) && validDate(value.get(1)) : validTime(value.get(0)) && validTime(value.get(1)))
+                && value.get(0).textValue().compareTo(value.get(1).textValue()) <= 0));
     }
 
     private static boolean validDate(JsonNode value) {

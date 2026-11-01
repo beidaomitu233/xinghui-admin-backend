@@ -67,12 +67,17 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
         wrapper.le(queryDTO.getCreateTimeEnd() != null,
                 SysRole::getCreateTime, queryDTO.getCreateTimeEnd());
 
-        // 动态排序
-        if ("asc".equalsIgnoreCase(queryDTO.getOrder())) {
-            wrapper.orderByAsc(SysRole::getCreateTime);
-        } else {
-            wrapper.orderByDesc(SysRole::getCreateTime);
+        boolean ascending = "asc".equals(queryDTO.getOrder());
+        String field = queryDTO.getOrderBy() == null ? "createTime" : queryDTO.getOrderBy();
+        switch (field) {
+            case "roleName" -> wrapper.orderBy(true, ascending, SysRole::getRoleName);
+            case "roleKey" -> wrapper.orderBy(true, ascending, SysRole::getRoleKey);
+            case "status" -> wrapper.orderBy(true, ascending, SysRole::getStatus);
+            case "createTime" -> wrapper.orderBy(true, ascending, SysRole::getCreateTime);
+            case "updateTime" -> wrapper.orderBy(true, ascending, SysRole::getUpdateTime);
+            default -> throw new IllegalArgumentException("不支持的角色排序字段");
         }
+        wrapper.orderByAsc(SysRole::getRoleId);
 
         // 执行查询
         return this.page(page, wrapper);
@@ -143,7 +148,9 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
         // 更新角色信息
         existRole.setRoleName(addDTO.getRoleName());
         existRole.setRoleKey(addDTO.getRoleKey());
-        existRole.setDataScope(addDTO.getDataScope());
+        if (addDTO.getDataScope() != null) {
+            existRole.setDataScope(addDTO.getDataScope());
+        }
         existRole.setStatus(addDTO.getStatus());
 
         this.updateById(existRole);

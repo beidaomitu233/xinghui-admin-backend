@@ -58,6 +58,7 @@ public class SysRoleQueryDTO {
      * 排序字段
      * 默认按创建时间排序
      */
+    @Pattern(regexp = "^(roleName|roleKey|status|createTime|updateTime)$", message = "不支持的角色排序字段")
     private String orderBy = "createTime";
 
     /**

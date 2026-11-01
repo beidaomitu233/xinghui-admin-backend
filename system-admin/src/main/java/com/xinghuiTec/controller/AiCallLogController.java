@@ -16,12 +16,14 @@ import java.util.*;
 @RestController
 @RequestMapping("/system/ai/call-logs")
 public class AiCallLogController {
+    @jakarta.annotation.Resource private AiStatisticsService analytics;
+    public record Rating(int score,String comment) {}
     private final AiCallLogService logs;
     private final AiInvocationIdentity identity;
     private final PlatformAccessService platform;
     public AiCallLogController(AiCallLogService logs,AiInvocationIdentity identity,PlatformAccessService platform){this.logs=logs;this.identity=identity;this.platform=platform;}
     public record Query(String scope,String from,String to,String requestId,String modelRef,String providerCode,String status,
-                        String entryType,String tenantRef,String subjectRef,String appId,String sceneKey,Integer pageNum,Integer pageSize){
+                        String entryType,String tenantRef,String subjectRef,String appId,String sceneKey,Integer pageNum,Integer pageSize,String orderBy,String order){
         public AiCallLogService.Filters filters(){try{return new AiCallLogService.Filters(scope==null?AiRequestLogService.Scope.OWN:AiRequestLogService.Scope.valueOf(scope),
                 blank(from)?null:Instant.parse(from),blank(to)?null:Instant.parse(to),requestId,modelRef,providerCode,
                 blank(status)?null:AiRequestStatus.valueOf(status),blank(entryType)?null:AiCallLogService.EntryType.valueOf(entryType),tenantRef,subjectRef,appId,sceneKey);
@@ -29,9 +31,15 @@ public class AiCallLogController {
         private static boolean blank(String value){return value==null||value.isBlank();}
     }
     @GetMapping @PreAuthorize("hasAuthority('ai:request:list')")
-    public Result<AiCallLogService.Page> list(@ModelAttribute Query query){return Result.ok(logs.page(identity.current(),platform.isPlatformIdentity(),query.filters(),query.pageNum()==null?1:query.pageNum(),query.pageSize()==null?20:query.pageSize()));}
+    public Result<AiCallLogService.Page> list(@ModelAttribute Query query){return Result.ok(logs.page(identity.current(),platform.isPlatformIdentity(),query.filters(),query.pageNum()==null?1:query.pageNum(),query.pageSize()==null?20:query.pageSize(),query.orderBy(),query.order()));}
     @GetMapping("/statistics") @PreAuthorize("hasAuthority('ai:request:list')")
     public Result<AiCallLogService.Statistics> statistics(@ModelAttribute Query query){return Result.ok(logs.statistics(identity.current(),platform.isPlatformIdentity(),query.filters()));}
+    @GetMapping("/analytics") @PreAuthorize("hasAuthority('ai:request:list')")
+    public Result<Map<String,Object>> analytics(@ModelAttribute Query query){return Result.ok(analytics.summary(identity.current(),platform.isPlatformIdentity(),query.filters()));}
+    @GetMapping("/{callId}/feedback") @PreAuthorize("hasAuthority('ai:request:query')")
+    public Result<Map<String,Object>> feedback(@PathVariable String callId,@ModelAttribute Query query){return Result.ok(analytics.feedback(identity.current(),platform.isPlatformIdentity(),query.filters(),callId));}
+    @PutMapping("/{callId}/feedback") @PreAuthorize("hasAuthority('ai:request:query')")
+    public Result<Void> rate(@PathVariable String callId,@ModelAttribute Query query,@RequestBody Rating value){analytics.rate(identity.current(),platform.isPlatformIdentity(),query.filters(),callId,value.score(),value.comment());return Result.ok();}
     @GetMapping("/export") @PreAuthorize("hasAuthority('ai:request:export')")
     public Result<List<Map<String,Object>>> export(@ModelAttribute Query query){return Result.ok(logs.export(identity.current(),platform.isPlatformIdentity(),query.filters()));}
     @GetMapping("/{callId}") @PreAuthorize("hasAuthority('ai:request:query')")

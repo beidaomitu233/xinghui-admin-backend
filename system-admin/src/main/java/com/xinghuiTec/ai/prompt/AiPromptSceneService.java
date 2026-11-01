@@ -90,6 +90,14 @@ public class AiPromptSceneService {
 
     public Page page(Integer requestedPage, Integer requestedSize, String requestedAppKey,
                      String requestedSceneKey, Boolean enabled, Boolean published) {
+        return page(requestedPage,requestedSize,requestedAppKey,requestedSceneKey,enabled,published,null,null);
+    }
+    public Page page(Integer requestedPage, Integer requestedSize, String requestedAppKey,
+                     String requestedSceneKey, Boolean enabled, Boolean published,String orderBy,String order) {
+        String ordering=com.xinghuiTec.ai.AiListOrder.clause(orderBy,order,Map.of(
+                "appKey","s.app_key","sceneKey","s.scene_key","enabled","s.enabled",
+                "draftRevision","s.draft_revision","publishedRevision","s.published_revision","updateTime","s.update_time"),
+                "s.scene_id DESC","s.scene_id");
         int pageNum = requestedPage == null ? 1 : requestedPage;
         int pageSize = requestedSize == null ? 20 : requestedSize;
         if (pageNum < 1 || pageNum > 100_000) {
@@ -136,7 +144,7 @@ public class AiPromptSceneService {
                        pm.provider_code AS published_provider_code,pm.model_code AS published_model_code,
                        pm.enabled AS published_model_enabled,s.published_revision,s.draft_revision,
                        s.enabled,s.revision,s.update_time
-                """ + from + " ORDER BY s.scene_id DESC LIMIT ? OFFSET ?", summaryMapper(), pageArgs.toArray());
+                """ + from + ordering + " LIMIT ? OFFSET ?", summaryMapper(), pageArgs.toArray());
         return new Page(records, total == null ? 0 : total, pageNum, pageSize);
     }
 

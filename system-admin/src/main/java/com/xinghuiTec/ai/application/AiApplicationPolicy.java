@@ -15,7 +15,12 @@ public record AiApplicationPolicy(ModelMode modelMode, List<ModelBinding> models
                                   Requirements requirements, Scope scope,
                                   Set<String> allowedSubjects, Set<String> allowedAuthorities,
                                   String formId, int timeoutSeconds, int maxAttempts,
-                                  int maxConcurrent, int maxTokens, String businessModel) {
+                                  int maxConcurrent, int maxTokens, String businessModel, List<String> businessModels) {
+    public AiApplicationPolicy(ModelMode modelMode,List<ModelBinding> models,boolean modelFallback,
+            TemplateVersionRef template,Set<String> inputNames,Requirements requirements,Scope scope,
+            Set<String> allowedSubjects,Set<String> allowedAuthorities,String formId,int timeoutSeconds,int maxAttempts,int maxConcurrent,int maxTokens,String businessModel){
+        this(modelMode,models,modelFallback,template,inputNames,requirements,scope,allowedSubjects,allowedAuthorities,formId,timeoutSeconds,maxAttempts,maxConcurrent,maxTokens,businessModel,List.of());
+    }
     public AiApplicationPolicy(ModelMode modelMode,List<ModelBinding> models,boolean modelFallback,
             TemplateVersionRef template,Set<String> inputNames,Requirements requirements,Scope scope,
             Set<String> allowedSubjects,Set<String> allowedAuthorities,String formId,int timeoutSeconds,int maxAttempts,int maxConcurrent,int maxTokens){
@@ -28,6 +33,10 @@ public record AiApplicationPolicy(ModelMode modelMode, List<ModelBinding> models
         Objects.requireNonNull(modelMode);
         Objects.requireNonNull(requirements);
         Objects.requireNonNull(scope);
+        businessModels=businessModels==null?List.of():List.copyOf(businessModels);
+        if(businessModels.size()>16 || businessModels.stream().distinct().count()!=businessModels.size()
+                || (!businessModels.isEmpty() && (businessModel!=null || !models.isEmpty())))throw new IllegalArgumentException("Invalid business model order");
+        businessModels.forEach(value->requirePattern(value,"[a-z0-9][a-z0-9._:-]{0,79}"));
         if(businessModel!=null && (!businessModel.matches("[a-z0-9][a-z0-9._:-]{0,79}") || !models.isEmpty()))throw new IllegalArgumentException("Invalid business model");
         models = List.copyOf(models);
         inputNames = Set.copyOf(inputNames);
@@ -53,12 +62,14 @@ public record AiApplicationPolicy(ModelMode modelMode, List<ModelBinding> models
 
     /** Native scenes carry C's compiled snapshot rather than inventing a template ID. */
     public void requireModelComplete() {
-        if ((models.isEmpty() && businessModel==null) || (allowedSubjects.isEmpty() && allowedAuthorities.isEmpty())
-                || (businessModel==null && modelMode == ModelMode.FIXED && !modelFallback && models.size() != 1)) {
+        if ((models.isEmpty() && !hasBusinessModels()) || (allowedSubjects.isEmpty() && allowedAuthorities.isEmpty())
+                || (!hasBusinessModels() && modelMode == ModelMode.FIXED && !modelFallback && models.size() != 1)) {
             throw new IllegalArgumentException("Incomplete application configuration");
         }
         if (requirements.tools()) throw new IllegalArgumentException("Tools require the second phase");
     }
+    public List<String> selectedBusinessModels(){return businessModels.isEmpty()?(businessModel==null?List.of():List.of(businessModel)):businessModels;}
+    public boolean hasBusinessModels(){return !selectedBusinessModels().isEmpty();}
 
     /** A configuration administrator is not implicitly a permitted business caller. */
     public boolean permits(TrustedActor actor) {

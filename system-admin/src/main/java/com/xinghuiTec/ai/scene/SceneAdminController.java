@@ -23,7 +23,7 @@ public class SceneAdminController {
     private final ObjectProvider<AiProviderRuntime> providers;
     public SceneAdminController(SceneManagementService service,AiInvocationIdentity identity,AiRuntimeBodyCodec codec,ObjectProvider<AiProviderRuntime> providers){this.service=service;this.identity=identity;this.codec=codec;this.providers=providers;}
     @GetMapping @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:scene:list')")
-    public Result<SceneDtos.Page> page(@RequestParam(defaultValue="1")int pageNum,@RequestParam(defaultValue="20")int pageSize,@RequestParam(required=false)String search){return Result.ok(service.page(pageNum,pageSize,search));}
+    public Result<SceneDtos.Page> page(@RequestParam(defaultValue="1")int pageNum,@RequestParam(defaultValue="20")int pageSize,@RequestParam(required=false)String search,@RequestParam(required=false)String orderBy,@RequestParam(required=false)String order){return Result.ok(service.page(pageNum,pageSize,search,orderBy,order));}
     @GetMapping("/workspace") @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:scene:list')")
     public Result<SceneDtos.Workspace> workspace(@RequestParam(defaultValue="1")int pageNum,@RequestParam(defaultValue="20")int pageSize,
             @RequestParam(required=false)String search,@RequestParam(required=false)String selectedSceneKey){

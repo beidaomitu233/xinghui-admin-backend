@@ -132,6 +132,15 @@ class AiModelCatalogTest {
         assertEquals(422,assertThrows(AiModelCatalogException.class,()->service.draftScan(new DraftScan("openai",KEY,"",1,20,"https://evil.example/v1/chat/completions"))).status());
         assertEquals(0,calls.get());
     }
+    @Test void mimoOfficialIdsUseDocumentedTextCapabilitiesWithoutAdmittingSpeechOrUnknownTools() {
+        body="{\"data\":[{\"id\":\"mimo-v2.6-flash\"},{\"id\":\"mimo-v2.5-asr\"},{\"id\":\"mimo-v2.5-tts\"},{\"id\":\"mimo-future\"}]}";
+        var result=service.draftScan(new DraftScan("mimo",KEY,"",1,20));
+        assertEquals("/v1/models",path);assertEquals("Bearer "+KEY,authorization);assertEquals(2,result.filteredCount());
+        var flash=result.records().stream().filter(m->m.code().equals("mimo-v2.6-flash")).findFirst().orElseThrow();
+        assertTrue(flash.supportedParameters().contains("tools"));assertEquals(1_000_000L,flash.contextLength());assertEquals(128_000L,flash.maxCompletionTokens());
+        var future=result.records().stream().filter(m->m.code().equals("mimo-future")).findFirst().orElseThrow();
+        assertTrue(future.supportedParameters().isEmpty());assertNull(future.contextLength());assertFalse(result.generationVerified());
+    }
 
     @Test void providerFailuresAreFixedSafeCodesAndRedirectsAreNeverFollowed() {
         body = "{\"error\":{\"message\":\"" + KEY + "\"}}";

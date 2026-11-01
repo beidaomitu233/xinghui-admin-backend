@@ -12,7 +12,7 @@ public class TemplateAdminController {
     private final TemplateDataService service;
     public TemplateAdminController(TemplateDataService service) { this.service = service; }
     @GetMapping @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:template:list')")
-    public Result<Page> page(@RequestParam(defaultValue="1") int pageNum, @RequestParam(defaultValue="20") int pageSize) { return Result.ok(service.page(false, pageNum, pageSize)); }
+    public Result<Page> page(@RequestParam(defaultValue="1") int pageNum, @RequestParam(defaultValue="20") int pageSize,@RequestParam(required=false) String orderBy,@RequestParam(required=false) String order) { return Result.ok(service.page(false, pageNum, pageSize,orderBy,order)); }
     @GetMapping("/options")
     @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAnyAuthority('ai:template:query','ai:application:query','ai:application:add','ai:application:edit','ai:application:test')")
     public Result<OptionsPage> options(@RequestParam(defaultValue="1") int pageNum, @RequestParam(defaultValue="20") int pageSize,
@@ -20,7 +20,7 @@ public class TemplateAdminController {
         return Result.ok(service.options(pageNum, pageSize, keyword, appId));
     }
     @GetMapping("/legacy-scenes") @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:template:query')")
-    public Result<Page> legacy(@RequestParam(defaultValue="1") int pageNum, @RequestParam(defaultValue="20") int pageSize) { return Result.ok(service.legacyScenes(pageNum, pageSize)); }
+    public Result<Page> legacy(@RequestParam(defaultValue="1") int pageNum, @RequestParam(defaultValue="20") int pageSize,@RequestParam(required=false) String orderBy,@RequestParam(required=false) String order) { return Result.ok(service.legacyScenes(pageNum, pageSize,orderBy,order)); }
     @GetMapping("/{id}") @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:template:query')")
     public Result<?> get(@PathVariable long id) { return Result.ok(service.get(false, id)); }
     @PostMapping @PreAuthorize("@platformAccess.isPlatformIdentity() and hasAuthority('ai:template:add')")

@@ -41,7 +41,7 @@ class AiPromptSceneMethodSecurityTest {
             authenticate("000001", "000001", "ai:prompt:list", "ai:prompt:query", "ai:prompt:add",
                     "ai:prompt:edit", "ai:prompt:publish", "ai:prompt:enable", "ai:prompt:remove");
 
-            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null, null));
+            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null, null, null, null));
             assertThrows(AccessDeniedException.class, controller::availableModels);
             assertThrows(AccessDeniedException.class, () -> controller.get(1));
             assertThrows(AccessDeniedException.class, () -> controller.create(create()));
@@ -60,16 +60,16 @@ class AiPromptSceneMethodSecurityTest {
             var controller = context.getBean(AiPromptSceneAdminController.class);
             var service = context.getBean(AiPromptSceneService.class);
             authenticate("000000", "000000");
-            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null, null));
+            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null, null, null, null));
             assertThrows(AccessDeniedException.class, controller::availableModels);
             assertThrows(AccessDeniedException.class, () -> controller.create(create()));
             verifyNoInteractions(service);
 
             authenticate("000000", "000000", "ai:prompt:list");
-            assertDoesNotThrow(() -> controller.page(1, 20, null, null, null, null));
+            assertDoesNotThrow(() -> controller.page(1, 20, null, null, null, null, null, null));
             assertThrows(AccessDeniedException.class, controller::availableModels);
             assertThrows(AccessDeniedException.class, () -> controller.get(1));
-            verify(service).page(1, 20, null, null, null, null);
+            verify(service).page(1, 20, null, null, null, null, null, null);
             verify(service, never()).availableModels();
         }
     }
@@ -84,8 +84,8 @@ class AiPromptSceneMethodSecurityTest {
             assertDoesNotThrow(controller::availableModels);
             verify(service).create(any());
             verify(service).availableModels();
-            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null, null));
-            verify(service, never()).page(any(), any(), any(), any(), any(), any());
+            assertThrows(AccessDeniedException.class, () -> controller.page(1, 20, null, null, null, null, null, null));
+            verify(service, never()).page(any(), any(), any(), any(), any(), any(), any(), any());
         }
     }
 

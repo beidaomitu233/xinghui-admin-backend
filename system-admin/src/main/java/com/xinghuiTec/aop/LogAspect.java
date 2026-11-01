@@ -71,6 +71,9 @@ public class LogAspect {
             // 仅保留非敏感结果码，不持久化可能含令牌的响应数据。
             operLog.setJsonResult(result instanceof Result<?> response
                     ? "code=" + response.getCode() : "completed");
+            if(result instanceof Result<?> response && !Integer.valueOf(200).equals(response.getCode())){
+                operLog.setStatus(1);operLog.setErrorMsg("code="+response.getCode());
+            }
 
         } catch (Exception e) {
             // 记录异常信息
@@ -116,7 +119,7 @@ public class LogAspect {
                     // 设置 IP 地址
                     operLog.setOperIp(IpUtils.getIpAddr(request));
 
-                    operLog.setOperParam("[omitted]");
+                    operLog.setOperParam(BusinessLogDetails.metadata(joinPoint.getArgs(),request));
                 }
 
                 // 获取操作人员

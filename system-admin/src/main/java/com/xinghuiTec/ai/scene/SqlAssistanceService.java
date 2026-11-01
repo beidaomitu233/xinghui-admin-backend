@@ -73,7 +73,7 @@ public class SqlAssistanceService {
             }
             var selected=scenes.assistanceRoute(input,actor);
             com.xinghuiTec.ai.modelhub.ModelHubService.Frozen frozen=null;
-            if(selected.policy().businessModel()!=null){require(modelHub!=null,503,"DEPENDENCY_UNAVAILABLE");frozen=modelHub.freeze(selected.policy());selected=new SceneManagementService.AssistanceRoute(selected.sceneKey(),selected.revision(),selected.appId(),selected.appVersion(),frozen.policy());}
+            if(selected.policy().hasBusinessModels()){require(modelHub!=null,503,"DEPENDENCY_UNAVAILABLE");frozen=modelHub.freeze(selected.policy());selected=new SceneManagementService.AssistanceRoute(selected.sceneKey(),selected.revision(),selected.appId(),selected.appVersion(),frozen.policy());}
             var app=application(selected,actor);Instant now=Instant.now();
             var accepted=requests.accept(new AiRequestStore.Admission(app[0],app[1],null,AiRequestStore.Kind.BUSINESS,owner,
                     AiRequestStore.SQL_ASSISTANCE_TYPE,input.clientMutationId(),input.clientMutationId(),hash,now.plusSeconds(selected.policy().timeoutSeconds())),now);
@@ -186,6 +186,9 @@ public class SqlAssistanceService {
 
     private SqlQuery candidate(String text,int maxRows) {
         try {
+            text=text.strip();
+            var fenced=java.util.regex.Pattern.compile("\\A```(?:json)?\\s*\\R(.*)\\R```\\z",java.util.regex.Pattern.DOTALL|java.util.regex.Pattern.CASE_INSENSITIVE).matcher(text);
+            if(fenced.matches())text=fenced.group(1);
             var root=OUTPUT.readTree(text);
             require(root!=null && root.isObject() && root.has("sql") && root.get("sql").isTextual(),422,"INVALID_SQL_GENERATION");
             var names=root.fieldNames();while(names.hasNext())require(Set.of("sql","parameters").contains(names.next()),422,"INVALID_SQL_GENERATION");
