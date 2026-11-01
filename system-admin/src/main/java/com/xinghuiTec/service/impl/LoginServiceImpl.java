@@ -224,7 +224,7 @@ public class LoginServiceImpl implements LoginService {
                 }
 
                 List<SysMenu> filteredMenus = menus.stream()
-                                .filter(menu -> !"F".equals(menu.getMenuType()))
+                                .filter(menu -> "M".equals(menu.getMenuType()) || "C".equals(menu.getMenuType()))
                                 .filter(menu -> "0".equals(menu.getStatus()))
                                 .collect(Collectors.toList());
 

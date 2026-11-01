@@ -6,7 +6,7 @@ import lombok.Data;
 /**
  * 新增/修改菜单请求DTO
  * 用于接收新增或修改菜单时的请求参数
- * 支持三种菜单类型：M(目录)、C(菜单)、F(按钮)
+ * 支持目录、页面、业务模块与操作权限四种类型
  *
  * @author beidoa23
  * @since 2026-01-22
@@ -76,7 +76,7 @@ public class SysMenuAddDTO {
      * F: 按钮（页面内的操作权限）
      */
     @NotBlank(message = "菜单类型不能为空")
-    @Pattern(regexp = "^[MCF]$", message = "菜单类型只能是M（目录）、C（菜单）或F（按钮）")
+    @Pattern(regexp = "^[MCGF]$", message = "请选择目录、页面、业务模块或操作权限")
     private String menuType;
 
     /**

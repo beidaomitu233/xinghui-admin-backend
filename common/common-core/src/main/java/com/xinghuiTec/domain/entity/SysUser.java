@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
 
 /**
  * 用户信息表(SysUser)表实体类
@@ -51,5 +52,8 @@ public class SysUser extends TenantEntity {
     private String loginIp;
     // 最后登录时间
     private Date loginDate;
+
+    @TableField(exist = false)
+    private java.util.List<String> roleNames;
 
 }

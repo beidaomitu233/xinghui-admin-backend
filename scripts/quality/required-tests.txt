@@ -134,3 +134,4 @@ AgentWorkbenchHttpTest
 AgentNavigationMigrationTest
 LoginNavigationCacheTest
 BusinessConfigProbeTest
+AgentExtensionTest

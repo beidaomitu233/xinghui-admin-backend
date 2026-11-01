@@ -27,7 +27,8 @@ public class AiCallLogService {
         @Override public String toString(){return "Response[REDACTED]";}
     }
     public record Statistics(long calls,long succeeded,long failed,Long knownInputTokens,Long knownOutputTokens,long unknownInputCalls,long unknownOutputCalls) {}
-    private record Where(String sql,List<Object> args,boolean empty) {}
+    record Where(String sql,List<Object> args,boolean empty) {}
+    Where analyticsScope(TrustedActor actor,boolean platform,Filters filters,String action,String id){return where(actor,platform,filters,action,id);}
     private final JdbcTemplate jdbc;
     private final AiCallLogStore store;
     private final AiRequestLogService requestLogs;
@@ -175,7 +176,7 @@ public class AiCallLogService {
     }
     private long count(Where where){return Objects.requireNonNull(jdbc.queryForObject("SELECT COUNT(*)"+from()+where.sql(),Long.class,where.args().toArray()));}
     private String select(){return "SELECT c.*"+from();}
-    private String from(){return " FROM sys_ai_call_log c LEFT JOIN sys_ai_request r ON r.request_id=c.request_id";}
+    String from(){return " FROM sys_ai_call_log c LEFT JOIN sys_ai_request r ON r.request_id=c.request_id";}
     private Map<String,Object> object(String value){return AiCallLogArchiveJson.object(value);}
     private static String instant(ResultSet rs,String column)throws SQLException{var time=rs.getTimestamp(column);return time==null?null:time.toInstant().toString();}
     private static boolean present(String value){return value!=null&&!value.isBlank();}

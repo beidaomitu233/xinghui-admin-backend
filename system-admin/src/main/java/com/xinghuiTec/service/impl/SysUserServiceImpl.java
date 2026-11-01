@@ -110,7 +110,22 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         // 1.校验用户名、手机号、用户状态、创建时间范围是否为空，不为空则添加到查询条件中
         LambdaQueryWrapper<SysUser> userListWrapper = buildUserFilters(sysUserQueryDTO);
         // 列表和导出共用白名单次序，在分页之前排序，相同值按 ID 稳定排列。
-        return this.page(page, applyExportOrdering(userListWrapper, sysUserQueryDTO));
+        Page<SysUser> result = this.page(page, applyExportOrdering(userListWrapper, sysUserQueryDTO));
+        if (!result.getRecords().isEmpty()) {
+            var users = result.getRecords().stream().map(SysUser::getUserId).toList();
+            var associations = sysUserRoleService.list(new LambdaQueryWrapper<SysUserRole>().in(SysUserRole::getUserId, users));
+            var ids = associations.stream().map(SysUserRole::getRoleId).distinct().toList();
+            java.util.Map<Long, String> names = ids.isEmpty() ? java.util.Map.of() : sysRoleService.list(
+                    new LambdaQueryWrapper<SysRole>().in(SysRole::getRoleId, ids)).stream()
+                    .collect(java.util.stream.Collectors.toMap(SysRole::getRoleId, SysRole::getRoleName));
+            var byUser = new java.util.HashMap<Long, java.util.List<String>>();
+            for (var link : associations) {
+                String name = names.get(link.getRoleId());
+                if (name != null) byUser.computeIfAbsent(link.getUserId(), key -> new java.util.ArrayList<>()).add(name);
+            }
+            result.getRecords().forEach(user -> user.setRoleNames(byUser.getOrDefault(user.getUserId(), java.util.List.of())));
+        }
+        return result;
     }
 
     private LambdaQueryWrapper<SysUser> buildUserFilters(SysUserQueryDTO query) {

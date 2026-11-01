@@ -30,8 +30,9 @@ class AiCallLogMysqlSortIT {
         String url = System.getenv("DB_URL");
         assertEquals("1", System.getenv("UI_NATIVE_MYSQL_SORT"), "Enable this isolated gate explicitly");
         boolean ci = "true".equals(System.getenv("CI"));
-        String schema = ci ? "xinghui_oss04_ci" : "ui_native_03_20261024";
-        String target = "jdbc:mysql://127.0.0.1:" + (ci ? "3306/" : "13323/") + schema;
+        boolean hub = !ci && url != null && url.startsWith("jdbc:mysql://127.0.0.1:13325/ai_hub_20261026");
+        String schema = ci ? "xinghui_oss04_ci" : hub ? "ai_hub_20261026" : "ui_native_03_20261024";
+        String target = "jdbc:mysql://127.0.0.1:" + (ci ? "3306/" : hub ? "13325/" : "13323/") + schema;
         assertTrue(url != null && (url.equals(target) || url.startsWith(target + "?")),
                 "Refuse any database outside the exact local or CI gate schema");
         try (var source = dataSource(url, System.getenv("DB_USERNAME"), System.getenv("DB_PASSWORD"))) {
@@ -69,6 +70,8 @@ class AiCallLogMysqlSortIT {
                     else metadata.put("elapsedMs", duration);
                     metadata.put("firstOutputMs", first);
                     metadata.put("firstOutputKind", "TEXT");
+                    if (index == 0) { metadata.put("totalTokens",1000); metadata.put("reportedCost","0.000000000123"); metadata.put("currency","USD"); }
+                    if (index == 1) { metadata.put("totalTokens",50); metadata.put("reportedCost","2.5"); metadata.put("currency","CNY"); }
                     jdbc.update("UPDATE sys_ai_call_log SET metadata_json=?,started_at=? WHERE call_id=?",
                             json.writeValueAsString(metadata), Timestamp.from(Instant.now().minusSeconds(30)), id);
                     if (index < 25) { ownIds.add(id); elapsed.put(id, duration); firstOutput.put(id, first); }
@@ -98,9 +101,24 @@ class AiCallLogMysqlSortIT {
                 }
                 assertEquals(27, service.page(audit, true, filters(AiRequestLogService.Scope.AUDIT, provider),
                         1, 100, "elapsedMs", "asc").total());
+                var analytics = new AiStatisticsService(jdbc,service);
+                var result = analytics.summary(own,true,filters(AiRequestLogService.Scope.OWN,provider));
+                var totals = (Map<?,?>)result.get("totals");
+                assertEquals(25L,((Number)totals.get("calls")).longValue());
+                assertEquals(1050L,((Number)totals.get("totalTokens")).longValue());
+                assertEquals(2L,((Number)totals.get("tokenSamples")).longValue());
+                assertEquals(3,((List<?>)result.get("costs")).size()); // USD, CNY and unknown; never converted.
+                assertFalse(((List<?>)result.get("trend")).isEmpty());
+                assertNotNull(totals.get("firstOutputP95Ms"));
+                analytics.rate(own,true,filters(AiRequestLogService.Scope.OWN,provider),ownIds.get(0),5,"QA useful output");
+                analytics.rate(own,true,filters(AiRequestLogService.Scope.OWN,provider),ownIds.get(0),4,"QA updated rating");
+                var rated = (Map<?,?>)analytics.summary(own,true,filters(AiRequestLogService.Scope.OWN,provider)).get("totals");
+                assertEquals(1L,((Number)rated.get("ratings")).longValue());
+                assertEquals(4,((Number)rated.get("qualityScore")).intValue());
                 verifyNoInteractions(requestLogs, requests, runtime, sql, modelTests);
             } finally {
                 for (String id : ids) {
+                    jdbc.update("DELETE FROM sys_ai_call_feedback WHERE call_id=?",id);
                     jdbc.update("DELETE FROM sys_ai_call_response WHERE call_id=?", id);
                     jdbc.update("DELETE FROM sys_ai_call_log WHERE call_id=? AND provider_code=?", id, provider);
                 }

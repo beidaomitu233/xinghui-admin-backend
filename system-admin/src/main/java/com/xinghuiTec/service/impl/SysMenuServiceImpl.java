@@ -495,6 +495,26 @@ public class SysMenuServiceImpl extends ServiceImpl<SysMenuMapper, SysMenu> impl
     private void validateMenuTypeFields(SysMenuAddDTO addDTO) {
         String menuType = addDTO.getMenuType();
 
+        if (addDTO.getParentId() != null && addDTO.getParentId() != 0) {
+            SysMenu parent = getById(addDTO.getParentId());
+            if (parent != null && "G".equals(parent.getMenuType()) && ("M".equals(menuType) || "C".equals(menuType))) {
+                throw new IllegalArgumentException("业务模块下只能添加子模块或操作权限");
+            }
+        }
+        if ("G".equals(menuType)) {
+            SysMenu parent = addDTO.getParentId() == null ? null : getById(addDTO.getParentId());
+            if (parent == null || !("C".equals(parent.getMenuType()) || "G".equals(parent.getMenuType()))) {
+                throw new IllegalArgumentException("业务模块必须放在页面或业务模块下");
+            }
+            if (addDTO.getMenuId() != null && count(new LambdaQueryWrapper<SysMenu>()
+                    .eq(SysMenu::getParentId, addDTO.getMenuId()).in(SysMenu::getMenuType, "M", "C")) > 0) {
+                throw new IllegalArgumentException("包含页面或目录的节点不能改为业务模块");
+            }
+            addDTO.setPath("");
+            addDTO.setComponent("");
+            addDTO.setIsFrame(1);
+        }
+
         if ("M".equals(menuType)) {
             // 目录类型：path必填
             if (!StringUtils.hasText(addDTO.getPath())) {
