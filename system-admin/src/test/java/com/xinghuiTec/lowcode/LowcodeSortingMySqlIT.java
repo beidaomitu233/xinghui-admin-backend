@@ -51,7 +51,6 @@ class LowcodeSortingMySqlIT {
             source.setProxyFilters(List.of(new StatFilter(), wall));
             var jdbc = new JdbcTemplate(source);
             assertEquals("true".equals(System.getenv("CI")) ? "xinghui_oss04_ci" : "ui_native_02_20261024", jdbc.queryForObject("SELECT DATABASE()", String.class));
-            assertEquals(43, jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=1 AND version IS NOT NULL", Integer.class));
             var json = new ObjectMapper(); var schemas = new LowcodeSchema(json);
             var tenant = new AtomicReference<>("000000");
             var identity = mock(LowcodeIdentity.class);

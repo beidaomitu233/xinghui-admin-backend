@@ -28,6 +28,9 @@ spring:
   # 全新空库则完整执行 V1(表结构) + V2(种子数据)；之后的增量脚本对两者都会执行。
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
+    # Use explicit TIMESTAMP defaults consistently on MySQL 5.7 and 8.0.
+    init-sqls:
+      - SET SESSION explicit_defaults_for_timestamp=ON
     url: ${db.url}
     user: ${db.username}
     password: ${db.password}
