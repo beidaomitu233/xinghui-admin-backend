@@ -60,6 +60,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REGISTRY_TOKEN: ${{ github.token }}
+          LOCAL_ASSET_URL: ${{ secrets.LOCAL_ASSET_URL }}
           ARTIFACT_RELEASE: ${{ inputs.artifact_release }}
           ARCHIVE_SHA256: ${{ inputs.archive_sha256 }}
         run: python3 tooling/deploy/server/publish-local-image.py
