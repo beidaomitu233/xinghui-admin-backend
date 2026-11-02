@@ -1,0 +1,95 @@
+name: Deploy locally built backend
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact protected-branch source SHA
+        required: true
+        type: string
+      ci_run_id:
+        description: Successful push CI for that SHA
+        required: true
+        type: string
+      artifact_release:
+        description: Release containing the local image archive
+        required: true
+        type: string
+      archive_sha256:
+        description: SHA256 of the uploaded tar.gz archive
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: server-backend
+  cancel-in-progress: false
+env:
+  COMPONENT: backend
+  SOURCE_SHA: ${{ inputs.source_sha }}
+  CI_RUN_ID: ${{ inputs.ci_run_id }}
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    outputs:
+      digest: ${{ steps.package.outputs.digest }}
+    steps:
+      - name: Require protected branch and fixed tooling
+        env:
+          TOOLING_SHA: ${{ vars.DEPLOY_TOOLING_SHA }}
+        run: |
+          [[ "$GITHUB_REF" == refs/heads/master ]]
+          [[ $TOOLING_SHA =~ ^[0-9a-f]{40}$ ]]
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: beidaomitu233/xinghui-admin-backend
+          ref: ${{ vars.DEPLOY_TOOLING_SHA }}
+          path: tooling
+          persist-credentials: false
+      - name: Verify successful CI and current protected head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tooling/deploy/server/verify-ci.py "$COMPONENT" "$CI_RUN_ID" "$SOURCE_SHA"
+      - id: package
+        name: Publish checksummed local image without rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REGISTRY_TOKEN: ${{ github.token }}
+          ARTIFACT_RELEASE: ${{ inputs.artifact_release }}
+          ARCHIVE_SHA256: ${{ inputs.archive_sha256 }}
+        run: python3 tooling/deploy/server/publish-local-image.py
+  deploy:
+    if: ${{ vars.SERVER_DEPLOY_ENABLED == 'true' }}
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Require fixed tooling
+        env:
+          TOOLING_SHA: ${{ vars.DEPLOY_TOOLING_SHA }}
+        run: '[[ $TOOLING_SHA =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: beidaomitu233/xinghui-admin-backend
+          ref: ${{ vars.DEPLOY_TOOLING_SHA }}
+          path: tooling
+          persist-credentials: false
+      - name: Recheck head before server update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tooling/deploy/server/verify-ci.py "$COMPONENT" "$CI_RUN_ID" "$SOURCE_SHA"
+      - name: Send restricted component receipt
+        env:
+          DIGEST: ${{ needs.publish.outputs.digest }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: bash tooling/deploy/server/notify-server.sh
