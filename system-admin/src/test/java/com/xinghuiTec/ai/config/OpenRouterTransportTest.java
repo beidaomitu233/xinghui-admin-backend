@@ -158,15 +158,16 @@ class OpenRouterTransportTest {
         verify(client, times(1)).sendAsync(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
     @Test void officialProvidersUseTheirOwnTokenAndRoutingParameters()throws Exception {
-        for(var preset:AiProviderPresets.all()) {
+        var official=AiProviderPresets.all().stream().filter(p->!p.chatEndpoint().isEmpty()).toList();
+        for(var preset:official) {
             response(200,"{\"model\":\"unit/model\",\"choices\":[{\"message\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}");
             var result=transport.callForProvider(preset.code(),preset.chatEndpoint(),"unit/model",5,"controlled-secret",List.of(new AiMessage(MessageRole.USER,"synthetic")),
                     new Requirements(OutputFormat.TEXT,false,false),128,mock(StreamObserver.class),control);
             assertEquals(ExecutionStatus.SUCCEEDED,result.status(),preset.code());
         }
-        var captured=org.mockito.ArgumentCaptor.forClass(HttpRequest.class);verify(client,times(AiProviderPresets.all().size())).sendAsync(captured.capture(),any(HttpResponse.BodyHandler.class));
-        for(int index=0;index<AiProviderPresets.all().size();index++) {
-            var preset=AiProviderPresets.all().get(index);var request=captured.getAllValues().get(index);var body=new ObjectMapper().readTree(requestBody(request));
+        var captured=org.mockito.ArgumentCaptor.forClass(HttpRequest.class);verify(client,times(official.size())).sendAsync(captured.capture(),any(HttpResponse.BodyHandler.class));
+        for(int index=0;index<official.size();index++) {
+            var preset=official.get(index);var request=captured.getAllValues().get(index);var body=new ObjectMapper().readTree(requestBody(request));
             assertEquals(preset.chatEndpoint(),request.uri().toString());assertEquals("Bearer controlled-secret",request.headers().firstValue("Authorization").orElseThrow());
             boolean completionTokens=java.util.Set.of("openai","mimo").contains(preset.code());
             assertEquals(128,body.path(completionTokens?"max_completion_tokens":"max_tokens").intValue());

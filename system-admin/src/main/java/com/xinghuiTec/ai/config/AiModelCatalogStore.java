@@ -30,9 +30,9 @@ public class AiModelCatalogStore {
             String models=json.writeValueAsString(catalog.models());
             if(models.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>AiModelCatalogTransport.MAX_BYTES)throw failure(413,"CATALOG_LIMIT");
             jdbc.update("INSERT INTO sys_ai_channel_catalog_scan(scan_id,owner_scope,provider_code,endpoint_url,catalog_endpoint_url,credential_fingerprint,source_code,refreshed_at_ms,expires_at_ms,models_json,scanned_count,filtered_count,filter_reasons_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    id,owner,provider,endpoint,AiProviderPresets.require(provider).modelsEndpoint(),credentialFingerprint,source,now.toEpochMilli(),now.plus(Duration.ofHours(24)).toEpochMilli(),models,catalog.scannedCount(),catalog.filteredCount(),json.writeValueAsString(catalog.filterReasons()));
+                    id,owner,provider,endpoint,AiProviderPresets.require(provider,endpoint).modelsEndpoint(),credentialFingerprint,source,now.toEpochMilli(),now.plus(Duration.ofHours(24)).toEpochMilli(),models,catalog.scannedCount(),catalog.filteredCount(),json.writeValueAsString(catalog.filterReasons()));
         }catch(com.fasterxml.jackson.core.JsonProcessingException invalid){throw failure(503,"UNAVAILABLE");}
-        return new Receipt(id,owner,provider,endpoint,AiProviderPresets.require(provider).modelsEndpoint(),credentialFingerprint,source,now,now.plus(Duration.ofHours(24)),catalog);
+        return new Receipt(id,owner,provider,endpoint,AiProviderPresets.require(provider,endpoint).modelsEndpoint(),credentialFingerprint,source,now,now.plus(Duration.ofHours(24)),catalog);
     }
     Receipt get(String id){
         return get(id,false);

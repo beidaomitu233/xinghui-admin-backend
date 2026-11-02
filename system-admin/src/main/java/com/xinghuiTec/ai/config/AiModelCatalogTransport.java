@@ -85,9 +85,13 @@ public class AiModelCatalogTransport {
     record Catalog(List<Model> models, int scannedCount, int filteredCount, Map<String, Integer> filterReasons) {}
 
     Catalog fetch(String provider, String secret) {
+        return fetch(provider, null, secret);
+    }
+
+    Catalog fetch(String provider, String chatEndpoint, String secret) {
         final AiProviderPresets.Preset preset;
-        try { preset = AiProviderPresets.require(provider); }
-        catch (AiConfigurationException invalid) { throw failure(422, "PROVIDER_UNSUPPORTED"); }
+        try { preset = chatEndpoint == null ? AiProviderPresets.require(provider) : AiProviderPresets.require(provider, chatEndpoint); }
+        catch (RuntimeException invalid) { throw failure(422, "PROVIDER_UNSUPPORTED"); }
         String destination = secret == null ? preset.publicModelsEndpoint() : preset.modelsEndpoint();
         if (destination == null) throw failure(400, "KEY_REQUIRED");
         URI official = URI.create(destination);
@@ -99,7 +103,7 @@ public class AiModelCatalogTransport {
         CompletableFuture<?> pending = null;
         long deadline = System.nanoTime() + timeout.toNanos();
         try {
-            if (checkDns) {
+            if (checkDns || (localBase == null && "openai-compatible".equals(provider))) {
                 var resolved = DNS.submit(() -> InetAddress.getAllByName(official.getHost()));
                 try {
                     for (var address : resolved.get(Math.min(3000, timeout.toMillis()), TimeUnit.MILLISECONDS)) {

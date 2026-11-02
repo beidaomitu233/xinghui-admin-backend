@@ -48,6 +48,7 @@ final class SceneTestSupport implements AutoCloseable {
         source=new DriverManagerDataSource("jdbc:h2:mem:scene_runtime_"+UUID.randomUUID()+";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=5000","sa","");jdbc=new JdbcTemplate(source);manager=new DataSourceTransactionManager(source);
         script(read("V20261016_200__ai_app_runtime_v04.sql"));script(read("V20261016_220__ai_attempt_trace.sql"));
         script(read("V20261016_225__direct_scene_runtime.sql").split("-- Duplicate legacy")[0]);
+        script(read("V20261103_620__agent_settings_draft.sql"));
         jdbc.execute("ALTER TABLE sys_ai_request ADD scene_key VARCHAR(128)");jdbc.execute("ALTER TABLE sys_ai_request ADD scene_version_id BIGINT");
         script(read("V20261012_160__lowcode_forms.sql").split("-- Prefer reserved IDs")[0]);
         jdbc.execute("CREATE TABLE sys_user(user_id BIGINT PRIMARY KEY,tenant_id VARCHAR(64),status INT,is_deleted INT)");jdbc.update("INSERT INTO sys_user VALUES(101,'tenant_a',1,0),(102,'tenant_b',1,0)");

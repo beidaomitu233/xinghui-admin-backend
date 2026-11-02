@@ -23,6 +23,20 @@ class AgentSceneManagementTest {
         var entries=fixture.management.agentChoices(agent);assertEquals(1,entries.size());assertFalse(entries.get(0).canStartFromMonitor());
         assertFalse(fixture.mapper.valueToTree(entries).toString().contains("自主规划"));assertFalse(route.toString().contains("自主规划"));
     }
+    @Test void promptCanBeSavedBeforeSelectingAModelAndLaterActivated() {
+        var created=fixture.management.create(new SceneDtos.Create("业务助手","",SceneDtos.Kind.AGENT,null,UUID.randomUUID().toString()),fixture.actor);
+        var definition=new SceneDtos.Definition("业务助手","","先保存助手职责","",List.of(),null);
+        var mutation=UUID.randomUUID().toString();
+        var request=new SceneDtos.Save(created.scene().revision(),mutation,definition);
+        var draft=fixture.management.save(created.scene().sceneKey(),request,fixture.actor).detail();
+        assertNull(draft.scene().currentVersionId());assertEquals(1,draft.scene().revision());
+        assertEquals("先保存助手职责",fixture.management.detail(draft.scene().sceneKey(),fixture.actor).definition().promptText());
+        assertEquals(1,fixture.management.save(draft.scene().sceneKey(),request,fixture.actor).detail().scene().revision());
+        var active=fixture.save(draft,"已选模型后的助手职责",false).detail();
+        assertNotNull(active.scene().currentVersionId());
+        assertEquals(0,fixture.jdbc.queryForObject("SELECT COUNT(*) FROM sys_ai_agent_settings_draft",Integer.class));
+        assertEquals(0,fixture.provider.calls.get());
+    }
     @Test void ordinarySceneAndConversationEndpointsCannotExecuteAgentPresets() {
         var saved=configured("业务系统助手");
         assertTrue(fixture.service.candidates(null,null,fixture.actor).isEmpty());

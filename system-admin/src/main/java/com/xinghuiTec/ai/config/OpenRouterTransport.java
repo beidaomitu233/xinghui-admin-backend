@@ -109,7 +109,7 @@ public class OpenRouterTransport {
             if((requirements.tools()&&wire==null)||(requirements.outputFormat()==OutputFormat.JSON_OBJECT&&!OpenRouterCapabilities.supportsJson(modelCode))) throw new AiRuntimeException(ErrorCode.CAPABILITY_UNSUPPORTED);
             if(maxTokens<1||maxTokens>32768) throw new AiRuntimeException(ErrorCode.INVALID_INPUT);
             if(key==null||key.isBlank()||key.length()>8192||key.chars().anyMatch(c->c<32||c==127)) throw new AiRuntimeException(ErrorCode.CREDENTIAL_UNAVAILABLE);
-            if(!proxy) for(var address:InetAddress.getAllByName(URI.create(endpoint).getHost())) validateResolvedAddress(address);
+            if(!proxy || "openai-compatible".equals(provider)) for(var address:InetAddress.getAllByName(URI.create(endpoint).getHost())) validateResolvedAddress(address);
             var body=new LinkedHashMap<String,Object>();
             var outbound=new ArrayList<Map<String,String>>();
             if(state.jsonObject) outbound.add(Map.of("role","system","content","Return exactly one JSON object. Do not wrap it in Markdown."));

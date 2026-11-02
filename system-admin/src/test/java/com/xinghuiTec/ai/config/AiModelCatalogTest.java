@@ -132,6 +132,15 @@ class AiModelCatalogTest {
         assertEquals(422,assertThrows(AiModelCatalogException.class,()->service.draftScan(new DraftScan("openai",KEY,"",1,20,"https://evil.example/v1/chat/completions"))).status());
         assertEquals(0,calls.get());
     }
+    @Test void compatibleProviderDiscoversModelsFromConfiguredBaseAndRejectsPrivateEndpoints() {
+        body="{\"data\":[{\"id\":\"vendor/model-1\",\"object\":\"model\"}]}";
+        var result=service.draftScan(new DraftScan("openai-compatible",KEY,"",1,20,"https://provider.example/v1"));
+        assertEquals("/v1/models",path);assertEquals("Bearer "+KEY,authorization);
+        assertEquals("vendor/model-1",result.records().get(0).code());
+        assertEquals("https://provider.example/v1/chat/completions",AiProviderPresets.require("openai-compatible","https://provider.example/v1/").chatEndpoint());
+        assertThrows(RuntimeException.class,()->AiProviderPresets.require("openai-compatible","https://127.0.0.1/v1"));
+        assertThrows(RuntimeException.class,()->AiProviderPresets.require("openai-compatible","http://provider.example/v1"));
+    }
     @Test void mimoOfficialIdsUseDocumentedTextCapabilitiesWithoutAdmittingSpeechOrUnknownTools() {
         body="{\"data\":[{\"id\":\"mimo-v2.6-flash\"},{\"id\":\"mimo-v2.5-asr\"},{\"id\":\"mimo-v2.5-tts\"},{\"id\":\"mimo-future\"}]}";
         var result=service.draftScan(new DraftScan("mimo",KEY,"",1,20));
