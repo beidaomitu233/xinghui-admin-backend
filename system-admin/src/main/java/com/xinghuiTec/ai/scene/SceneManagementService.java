@@ -47,6 +47,7 @@ public class SceneManagementService {
     public SceneDtos.Detail detail(String key,TrustedActor actor) {
         var h=scenes.head(key,false);SceneDtos.Definition definition=null;
         SceneDtos.LegacyDetails legacyDetails=null;
+        if(h.currentVersion()==null && h.kind()==SceneDtos.Kind.AGENT) definition=scenes.agentDraft(key);
         if(h.currentVersion()!=null){var current=scenes.version(h.currentVersion());definition=current.definition();
             if(current.compiled()==null && h.legacyBaseVersion()!=null){var view=legacyView(h,actor);
                 var editor=view.editor()==null?null:new SceneDtos.LegacyEditor(view.editor().prompt(),view.editor().outputInstructions(),view.editor().selections().stream().map(s->new SceneDtos.DataObject(s.objectKey(),s.formId(),s.fields())).toList());
@@ -74,7 +75,18 @@ public class SceneManagementService {
         return references.withReferenceGuard(()->{
             var head=scenes.head(key,true);String fingerprint=fingerprint("SAVE",input);
             var replay=scenes.mutation(key,input.clientMutationId());if(replay!=null){require(replay.fingerprint().equals(fingerprint),409,"IDEMPOTENCY_CONFLICT");return replay.result();}
-            expected(head,input.expectedRevision());var definition=bodyRouting(head,singlePrompt(input.definition()));validate(definition);
+            expected(head,input.expectedRevision());
+            var raw=singlePrompt(input.definition());
+            if(head.kind()==SceneDtos.Kind.AGENT && head.currentVersion()==null && !raw.hasBusinessModels() && raw.initialModel()==null && raw.modelPolicy()==null) {
+                text(raw.name(),128,"name");purpose(raw.purpose());
+                require(raw.promptText()!=null && raw.promptText().length()<=32768,400,"INVALID_INPUT");
+                require(raw.dataObjects().isEmpty() && raw.dataBindings().isEmpty() && raw.sqlBindings().isEmpty(),400,"AGENT_USES_BUSINESS_TOOLS");
+                var draft=new SceneDtos.Definition(raw.name(),raw.purpose(),raw.promptText(),"",List.of(),businessPolicy());
+                var updated=scenes.saveAgentDraft(head,draft);
+                var result=new SceneDtos.SaveResult(detail(key,actor),input.clientMutationId(),updated.updatedAt());
+                scenes.mutation(key,input.clientMutationId(),fingerprint,result);return result;
+            }
+            var definition=bodyRouting(head,raw);validate(definition);
             var selections=selections(head,definition);
             var runtime=data.getIfUnique();require(runtime!=null,503,"DEPENDENCY_UNAVAILABLE");
             AiSceneDataRuntime.CompiledScene compiled;
@@ -97,6 +109,7 @@ public class SceneManagementService {
             if(head.appId()==null){String app=execution.createApplication(head,policy,actor.subjectId());scenes.attachApplication(head,app);head=scenes.head(key,true);}
             String appVersion=execution.append(head,policy,definition,actor.subjectId());
             var version=scenes.insertVersion(head,appVersion,definition,compiled,actor.subjectId());scenes.activate(head,version,definition);
+            if(head.kind()==SceneDtos.Kind.AGENT)scenes.clearAgentDraft(key);
             var result=new SceneDtos.SaveResult(detail(key,actor),input.clientMutationId(),version.createdAt());scenes.mutation(key,input.clientMutationId(),fingerprint,result);return result;
         });
     }

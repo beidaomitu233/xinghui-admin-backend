@@ -68,6 +68,17 @@ public class SceneStore {
     void attachApplication(Head head,String appId) {
         require(jdbc.update("UPDATE sys_ai_scene SET app_id=? WHERE scene_key=? AND app_id IS NULL AND revision=?",appId,head.key,head.revision)==1,409,"VERSION_CONFLICT");
     }
+    SceneDtos.Definition agentDraft(String key) {
+        var rows=jdbc.query("SELECT definition_json FROM sys_ai_agent_settings_draft WHERE scene_key=?",(rs,n)->read(rs.getString(1),SceneDtos.Definition.class),key);
+        return rows.isEmpty()?null:rows.get(0);
+    }
+    Head saveAgentDraft(Head head,SceneDtos.Definition definition) {
+        jdbc.update("DELETE FROM sys_ai_agent_settings_draft WHERE scene_key=?",head.key());
+        jdbc.update("INSERT INTO sys_ai_agent_settings_draft(scene_key,definition_json) VALUES(?,?)",head.key(),json(definition));
+        require(jdbc.update("UPDATE sys_ai_scene SET name=?,purpose=?,revision=revision+1,update_time=CURRENT_TIMESTAMP(3) WHERE scene_key=? AND revision=?",definition.name(),definition.purpose(),head.key(),head.revision())==1,409,"VERSION_CONFLICT");
+        return head(head.key(),false);
+    }
+    void clearAgentDraft(String key) { jdbc.update("DELETE FROM sys_ai_agent_settings_draft WHERE scene_key=?",key); }
     Version version(String id) {
         decimal(id);var rows=jdbc.query("SELECT * FROM sys_ai_scene_version WHERE scene_version_id=?",(rs,n)->version(rs),id);
         require(rows.size()==1,404,"NOT_FOUND");return rows.get(0);

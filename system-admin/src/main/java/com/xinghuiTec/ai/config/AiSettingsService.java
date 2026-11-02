@@ -257,6 +257,7 @@ public class AiSettingsService implements AiConfigurationTestObserver {
         String endpoint = input.endpointUrl() == null || input.endpointUrl().isBlank()
                 ? previous == null ? AiProviderPresets.require(provider).chatEndpoint() : previous.endpointUrl()
                 : input.endpointUrl();
+        if ("openai-compatible".equals(provider)) endpoint = AiProviderPresets.require(provider,endpoint).chatEndpoint();
         return new AiConfigurationDtos.DraftChange(input.expectedRevision() == null ? 0 : input.expectedRevision(),
                 input.name(), "production", provider, endpoint, "OPENAI_CHAT",
                 previous == null ? 120 : previous.timeoutSeconds(), models, keys);

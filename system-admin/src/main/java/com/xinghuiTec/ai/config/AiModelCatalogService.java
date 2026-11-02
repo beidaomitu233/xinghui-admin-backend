@@ -43,10 +43,9 @@ public class AiModelCatalogService {
         if (request == null || request.apiKey() == null || request.apiKey().isBlank())
             throw failure(400, "INVALID_INPUT");
         String query = query(request.search(), request.pageNum(), request.pageSize());
-        var preset=preset(request.provider());
-        if(request.endpointUrl()!=null&&!request.endpointUrl().equals(preset.chatEndpoint()))throw failure(422,"ENDPOINT_UNSUPPORTED");
+        var preset=preset(request.provider(),request.endpointUrl());
         if(store!=null)owner(actor);
-        var models=fetch(request.provider(),request.apiKey(),actor);String source=source(request.provider());
+        var models=fetch(request.provider(),preset.chatEndpoint(),request.apiKey(),actor);String source=source(request.provider());
         var receipt=store==null?null:store.create(owner(actor),preset.code(),preset.chatEndpoint(),credential(preset.code(),preset.chatEndpoint(),request.apiKey()),source,models);
         return page(models,query,request.pageNum(),request.pageSize(),source,request.provider(),null,null,null,
                 receipt==null?Instant.now():receipt.refreshedAt(),receipt==null?null:receipt.id());
@@ -67,8 +66,8 @@ public class AiModelCatalogService {
         try { snapshot = configs.snapshot(configId, head.draft()); }
         catch (RuntimeException unavailable) { throw failure(409, "CONFIG_UNAVAILABLE"); }
         final AiProviderPresets.Preset preset;
-        try { preset = AiProviderPresets.require(snapshot.providerCode()); }
-        catch (AiConfigurationException invalid) { throw failure(422, "PROVIDER_UNSUPPORTED"); }
+        try { preset = AiProviderPresets.require(snapshot.providerCode(),snapshot.endpointUrl()); }
+        catch (RuntimeException invalid) { throw failure(422, "PROVIDER_UNSUPPORTED"); }
         if (!preset.chatEndpoint().equals(snapshot.endpointUrl()))
             throw failure(422, "PROVIDER_UNSUPPORTED");
         var keys = snapshot.keys() == null ? List.<AiConfigurationDtos.KeySpec>of() : snapshot.keys();
@@ -80,7 +79,7 @@ public class AiModelCatalogService {
         if (secret == null || secret.isBlank()) throw failure(503, "CREDENTIAL_UNAVAILABLE");
         // Recheck before sending credentials and after receiving the remote result.
         same(head, head(configId));
-        var models = fetch(preset.code(),secret,actor);
+        var models = fetch(preset.code(),preset.chatEndpoint(),secret,actor);
         same(head, head(configId));
         var receipt=store==null?null:store.create(owner(actor),preset.code(),preset.chatEndpoint(),credential(preset.code(),preset.chatEndpoint(),secret),source(preset.code()),models);
         if(receipt!=null)attach(new Attach(request.configId(),request.keyId(),head.revision(),receipt.id()),actor);
@@ -168,11 +167,19 @@ public class AiModelCatalogService {
         return new StoredCatalog(configId,current.revision(),snapshot.providerCode(),snapshot.endpointUrl(),state,
                 page(combined,query,pageNum,pageSize,"SAVED_CATALOG",snapshot.providerCode(),configId,keyId,current.revision(),refreshed,null,orderBy,order),sources);
     }
-    private AiProviderPresets.Preset preset(String provider){try{return AiProviderPresets.require(provider);}catch(RuntimeException invalid){throw failure(422,"PROVIDER_UNSUPPORTED");}}
+    private AiProviderPresets.Preset preset(String provider,String endpoint){
+        try {
+            if (endpoint==null || endpoint.isBlank()) return AiProviderPresets.require(provider);
+            return AiProviderPresets.require(provider,endpoint);
+        } catch(RuntimeException invalid){throw failure(422,"ENDPOINT_UNSUPPORTED");}
+    }
     private AiModelCatalogTransport.Catalog fetch(String provider,String secret,TrustedActor actor){
+        return fetch(provider,null,secret,actor);
+    }
+    private AiModelCatalogTransport.Catalog fetch(String provider,String endpoint,String secret,TrustedActor actor){
         if(callLogs!=null&&actor==null)throw failure(403,"FORBIDDEN");
         String call=callLogs==null?null:callLogs.beginDiscovery(actor,provider);long start=System.nanoTime();boolean success=false;
-        try{var result=transport.fetch(provider,secret);success=true;return result;}
+        try{var result=transport.fetch(provider,endpoint,secret);success=true;return result;}
         finally{if(callLogs!=null)callLogs.completeDiscovery(call,success,java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start));}
     }
     private String source(String provider){return "openrouter".equals(provider)?"USER_FILTERED":"PROVIDER_KEY";}

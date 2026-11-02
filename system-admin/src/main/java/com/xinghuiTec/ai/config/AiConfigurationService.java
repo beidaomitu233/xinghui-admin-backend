@@ -191,7 +191,8 @@ public class AiConfigurationService {
         if(d==null||d.name()==null||d.name().isBlank()||d.name().length()>100||d.environment()==null||!d.environment().matches("[A-Za-z0-9_-]{1,32}"))
             throw fail(400,"请填写配置名称和环境");
         rules.providerCode(d.providerCode()); rules.endpointUrl(d.endpointUrl()); rules.timeoutSeconds(d.timeoutSeconds());
-        AiProviderPresets.require(d.providerCode(),d.endpointUrl());
+        if (!AiProviderPresets.require(d.providerCode(),d.endpointUrl()).chatEndpoint().equals(d.endpointUrl()))
+            throw fail(400,"请使用完整的聊天接口地址");
         if(!"OPENAI_CHAT".equals(d.protocol())) throw fail(400,"请选择支持的聊天协议");
         if(d.models()==null||d.keys()==null||d.models().size()>16||d.keys().size()>16)
             throw fail(400,"最多16个模型、16个Key及64个搭配");
