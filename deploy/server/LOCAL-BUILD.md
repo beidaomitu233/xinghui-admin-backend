@@ -4,4 +4,6 @@
 
 在对应仓库运行 **Deploy locally built backend/web**，填写受保护分支的源码 SHA、该提交成功的 push CI 运行号、Release 标签和归档 SHA256。Actions 校验当前分支、CI、归档、镜像来源及架构，再上传到镜像仓库并通过受限 SSH 命令部署。`SERVER_DEPLOY_ENABLED` 为 `false` 时只发布镜像。
 
+从草稿 Release 获取单个归档的短时下载链接，保存为仓库 Actions secret `LOCAL_ASSET_URL`。链接到期后需要重新获取，使用完删除该 secret。
+
 部署服务器只拉取已完成的镜像、启动服务并执行健康检查。前后端分别运行发布流程，先后端、再前端；后端迁移失败不会自动回退数据库。

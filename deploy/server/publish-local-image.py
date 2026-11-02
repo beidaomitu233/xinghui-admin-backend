@@ -7,6 +7,13 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import urllib.parse
+import urllib.request
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def main():
@@ -26,11 +33,22 @@ def main():
     assert re.fullmatch(r'[0-9a-f]{64}', expected)
     tag = image + ':ci-' + ci + '-' + sha
     asset = 'image-' + component + '-' + sha + '.tar.gz'
+    url = os.environ['LOCAL_ASSET_URL']
+    parsed = urllib.parse.urlsplit(url)
+    assert parsed.scheme == 'https' and parsed.hostname == 'release-assets.githubusercontent.com'
+    assert parsed.username is None and parsed.password is None and parsed.port in (None, 443)
     with tempfile.TemporaryDirectory(prefix='xinghui-local-image-') as directory:
-        subprocess.run(['gh', 'release', 'download', release, '--repo', repo,
-                        '--pattern', asset, '--dir', directory], check=True)
         archive = Path(directory) / asset
-        assert archive.is_file()
+        try:
+            opener = urllib.request.build_opener(NoRedirect())
+            with opener.open(url, timeout=90) as response, archive.open('wb') as output:
+                total = 0
+                while chunk := response.read(1024 * 1024):
+                    total += len(chunk)
+                    assert total <= 1024 * 1024 * 1024, 'archive exceeds 1 GiB'
+                    output.write(chunk)
+        except Exception:
+            raise RuntimeError('Could not download the authorized release asset') from None
         with archive.open('rb') as stream:
             assert hashlib.file_digest(stream, 'sha256').hexdigest() == expected, 'archive checksum mismatch'
         subprocess.run(['docker', 'load', '--input', str(archive)], check=True)
